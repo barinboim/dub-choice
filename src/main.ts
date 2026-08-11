@@ -137,7 +137,7 @@ async function loadPreloaded(id: string): Promise<void> {
   if (item) item.disabled = true;
 
   try {
-    const blob = await fetchWithProgress(pp.url, pp.sizeBytes, (ratio) => {
+    const blob = await fetchWithProgress(pp.urls, pp.sizeBytes, (ratio) => {
       if (barEl) barEl.style.width = `${ratio * 100}%`;
       if (sizeEl) sizeEl.textContent = `${t("packLoading")} ${Math.round(ratio * 100)}%`;
     });
