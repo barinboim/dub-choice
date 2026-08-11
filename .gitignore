@@ -1,0 +1,6 @@
+node_modules
+dist
+# генерируется postinstall-скриптом из node_modules/ogv
+public/ogv
+# локальные паки для смоук-тестов (копирайтный контент — не коммитить)
+public/test-*.zip
