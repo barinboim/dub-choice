@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Dub Choice</title>
+    <meta name="description" content="Redub your favorite scene with your own voice — in the browser." />
+    <meta name="theme-color" content="#0b0b0b" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <div class="logo">dub choice</div>
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button id="lang-ru" class="lang-btn">RU</button>
+          <button id="lang-en" class="lang-btn">EN</button>
+        </div>
+      </header>
+
+      <!-- ЭКРАН 1: выбор пака -->
+      <section id="screen-home" class="screen">
+        <p class="tagline" data-i18n="tagline"></p>
+
+        <div class="section-label" data-i18n="galleryTitle"></div>
+        <div id="preloaded-list" class="preloaded-list"></div>
+
+        <div id="drop-zone" class="drop-zone" tabindex="0">
+          <p class="drop-title" data-i18n="dropTitle"></p>
+          <p class="drop-hint" data-i18n="dropHint"></p>
+          <div class="drop-buttons">
+            <button id="btn-pick-zip" class="btn btn-pill" data-i18n="pickZip"></button>
+            <button id="btn-pick-folder" class="btn btn-pill" data-i18n="pickFolder"></button>
+          </div>
+          <input id="input-zip" type="file" accept=".zip" hidden />
+          <input id="input-folder" type="file" webkitdirectory hidden />
+        </div>
+
+        <p id="home-error" class="home-error" hidden></p>
+
+        <div id="loaded-label" class="section-label" data-i18n="loadedTitle" hidden></div>
+        <div id="pack-list" class="pack-list"></div>
+
+        <footer class="credits">
+          <p>
+            <span data-i18n="creditsInspired"></span>
+            · <a href="https://yeahmaybe.itch.io/the-choicer-voicer" target="_blank" rel="noopener">itch.io</a>
+          </p>
+          <p>
+            <span data-i18n="creditsCreated"></span>
+            <a href="https://t.me/barinboimgpt" target="_blank" rel="noopener">@barinboim</a>
+          </p>
+        </footer>
+      </section>
+
+      <!-- ЭКРАН 2: карточка пака -->
+      <section id="screen-pack" class="screen" hidden>
+        <button id="btn-pack-back" class="btn btn-text" data-i18n="back"></button>
+        <div class="pack-card">
+          <img id="pack-icon" class="pack-icon" alt="" />
+          <div class="pack-meta">
+            <h2 id="pack-title"></h2>
+            <p id="pack-subtitle" class="pack-subtitle"></p>
+            <p id="pack-authors" class="pack-authors"></p>
+            <p id="pack-stats" class="pack-stats"></p>
+          </div>
+        </div>
+        <div id="pack-warnings" class="pack-warnings" hidden></div>
+        <label class="rehearsal-toggle">
+          <input id="toggle-rehearsal" type="checkbox" />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">
+            <span data-i18n="rehearsalTitle"></span>
+            <small data-i18n="rehearsalHint"></small>
+          </span>
+        </label>
+        <div class="pack-start-row">
+          <button id="btn-start" class="btn btn-primary btn-big" data-i18n="start"></button>
+          <p id="mic-status" class="mic-status"></p>
+        </div>
+      </section>
+
+      <!-- ЭКРАН 3: дубляж -->
+      <section id="screen-dub" class="screen screen-dub" hidden>
+        <div class="dub-top">
+          <button id="btn-dub-quit" class="btn btn-text" data-i18n="quit"></button>
+          <div class="dub-progress">
+            <span id="dub-counter" class="dub-counter"></span>
+            <div class="dub-progress-bar"><div id="dub-progress-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="dub-stage">
+          <div class="dub-screen-frame">
+            <img id="dub-image" class="dub-image" alt="" hidden />
+            <div id="dub-video-slot" class="dub-video-slot" hidden></div>
+            <div id="dub-noimage" class="dub-noimage">🎬</div>
+          </div>
+
+          <div class="dub-side">
+            <div id="dub-character" class="dub-character"></div>
+            <div class="dub-controls">
+              <button id="btn-orig" class="btn btn-pill" data-i18n="original"></button>
+              <button id="btn-record" class="btn btn-record" data-i18n="record"></button>
+              <button id="btn-play-take" class="btn btn-pill" data-i18n="myTake" hidden></button>
+              <button id="btn-next" class="btn btn-primary" data-i18n="next" disabled></button>
+            </div>
+            <div class="monitor-block">
+              <label class="monitor-toggle">
+                <input id="toggle-monitor" type="checkbox" />
+                <span>🎧 <span data-i18n="monitorLabel"></span></span>
+              </label>
+              <div class="monitor-volume">
+                <input id="monitor-volume" type="range" min="0" max="100" value="50" />
+                <span id="monitor-volume-value" class="monitor-volume-value">50%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p id="dub-caption" class="dub-caption"></p>
+
+        <div class="waveform-wrap">
+          <canvas id="dub-waveform" class="waveform"></canvas>
+          <div id="record-badge" class="record-badge" data-i18n="recBadge" hidden></div>
+        </div>
+        <p class="waveform-hint" id="waveform-hint"></p>
+      </section>
+
+      <!-- ЭКРАН 4: финальный ролик -->
+      <section id="screen-final" class="screen screen-final" hidden>
+        <h2 class="final-title" data-i18n="premiere"></h2>
+        <div class="final-screen-frame">
+          <div id="final-video-slot" class="final-video-slot"></div>
+          <canvas id="export-canvas" hidden></canvas>
+        </div>
+        <div class="final-controls">
+          <button id="btn-final-play" class="btn btn-primary btn-big" data-i18n="watch"></button>
+          <button id="btn-export" class="btn btn-pill"></button>
+          <button id="btn-export-audio" class="btn btn-pill" data-i18n="downloadAudio"></button>
+          <button id="btn-retry" class="btn btn-pill" data-i18n="redub"></button>
+          <button id="btn-home" class="btn btn-pill" data-i18n="otherPack"></button>
+        </div>
+        <p id="export-status" class="export-status" hidden></p>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
