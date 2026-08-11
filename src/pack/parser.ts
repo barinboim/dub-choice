@@ -4,7 +4,16 @@ import { DubClip, DubPack, PackError, PackFileMap } from "./types";
 /** Приоритет форматов, как в оригинальной игре (README разработчика). */
 const AUDIO_EXTS = ["wav", "mp3", "ogg"];
 const IMAGE_EXTS = ["png", "jpg", "webp", "jpeg"];
-const VIDEO_NAME = "dub_video.ogv";
+/**
+ * Наше расширение формата: помимо Theora (.ogv) из оригинальной игры
+ * поддерживаем современные кодеки — они играют нативным <video> без wasm.
+ * Приоритет: mp4 → webm → ogv.
+ */
+const VIDEO_SOURCES: { name: string; kind: "native" | "ogv" }[] = [
+  { name: "dub_video.mp4", kind: "native" },
+  { name: "dub_video.webm", kind: "native" },
+  { name: "dub_video.ogv", kind: "ogv" },
+];
 
 /**
  * Собирает DubPack из плоской карты файлов (имя → Blob).
@@ -20,10 +29,12 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
   }
   const find = (name: string): Blob | null => byLower.get(name.toLowerCase())?.blob ?? null;
 
-  const video = find(VIDEO_NAME);
-  if (!video) {
+  const videoSource = VIDEO_SOURCES.map((s) => ({ ...s, blob: find(s.name) })).find(
+    (s) => s.blob !== null
+  );
+  if (!videoSource) {
     throw new PackError(
-      "В паке нет dub_video.ogv — это обычный Voice Pack, а не Dub Pack. " +
+      "В паке нет dub_video (.mp4/.webm/.ogv) — это обычный Voice Pack, а не Dub Pack. " +
         "Для Dub Mode нужен пак с видео и таймингами реплик."
     );
   }
@@ -104,7 +115,8 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     subtitle,
     authors,
     icon,
-    video,
+    video: videoSource.blob!,
+    videoKind: videoSource.kind,
     backingTrack: findByBase(byLower, "_backing_track", AUDIO_EXTS),
     clips,
     warnings,

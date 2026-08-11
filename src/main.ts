@@ -56,6 +56,14 @@ function switchLang(l: Lang): void {
 $("lang-ru").addEventListener("click", () => switchLang("ru"));
 $("lang-en").addEventListener("click", () => switchLang("en"));
 
+// Логотип ведёт на главную (с подтверждением, если есть активная сессия)
+$("logo").addEventListener("click", () => {
+  if (!screens.home.hidden) return; // уже на главной
+  if (session && !confirm(t("quitConfirm"))) return;
+  abandonSession();
+  showScreen("home");
+});
+
 /** Обновляет тексты, которые рисуются из кода (не через data-i18n). */
 function refreshDynamicTexts(): void {
   renderPreloadedList();
@@ -302,7 +310,7 @@ $("btn-start").addEventListener("click", async () => {
   micStatus.textContent = t("videoPreparing");
   try {
     videoPlayer?.dispose();
-    videoPlayer = await createVideoPlayer(selectedPack.video);
+    videoPlayer = await createVideoPlayer(selectedPack.video, selectedPack.videoKind);
   } catch (err) {
     console.error(err);
     micStatus.textContent = t("videoError");

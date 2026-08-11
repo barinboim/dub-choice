@@ -10,8 +10,8 @@ const STORAGE_KEY = "dubchoice.lang";
 const dict = {
   // Главная
   tagline: {
-    ru: "🎙️ Переозвучь любимую сцену своим голосом",
-    en: "🎙️ Redub your favorite scene with your own voice",
+    ru: "🎙️ Твоя студия дубляжа",
+    en: "🎙️ Your dubbing studio",
   },
   dropTitle: { ru: "Перетащи сюда dub-пак", en: "Drop a dub pack here" },
   dropHint: { ru: "ZIP-архив или папка с файлами пака", en: "A ZIP archive or a pack folder" },

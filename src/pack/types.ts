@@ -20,8 +20,10 @@ export interface DubPack {
   authors: string[];
   /** Иконка пака. */
   icon: Blob | null;
-  /** Видео сцены (dub_video.ogv). */
+  /** Видео сцены (dub_video.mp4 / .webm / .ogv). */
   video: Blob;
+  /** Как играть видео: нативным <video> (mp4/webm) или через ogv.js (theora). */
+  videoKind: "native" | "ogv";
   /** Фоновая дорожка без голосов (опционально). */
   backingTrack: Blob | null;
   /** Клипы, отсортированные по первому таймстампу. */

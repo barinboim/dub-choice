@@ -48,14 +48,14 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     title: "Shrek the Third — Pinocchio Tries to Lie",
     paths: ["packs/shrek.zip"],
     icon: "pack-icons/shrek.png",
-    sizeBytes: 99_923_617,
+    sizeBytes: 17_869_702,
   },
   {
     id: "harrypotter",
     title: "Harry Potter — The Duel",
-    paths: ["packs/harrypotter.zip.part1", "packs/harrypotter.zip.part2"],
+    paths: ["packs/harrypotter.zip"],
     icon: "pack-icons/harrypotter.png",
-    sizeBytes: 179_428_633,
+    sizeBytes: 14_798_859,
   },
 ];
 

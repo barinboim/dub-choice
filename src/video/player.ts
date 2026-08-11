@@ -34,8 +34,15 @@ export function nativeTheoraSupported(): boolean {
   return theoraSupported;
 }
 
-export async function createVideoPlayer(videoBlob: Blob): Promise<DubVideoPlayer> {
-  if (nativeTheoraSupported()) return createNativePlayer(videoBlob);
+/**
+ * kind "native" — mp4/webm, играем нативным <video> (аппаратный декодер).
+ * kind "ogv" — Theora: нативно, если браузер ещё умеет, иначе ogv.js (wasm).
+ */
+export async function createVideoPlayer(
+  videoBlob: Blob,
+  kind: "native" | "ogv" = "ogv"
+): Promise<DubVideoPlayer> {
+  if (kind === "native" || nativeTheoraSupported()) return createNativePlayer(videoBlob);
   return createOgvPlayer(videoBlob);
 }
 

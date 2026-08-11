@@ -72,7 +72,14 @@ a:hover { color: #fff; }
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+  font-family: var(--font);
+  background: none;
+  border: none;
+  color: var(--ink);
+  padding: 0;
+  cursor: pointer;
 }
+.logo:hover { opacity: 0.8; }
 .lang-switch {
   display: flex;
   border: 1px solid var(--line);

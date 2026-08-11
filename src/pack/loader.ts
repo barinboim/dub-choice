@@ -2,7 +2,7 @@ import { unzip } from "fflate";
 import { parsePack } from "./parser";
 import { DubPack, PackError, PackFileMap } from "./types";
 
-const MEDIA_RE = /\.(ini|txt|wav|mp3|ogg|ogv|png|jpg|jpeg|webp)$/i;
+const MEDIA_RE = /\.(ini|txt|wav|mp3|ogg|ogv|mp4|webm|png|jpg|jpeg|webp)$/i;
 
 /** Загружает пак из ZIP-архива. Файлы могут лежать в корне или в одной подпапке. */
 export async function loadPackFromZip(file: File): Promise<DubPack> {
