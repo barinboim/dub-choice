@@ -4,44 +4,64 @@ export interface PreloadedPack {
   id: string;
   /** Названия паков — имена собственные, не переводятся. */
   title: string;
-  /** Файлы качаются по порядку и склеиваются: GitHub Pages не принимает файлы >100 МБ. */
-  urls: string[];
+  /** Пути внутри public/. Файлы качаются по порядку и склеиваются:
+   *  GitHub не принимает файлы >100 МБ. */
+  paths: string[];
+  /** Превью пака (маленькая иконка, лежит в public/pack-icons). */
+  icon: string;
   sizeBytes: number;
 }
+
+/**
+ * В продакшене паки качаются с raw.githubusercontent.com: CDN GitHub Pages
+ * отдаёт крупные файлы мучительно медленно (десятки КБ/с), а raw — быстро
+ * и с CORS. В dev-режиме файлы берутся с локального dev-сервера.
+ */
+const PACKS_BASE = import.meta.env.PROD
+  ? "https://raw.githubusercontent.com/barinboim/dub-choice/main/public/"
+  : "";
 
 export const PRELOADED_PACKS: PreloadedPack[] = [
   {
     id: "starwars",
     title: "Star Wars — You Turned Her Against Me",
-    urls: ["packs/starwars.zip"],
+    paths: ["packs/starwars.zip"],
+    icon: "pack-icons/starwars.png",
     sizeBytes: 10_093_767,
   },
   {
     id: "lotr",
     title: "LOTR — Bridge of Khazad-dûm",
-    urls: ["packs/lotr.zip"],
+    paths: ["packs/lotr.zip"],
+    icon: "pack-icons/lotr.png",
     sizeBytes: 11_196_401,
   },
   {
     id: "breakingbad",
     title: "Breaking Bad — I Am the Danger",
-    urls: ["packs/breakingbad.zip"],
+    paths: ["packs/breakingbad.zip"],
+    icon: "pack-icons/breakingbad.png",
     sizeBytes: 14_850_856,
   },
   {
     id: "shrek",
     title: "Shrek the Third — Pinocchio Tries to Lie",
-    urls: ["packs/shrek.zip"],
+    paths: ["packs/shrek.zip"],
+    icon: "pack-icons/shrek.png",
     sizeBytes: 99_923_617,
   },
   {
-    // 179 МБ — больше лимита файла на GitHub Pages, поэтому в двух частях
     id: "harrypotter",
     title: "Harry Potter — The Duel",
-    urls: ["packs/harrypotter.zip.part1", "packs/harrypotter.zip.part2"],
+    paths: ["packs/harrypotter.zip.part1", "packs/harrypotter.zip.part2"],
+    icon: "pack-icons/harrypotter.png",
     sizeBytes: 179_428_633,
   },
 ];
+
+export function packUrls(pack: PreloadedPack): string[] {
+  return pack.paths.map((p) => PACKS_BASE + p);
+}
 
 /** Скачивает файлы по порядку, склеивает и отдаёт общий прогресс 0..1. */
 export async function fetchWithProgress(

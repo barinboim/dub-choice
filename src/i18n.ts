@@ -10,8 +10,8 @@ const STORAGE_KEY = "dubchoice.lang";
 const dict = {
   // Главная
   tagline: {
-    ru: "Переозвучь любимую сцену своим голосом",
-    en: "Redub your favorite scene with your own voice",
+    ru: "🎙️ Переозвучь любимую сцену своим голосом",
+    en: "🎙️ Redub your favorite scene with your own voice",
   },
   dropTitle: { ru: "Перетащи сюда dub-пак", en: "Drop a dub pack here" },
   dropHint: { ru: "ZIP-архив или папка с файлами пака", en: "A ZIP archive or a pack folder" },
@@ -21,6 +21,7 @@ const dict = {
   loadedTitle: { ru: "Загруженные", en: "Loaded" },
   packLoading: { ru: "Загружаю…", en: "Loading…" },
   packUnpacking: { ru: "Распаковываю…", en: "Unpacking…" },
+  packDownload: { ru: "Скачать", en: "Download" },
   creditsInspired: {
     ru: "Вдохновлено игрой The Choicer Voicer от YeahMaybe",
     en: "Inspired by The Choicer Voicer by YeahMaybe",
@@ -54,6 +55,10 @@ const dict = {
   micError: {
     ru: "Микрофон недоступен. Разреши доступ к микрофону в браузере и попробуй ещё раз.",
     en: "Microphone unavailable. Allow mic access in your browser and try again.",
+  },
+  micInsecure: {
+    ru: "Браузер даёт доступ к микрофону только по HTTPS. Открой сайт по https:// и попробуй снова.",
+    en: "Browsers allow microphone access over HTTPS only. Open the site via https:// and try again.",
   },
   videoPreparing: { ru: "Готовлю видео…", en: "Preparing video…" },
   videoError: { ru: "Не удалось открыть dub_video.ogv из пака.", en: "Couldn't open dub_video.ogv from the pack." },

@@ -1,7 +1,7 @@
 import "./style.css";
 import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/loader";
 import { DubPack, PackError } from "./pack/types";
-import { PRELOADED_PACKS, fetchWithProgress, formatSize } from "./pack/preloaded";
+import { PRELOADED_PACKS, packUrls, fetchWithProgress, formatSize } from "./pack/preloaded";
 import { audioContext } from "./audio/context";
 import { MicRecorder, recordingToBuffer } from "./audio/recorder";
 import { WaveformView } from "./audio/waveform";
@@ -103,24 +103,61 @@ async function addPack(load: Promise<DubPack>): Promise<void> {
 
 // --- Встроенные паки ---
 const preloadedBusy = new Set<string>();
+/** Выбранный (подсвеченный) пак в галерее — у него видна кнопка «Скачать». */
+let selectedPreloadedId: string | null = null;
 
 function renderPreloadedList(): void {
   preloadedList.replaceChildren(
     ...PRELOADED_PACKS.map((pp) => {
-      const btn = document.createElement("button");
-      btn.className = "preloaded-item";
-      btn.dataset.packId = pp.id;
-      const title = document.createElement("span");
+      const card = document.createElement("div");
+      card.className = "preloaded-item";
+      card.dataset.packId = pp.id;
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
+      card.classList.toggle("selected", selectedPreloadedId === pp.id);
+
+      const icon = document.createElement("img");
+      icon.className = "pi-icon";
+      icon.src = pp.icon;
+      icon.alt = "";
+      icon.loading = "lazy";
+
+      const meta = document.createElement("div");
+      meta.className = "pi-meta";
+      const title = document.createElement("div");
       title.className = "pi-title";
       title.textContent = pp.title;
-      const size = document.createElement("span");
+      const size = document.createElement("div");
       size.className = "pi-size";
       size.textContent = formatSize(pp.sizeBytes);
+      meta.append(title, size);
+
+      const download = document.createElement("button");
+      download.className = "btn btn-primary pi-download";
+      download.textContent = `⬇ ${t("packDownload")}`;
+      download.hidden = selectedPreloadedId !== pp.id;
+      download.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void loadPreloaded(pp.id);
+      });
+
       const progress = document.createElement("span");
       progress.className = "pi-progress";
-      btn.append(title, size, progress);
-      btn.addEventListener("click", () => void loadPreloaded(pp.id));
-      return btn;
+
+      card.append(icon, meta, download, progress);
+      const select = () => {
+        if (preloadedBusy.has(pp.id)) return;
+        selectedPreloadedId = pp.id;
+        renderPreloadedList();
+      };
+      card.addEventListener("click", select);
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          select();
+        }
+      });
+      return card;
     })
   );
 }
@@ -131,13 +168,15 @@ async function loadPreloaded(id: string): Promise<void> {
   preloadedBusy.add(id);
   homeError.hidden = true;
 
-  const item = preloadedList.querySelector<HTMLButtonElement>(`[data-pack-id="${id}"]`);
+  const item = preloadedList.querySelector<HTMLElement>(`[data-pack-id="${id}"]`);
   const sizeEl = item?.querySelector<HTMLElement>(".pi-size");
   const barEl = item?.querySelector<HTMLElement>(".pi-progress");
-  if (item) item.disabled = true;
+  const btnEl = item?.querySelector<HTMLButtonElement>(".pi-download");
+  if (btnEl) btnEl.disabled = true;
+  item?.classList.add("loading");
 
   try {
-    const blob = await fetchWithProgress(pp.urls, pp.sizeBytes, (ratio) => {
+    const blob = await fetchWithProgress(packUrls(pp), pp.sizeBytes, (ratio) => {
       if (barEl) barEl.style.width = `${ratio * 100}%`;
       if (sizeEl) sizeEl.textContent = `${t("packLoading")} ${Math.round(ratio * 100)}%`;
     });
@@ -148,7 +187,8 @@ async function loadPreloaded(id: string): Promise<void> {
     showHomeError(t("fetchError"));
   } finally {
     preloadedBusy.delete(id);
-    if (item) item.disabled = false;
+    if (btnEl) btnEl.disabled = false;
+    item?.classList.remove("loading");
     if (sizeEl) sizeEl.textContent = formatSize(pp.sizeBytes);
     if (barEl) barEl.style.width = "0";
   }
@@ -243,6 +283,12 @@ $("btn-pack-back").addEventListener("click", () => showScreen("home"));
 
 $("btn-start").addEventListener("click", async () => {
   if (!selectedPack) return;
+  // По HTTP браузеры вообще не показывают промпт микрофона — объясняем сразу
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    micStatus.textContent = t("micInsecure");
+    micStatus.classList.add("error");
+    return;
+  }
   audioContext(); // создаём по жесту пользователя
   micStatus.textContent = t("micRequest");
   micStatus.classList.remove("error");
