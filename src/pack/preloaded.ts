@@ -23,6 +23,13 @@ const PACKS_BASE = import.meta.env.PROD
 
 export const PRELOADED_PACKS: PreloadedPack[] = [
   {
+    id: "hpowl",
+    title: "Гарри Поттер — Я вам не сова!",
+    paths: ["packs/hpowl.zip"],
+    icon: "pack-icons/hpowl.png",
+    sizeBytes: 10_789_652,
+  },
+  {
     id: "starwars",
     title: "Star Wars — You Turned Her Against Me",
     paths: ["packs/starwars.zip"],

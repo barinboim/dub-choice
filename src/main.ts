@@ -529,14 +529,40 @@ function showWatchVideo(): void {
   dubNoImage.hidden = true;
 }
 
-function hideWatchVideo(): void {
+/**
+ * Кадр-заставка вместо картинки реплики: то же видео, оставленное на паузе в
+ * начале реплики. Паки, собранные без превью-картинок (наш пайплайн их не
+ * делает — движок и так умеет паузить видео), иначе показывали бы пустой
+ * плейсхолдер.
+ *
+ * Только для mp4/webm: у ogv.js отрисовка кадра после перемотки на паузе
+ * ненадёжна (он ведёт видео по аудиочасам), там честнее оставить заглушку.
+ */
+function showStillFrame(): boolean {
+  if (!session || !videoPlayer || session.pack.videoKind !== "native") return false;
+  if (videoPlayer.element.parentElement !== dubVideoSlot) {
+    dubVideoSlot.replaceChildren(videoPlayer.element);
+  }
+  dubVideoSlot.hidden = false;
+  videoPlayer.currentTime = session.clip.timestamps[0];
+  fitFrameWhenReady(document.querySelector(".dub-screen-frame"));
+  return true;
+}
+
+/**
+ * Останавливает показ фрагмента. `keepStill = false` — когда экран дубляжа
+ * покидают совсем (финал, выход из сессии): там плеер либо уезжает в другой
+ * слот, либо уничтожается, и трогать его незачем.
+ */
+function hideWatchVideo(keepStill = true): void {
   watchToken++;
   clearTimeout(watchTimer);
   stopPreview(); // глушим и звук фрагмента, если он ещё шёл
   videoPlayer?.pause();
-  dubVideoSlot.hidden = true;
+  const still = keepStill && !clipImageUrl && showStillFrame();
+  if (!still) dubVideoSlot.hidden = true;
   dubImage.hidden = !clipImageUrl;
-  dubNoImage.hidden = !!clipImageUrl;
+  dubNoImage.hidden = !!clipImageUrl || still;
 }
 
 btnOrig.addEventListener("click", () => void playOriginalVideo());
@@ -626,7 +652,7 @@ $("btn-dub-quit").addEventListener("click", () => {
 function abandonSession(): void {
   stopPreview();
   stopMonitor();
-  hideWatchVideo();
+  hideWatchVideo(false); // плеер сейчас уничтожат — заставку показывать не на чем
   if (recorder.isRecording) recorder.stop();
   stopExportUi();
   composer?.dispose();
@@ -650,7 +676,7 @@ async function enterFinal(): Promise<void> {
   if (!session || !composer || !videoPlayer) return;
   $("dub-progress-fill").style.width = "100%";
   await composer.prepare(session);
-  hideWatchVideo();
+  hideWatchVideo(false); // плеер сейчас переедет в финальный слот
   finalSlot.replaceChildren(videoPlayer.element);
   exportStatus.hidden = true;
   downloadRequested = false;
