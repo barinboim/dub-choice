@@ -10,6 +10,8 @@ export interface PreloadedPack {
   /** Превью пака (маленькая иконка, лежит в public/pack-icons). */
   icon: string;
   sizeBytes: number;
+  /** Значки на карточке в галерее, например "18+". */
+  tags?: string[];
 }
 
 /**
@@ -28,6 +30,14 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     paths: ["packs/hpowl.zip"],
     icon: "pack-icons/hpowl.png",
     sizeBytes: 10_789_652,
+  },
+  {
+    id: "slonik",
+    title: "Зелёный слоник — Сколько истребителей?",
+    paths: ["packs/slonik.zip"],
+    icon: "pack-icons/slonik.png",
+    sizeBytes: 26_593_370,
+    tags: ["18+"],
   },
   {
     id: "starwars",

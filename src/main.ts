@@ -136,13 +136,23 @@ function renderPreloadedList(): void {
 
       const meta = document.createElement("div");
       meta.className = "pi-meta";
+      const titleRow = document.createElement("div");
+      titleRow.className = "pi-title-row";
       const title = document.createElement("div");
       title.className = "pi-title";
       title.textContent = pp.title;
+      titleRow.append(title);
+      for (const tag of pp.tags ?? []) {
+        const badge = document.createElement("span");
+        badge.className = "pi-tag";
+        badge.textContent = tag;
+        if (tag === "18+") badge.title = t("tagAdultTooltip");
+        titleRow.append(badge);
+      }
       const size = document.createElement("div");
       size.className = "pi-size";
       size.textContent = formatSize(pp.sizeBytes);
-      meta.append(title, size);
+      meta.append(titleRow, size);
 
       const download = document.createElement("button");
       download.className = "btn btn-primary pi-download";

@@ -36,6 +36,7 @@ const dict = {
     en: "Couldn't download the pack. Check your connection and try again.",
   },
   clipsCount: { ru: "реплик", en: "lines" },
+  tagAdultTooltip: { ru: "Ненормативная лексика, тема 18+", en: "Explicit language, 18+ content" },
 
   // Карточка пака
   back: { ru: "← Назад", en: "← Back" },
