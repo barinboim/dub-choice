@@ -5,7 +5,7 @@ import { PRELOADED_PACKS, packUrls, fetchWithProgress, formatSize } from "./pack
 import { audioContext } from "./audio/context";
 import { MicRecorder, recordingToBuffer } from "./audio/recorder";
 import { matchLoudness } from "./audio/normalize";
-import { WaveformView } from "./audio/waveform";
+import { WaveformView, type WaveformColors } from "./audio/waveform";
 import { DubSession } from "./game/session";
 import { Composer } from "./game/composer";
 import { createVideoPlayer, DubVideoPlayer } from "./video/player";
@@ -33,12 +33,15 @@ let videoPlayer: DubVideoPlayer | null = null;
 let composer: Composer | null = null;
 const recorder = new MicRecorder();
 
-const waveColors = {
-  background: "transparent",
-  original: "#8a8a8a",
-  user: "#7fe0d2",
+const waveColors: WaveformColors = {
+  // Оболочка по пикам приглушённая, сердцевина по RMS — светлая.
+  // Пурпур оригинала против бирюзы игрока: запись кладётся плотно и доминирует
+  original: { shell: "#7d2470", core: "#e055c4" },
+  user: { shell: "#25b3a3", core: "#b6ffee" },
+  userLayers: { shell: 0.28, halo: 0.42, core: 0.85 },
+  userBlend: "screen",
   playhead: "#ffffff",
-  midline: "rgba(255,255,255,0.18)",
+  midline: "rgba(255,255,255,0.5)",
 };
 let waveform: WaveformView | null = null;
 

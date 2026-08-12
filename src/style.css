@@ -12,7 +12,7 @@
   --accent: #f2f2f2;          /* главные действия — белые пилюли */
   --record: #ff5c49;          /* запись — единственный тёплый акцент */
   --wave-user: #7fe0d2;       /* голос игрока */
-  --wave-orig: #8a8a8a;       /* оригинал */
+  --wave-orig: #e055c4;       /* оригинал (сердцевина волны) */
   --radius: 20px;
   --radius-sm: 12px;
   --font: "Instrument Sans", system-ui, -apple-system, sans-serif;
