@@ -181,7 +181,11 @@ async function loadPreloaded(id: string): Promise<void> {
   const sizeEl = item?.querySelector<HTMLElement>(".pi-size");
   const barEl = item?.querySelector<HTMLElement>(".pi-progress");
   const btnEl = item?.querySelector<HTMLButtonElement>(".pi-download");
-  if (btnEl) btnEl.disabled = true;
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.classList.add("downloading");
+    btnEl.textContent = t("packLoading");
+  }
   item?.classList.add("loading");
 
   try {
@@ -196,7 +200,11 @@ async function loadPreloaded(id: string): Promise<void> {
     showHomeError(t("fetchError"));
   } finally {
     preloadedBusy.delete(id);
-    if (btnEl) btnEl.disabled = false;
+    if (btnEl) {
+      btnEl.disabled = false;
+      btnEl.classList.remove("downloading");
+      btnEl.textContent = `⬇ ${t("packDownload")}`;
+    }
     item?.classList.remove("loading");
     if (sizeEl) sizeEl.textContent = formatSize(pp.sizeBytes);
     if (barEl) barEl.style.width = "0";

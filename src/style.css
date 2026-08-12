@@ -220,6 +220,13 @@ a:hover { color: #fff; }
   font-size: 0.9rem;
   animation: screen-in 0.2s ease both;
 }
+/* Мгновенная реакция на нажатие — до появления прогресс-бара (CDN бывает медленный) */
+.pi-download.downloading:disabled {
+  opacity: 1;
+  cursor: progress;
+  background: #00d560;
+  color: #06210f;
+}
 .preloaded-item .pi-progress {
   position: absolute;
   left: 0;
