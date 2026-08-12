@@ -5,16 +5,19 @@
 Использование:
     build_pack.py <aligned.json> <original.wav> <backing.wav> <source_video> <outdir>
                   [--icon-at=СЕК]  кадр для иконки (по умолчанию 45)
+                  [--no-frames]    не резать кадры-превью реплик
 
 На выходе, рядом с уже лежащим там dub_video.mp4:
     _pack_info.ini, _backing_track.mp3, icon.png,
-    NN_<name>.mp3 + NN_<name>.ini на каждый клип
+    NN_<name>.mp3 + NN_<name>.ini + NN_<name>.jpg на каждый клип
 """
 
 import json
 import subprocess
 import sys
 from pathlib import Path
+
+from make_frames import FRAME_AT, FRAME_HEIGHT, FRAME_QUALITY, grab
 
 CLIP_BITRATE = "128k"
 BACKING_BITRATE = "192k"
@@ -69,16 +72,30 @@ def main() -> int:
         encoding="utf-8",
     )
 
+    frames = "--no-frames" not in sys.argv[1:]
+
     for clip in spec["clips"]:
         base = f"{clip['n']:02d}_{clip['name']}"
         start, end = clip["start"], clip["end"]
         ffmpeg("-ss", f"{start:.3f}", "-t", f"{end - start:.3f}", "-i", orig_wav,
                "-c:a", "libmp3lame", "-b:a", CLIP_BITRATE, str(outdir / f"{base}.mp3"))
+
+        # Кадр-превью: из середины РЕЧИ, а не клипа — по краям сейф-зона,
+        # там персонаж может быть ещё не в кадре
+        image_line = ""
+        if frames:
+            speech_start = clip.get("content_start", start)
+            speech_end = clip.get("content_end", end)
+            grab(Path(video), speech_start + (speech_end - speech_start) * FRAME_AT,
+                 outdir / f"{base}.jpg", FRAME_HEIGHT, FRAME_QUALITY)
+            image_line = f'image="{base}.jpg"\n'
+
         (outdir / f"{base}.ini").write_text(
             "[data]\n\n"
             f"caption={ini_str(clip['text'])}\n"
             f"dub_timestamps=[{start:.3f}]\n"
-            f"dub_characters={ini_list([clip['character']])}\n",
+            f"dub_characters={ini_list([clip['character']])}\n"
+            f"{image_line}",
             encoding="utf-8",
         )
         print(f"{base}.mp3  {start:6.2f}–{end:6.2f}  ({end - start:.2f} с)  {clip['text'][:48]}")

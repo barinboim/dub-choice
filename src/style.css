@@ -579,6 +579,84 @@ a:hover { color: #fff; }
 }
 .export-status { color: var(--ink-soft); margin-top: 14px; font-size: 0.9rem; }
 
+/* ---------- Результаты ---------- */
+.results {
+  margin-top: 44px;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  padding-top: 28px;
+}
+.results-title {
+  font-size: clamp(1.15rem, 3.4vw, 1.4rem);
+  margin: 0 0 10px;
+  text-align: center;
+}
+.results-total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.results-percent {
+  font-size: clamp(2rem, 8vw, 3rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+.results-verdict { color: var(--wave-user); font-size: 1.05rem; }
+.results-hint {
+  text-align: center;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  max-width: 58ch;
+  margin: 0 auto 22px;
+  line-height: 1.4;
+}
+.results-list { display: flex; flex-direction: column; gap: 10px; }
+.result-row {
+  display: grid;
+  grid-template-columns: 108px minmax(120px, 1fr) minmax(0, 2.2fr);
+  align-items: center;
+  gap: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+.result-thumb {
+  width: 108px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+  display: block;
+}
+.result-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  opacity: 0.5;
+}
+.result-score { font-weight: 600; font-size: 1.05rem; }
+.result-caption {
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.result-wave {
+  display: block;
+  width: 100%;
+  height: 62px;
+  background: #000;
+  border-radius: 8px;
+}
+
 /* ---------- Мобильная версия ---------- */
 @media (max-width: 700px) {
   #app { padding-bottom: 40px; }
@@ -595,6 +673,12 @@ a:hover { color: #fff; }
   .pack-icon { width: 72px; height: 72px; }
   .final-controls { flex-direction: column; }
   .final-controls .btn { width: 100%; }
+  .result-row {
+    grid-template-columns: 84px 1fr;
+    gap: 10px;
+  }
+  .result-thumb { width: 84px; }
+  .result-wave { grid-column: 1 / -1; height: 52px; }
   .btn-big { width: 100%; }
   .pack-start-row { flex-direction: column; align-items: stretch; }
   .drop-buttons .btn { flex: 1; }

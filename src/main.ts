@@ -8,6 +8,7 @@ import { matchLoudness } from "./audio/normalize";
 import { WaveformView, type WaveformColors } from "./audio/waveform";
 import { DubSession } from "./game/session";
 import { Composer } from "./game/composer";
+import { scoreTake, totalPercent, verdictKey } from "./game/score";
 import { createVideoPlayer, DubVideoPlayer } from "./video/player";
 import { t, lang, setLang, Lang } from "./i18n";
 
@@ -83,6 +84,7 @@ function refreshDynamicTexts(): void {
   if (composer) {
     $("btn-export").textContent = t("downloadVideo", { fmt: composer.videoExt.toUpperCase() });
   }
+  if (!$("results").hidden) void renderResults(); // «Балл»/вердикт на новом языке
 }
 
 // ================= ЭКРАН 1: дом =================
@@ -362,6 +364,34 @@ const monitorVolume = $<HTMLInputElement>("monitor-volume");
 const monitorVolumeValue = $("monitor-volume-value");
 
 let clipImageUrl: string | null = null;
+/**
+ * Миниатюры реплик для экрана результатов. Паки с кадрами (`image=`) отдают
+ * их сами, а для паков без картинок кадр снимаем прямо во время просмотра
+ * фрагмента: видео и так играет на экране, лишней работы браузеру это не даёт
+ * (перематывать и декодировать все реплики отдельно — дорого, а у ogv.js
+ * кадр после перемотки ещё и ненадёжен).
+ */
+const clipThumbs = new Map<number, string>();
+const THUMB_HEIGHT = 180;
+
+function captureThumb(index: number): void {
+  if (!videoPlayer || clipThumbs.has(index) || session?.pack.clips[index].image) return;
+  const src = videoPlayer.frameSource();
+  // Размер canvas у ogv.js точнее, чем videoWidth (там бывает паддинг)
+  const w = src instanceof HTMLCanvasElement ? src.width : videoPlayer.videoWidth;
+  const h = src instanceof HTMLCanvasElement ? src.height : videoPlayer.videoHeight;
+  if (!w || !h) return;
+  const canvas = document.createElement("canvas");
+  canvas.height = THUMB_HEIGHT;
+  canvas.width = Math.max(1, Math.round((w / h) * THUMB_HEIGHT));
+  try {
+    canvas.getContext("2d")!.drawImage(src, 0, 0, canvas.width, canvas.height);
+    clipThumbs.set(index, canvas.toDataURL("image/jpeg", 0.82));
+  } catch {
+    /* кадр ещё не готов — снимем на следующей реплике */
+  }
+}
+
 let previewSource: AudioBufferSourceNode | null = null;
 let monitorSource: AudioBufferSourceNode | null = null;
 let monitorGain: GainNode | null = null;
@@ -504,6 +534,7 @@ async function playClipWithAudio(buffer: AudioBuffer): Promise<void> {
   stopPreview();
   const dur = buffer.duration;
   const token = ++watchToken;
+  const clipIndex = session.clipIndex;
 
   await startClipVideo();
   if (token !== watchToken) return; // пока грузились, фрагмент уже отменили
@@ -525,6 +556,8 @@ async function playClipWithAudio(buffer: AudioBuffer): Promise<void> {
       hideWatchVideo();
       return;
     }
+    // Середина фрагмента — там персонаж уже точно в кадре и говорит
+    if (ratio > 0.45) captureThumb(clipIndex);
     waveform?.setPlayhead(Math.max(ratio, 0));
     playheadRaf = requestAnimationFrame(animate);
   };
@@ -687,6 +720,8 @@ function abandonSession(): void {
   hideWatchVideo(false); // плеер сейчас уничтожат — заставку показывать не на чем
   if (recorder.isRecording) recorder.stop();
   stopExportUi();
+  clearResults();
+  clipThumbs.clear();
   composer?.dispose();
   composer = null;
   videoPlayer?.dispose();
@@ -726,6 +761,122 @@ async function enterFinal(): Promise<void> {
   };
   showScreen("final");
   startFinalPlayback();
+  // Только после showScreen: волнам нужна реальная ширина канвасов
+  void renderResults();
+}
+
+// ---------- Результаты дубляжа ----------
+const resultsSection = $("results");
+const resultsList = $("results-list");
+/** Волны строк результата: держим ссылки, чтобы перерисовать при ресайзе. */
+let resultViews: WaveformView[] = [];
+let resultImageUrls: string[] = [];
+let resultsResizeObserver: ResizeObserver | null = null;
+let resultsVisibility: IntersectionObserver | null = null;
+
+function clearResults(): void {
+  resultsSection.hidden = true;
+  resultsVisibility?.disconnect();
+  resultsVisibility = null;
+  resultsList.replaceChildren();
+  resultViews = [];
+  for (const url of resultImageUrls) URL.revokeObjectURL(url);
+  resultImageUrls = [];
+}
+
+/**
+ * Экран результатов как в оригинале: кадр реплики, балл и наложенные волны
+ * (пурпур оригинала под бирюзой дубля) — сразу видно, где промахнулся.
+ */
+async function renderResults(): Promise<void> {
+  if (!session) return;
+  clearResults();
+  const sess = session;
+
+  const rows: HTMLElement[] = [];
+  const waves: Array<{ canvas: HTMLCanvasElement; original: AudioBuffer; take: Recording }> = [];
+  const scores: number[] = [];
+
+  for (let i = 0; i < sess.total; i++) {
+    const take = sess.recordings.get(i);
+    if (!take) continue; // реплику пропустили — оценивать нечего
+    const clip = sess.pack.clips[i];
+    const original = await sess.originalBuffer(i);
+    if (session !== sess) return; // сессию бросили, пока декодировали
+    const { score } = scoreTake(original, take);
+    scores.push(score);
+
+    const row = document.createElement("div");
+    row.className = "result-row";
+
+    const thumbSrc = clip.image ? URL.createObjectURL(clip.image) : clipThumbs.get(i);
+    if (clip.image && thumbSrc) resultImageUrls.push(thumbSrc);
+    if (thumbSrc) {
+      const img = document.createElement("img");
+      img.className = "result-thumb";
+      img.src = thumbSrc;
+      img.alt = "";
+      img.loading = "lazy";
+      row.append(img);
+    } else {
+      const stub = document.createElement("div");
+      stub.className = "result-thumb result-thumb-empty";
+      stub.textContent = "🎬";
+      row.append(stub);
+    }
+
+    const info = document.createElement("div");
+    info.className = "result-info";
+    const scoreEl = document.createElement("div");
+    scoreEl.className = "result-score";
+    scoreEl.textContent = t("scoreLabel", { v: score.toFixed(2) });
+    const caption = document.createElement("div");
+    caption.className = "result-caption";
+    caption.textContent = clip.caption;
+    info.append(scoreEl, caption);
+
+    const canvas = document.createElement("canvas");
+    canvas.className = "result-wave";
+    row.append(info, canvas);
+    rows.push(row);
+    waves.push({ canvas, original, take });
+  }
+
+  if (rows.length === 0) return;
+  resultsList.replaceChildren(...rows);
+
+  const percent = totalPercent(scores);
+  $("results-percent").textContent = `${percent.toFixed(2)}%`;
+  $("results-verdict").textContent = t(verdictKey(percent));
+  resultsSection.hidden = false;
+
+  // Волны рисуем лениво, по мере прокрутки: сразу после финала на этом же
+  // потоке идёт запись ролика в файл, и полсотни канвасов разом её тормозят
+  resultsVisibility?.disconnect();
+  resultsVisibility = new IntersectionObserver(
+    (entries, observer) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const canvas = entry.target as HTMLCanvasElement;
+        observer.unobserve(canvas);
+        const wave = waves.find((w) => w.canvas === canvas);
+        if (!wave) continue;
+        const view = new WaveformView(canvas, waveColors);
+        view.setOriginal(wave.original);
+        view.setUserRecording(wave.take.samples, takeTimelineSamples(wave.original, wave.take));
+        resultViews.push(view);
+      }
+    },
+    { rootMargin: "200px" }
+  );
+  for (const { canvas } of waves) resultsVisibility.observe(canvas);
+
+  if (!resultsResizeObserver) {
+    resultsResizeObserver = new ResizeObserver(() => {
+      for (const view of resultViews) view.resize();
+    });
+    resultsResizeObserver.observe(resultsList);
+  }
 }
 
 /** Просмотр: экспорт видео при этом тихо идёт под капотом. */
@@ -806,6 +957,7 @@ $("btn-retry").addEventListener("click", () => {
   if (!session) return;
   composer?.stop();
   stopExportUi();
+  clearResults();
   session.recordings.clear();
   showScreen("dub");
   void enterClip(0);

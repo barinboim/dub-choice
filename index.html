@@ -148,6 +148,17 @@
           <button id="btn-home" class="btn btn-pill" data-i18n="otherPack"></button>
         </div>
         <p id="export-status" class="export-status" hidden></p>
+
+        <!-- Результаты: попадание дубля в оригинальные реплики -->
+        <section id="results" class="results" hidden>
+          <h3 class="results-title" data-i18n="resultsTitle"></h3>
+          <div class="results-total">
+            <span id="results-percent" class="results-percent"></span>
+            <span id="results-verdict" class="results-verdict"></span>
+          </div>
+          <p class="results-hint" data-i18n="resultsHint"></p>
+          <div id="results-list" class="results-list"></div>
+        </section>
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>

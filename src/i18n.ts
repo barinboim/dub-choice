@@ -113,6 +113,20 @@ const dict = {
   audioError: { ru: "Не удалось отрендерить аудио.", en: "Couldn't render the audio." },
   dubFileSuffix: { ru: "мой дубляж", en: "my dub" },
   audioFileSuffix: { ru: "дубляж (аудио)", en: "dub (audio)" },
+
+  // Результаты
+  resultsTitle: { ru: "Результаты", en: "Results" },
+  resultsHint: {
+    ru: "Балл — насколько твой дубль попал в ритм оригинала: вовремя начал, вовремя замолчал, там же сделал акценты.",
+    en: "The score is how well your take matched the original's rhythm: starts, pauses and accents in the same places.",
+  },
+  scoreLabel: { ru: "Балл: {v}", en: "Score: {v}" },
+  verdictAce: { ru: "Тебя берут на дубляж!", en: "You're hired for the dub!" },
+  verdictGreat: { ru: "Отличная работа!", en: "Great work!" },
+  verdictGood: { ru: "Крепкий дубляж", en: "Solid dubbing" },
+  verdictMeh: { ru: "Не бросай основную работу!", en: "Don't quit your day job!" },
+  verdictPoor: { ru: "Зато с душой", en: "But full of soul" },
+  verdictAvant: { ru: "Это был авангард", en: "That was avant-garde" },
 } as const;
 
 export type MsgKey = keyof typeof dict;
