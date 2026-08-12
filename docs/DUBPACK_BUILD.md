@@ -7,6 +7,80 @@ The Choicer Voicer **не требуется** — используем совр
 Исходники паков лежат в `../dc_dubpacks/<pack>/` (вне git). Первый пак —
 `hp_owl` (Гарри Поттер, «Я вам не сова!»).
 
+## TL;DR: собрать новый пак
+
+Положить в `../dc_dubpacks/<pack>/` видео и `.srt` с ролями, дальше:
+
+```bash
+PACK=hp_owl; SRC="исходник.mov"; DUR=72.87    # DUR — длительность видео, с
+cd ../dc_dubpacks/$PACK && mkdir -p work build
+S=../../app/scripts/dubpack; PY=../.venv/bin/python; V=work/sep/htdemucs/original
+
+# 1. аудио и видео из исходника
+ffmpeg -y -i "$SRC" -vn -ac 2 -ar 44100 -c:a pcm_s16le work/original.wav
+ffmpeg -y -i "$SRC" -an -vf scale=-2:540 -c:v libx264 -profile:v high \
+  -pix_fmt yuv420p -crf 28 -preset slow -movflags +faststart build/dub_video.mp4
+
+# 2. разделение голоса и фона (при первом запуске тянет модель ~87 МБ)
+$PY -m demucs --two-stems=vocals -n htdemucs -d mps -o work/sep work/original.wav
+
+# 3. тайминги слов
+ffmpeg -y -i work/original.wav -ac 1 -ar 16000 -c:a pcm_s16le work/orig16k.wav
+whisper-cli -m ../models/ggml-large-v3-turbo.bin -l ru -ml 1 -sow -oj \
+  -of work/w_orig -f work/orig16k.wav
+
+# 4. ✋ РУКАМИ: написать clips.json (формат ниже) — единственный шаг с головой
+
+# 5. выравнивание, уточнение, проверка
+python3 $S/align.py work/w_orig.json clips.json work/aligned.json --duration=$DUR
+$PY $S/refine_onsets.py $V/vocals.wav work/aligned.json work/aligned2.json   # без --apply: посмотреть
+$PY $S/refine_onsets.py $V/vocals.wav work/aligned.json work/aligned2.json --apply
+$PY $S/check_bounds.py $V/vocals.wav work/aligned2.json
+
+# 6. бэкинг и сборка
+$PY $S/build_backing.py work/original.wav $V/no_vocals.wav $V/vocals.wav work/aligned2.json work/backing.wav
+python3 $S/build_pack.py work/aligned2.json work/original.wav work/backing.wav \
+  build/dub_video.mp4 build --icon-at=45
+(cd build && zip -q -X -r ../$PACK.zip . -x '.*')
+
+# 7. проверка парсером (скрипт обходит ПОДпапки указанного пути)
+cd ../../app && npm run test:packs -- "../dc_dubpacks/$PACK"
+```
+
+`align.py` и `build_pack.py` идут на системном `python3`, остальным нужен
+venv (в них numpy).
+
+## Формат `clips.json` — то, что пишется руками
+
+Единственный вход, который не выводится автоматически: авторская нарезка.
+
+```jsonc
+{
+  "title": "Гарри Поттер — Я вам не сова!",   // название пака
+  "subtitle": "Harry Potter and the Goblet of Fire",
+  "authors": ["barinboim"],
+  "clips": [
+    {
+      "n": 1,                     // номер по порядку = префикс имени файла
+      "name": "nevill",           // ЛАТИНИЦЕЙ: файл станет 01_nevill.mp3/.ini
+      "character": "Невилл",      // как показывается игроку, кириллица можно
+      "text": "Потрясающе!",      // caption; он же выравнивается по словам whisper
+      "srt": 1,                   // номер строки SRT, откуда взят текст (null — если ниоткуда)
+      "hint": [3.5, 4.9],         // окно поиска; страховка от артефактов whisper
+      "lock_start": 48.86,        // необязательно: жёстко заданная граница,
+      "lock_end": 50.93           // её не тронут ни выравнивание, ни уточнение
+    }
+  ]
+}
+```
+
+- `hint` — приблизительное окно. Для клипов, взятых прямо из строки SRT,
+  берётся её тайминг; для кусков внутри длинной строки — прикидывается
+- `lock_start` / `lock_end` нужны в двух случаях: владелец назвал границу на
+  слух, либо реплики нет в выводе whisper (невербальный звук — см. 4б)
+- Клипы должны идти по возрастанию времени: `refine_onsets.py` смотрит на
+  соседей по списку, чтобы не заехать на чужую реплику
+
 ## Решения, уже принятые (2026-08-12)
 
 | Вопрос | Решение |
@@ -18,7 +92,7 @@ The Choicer Voicer **не требуется** — используем совр
 | Дробление реплик | По смене говорящего (обязательно) → по предложению → по клаузе, если >7 с. Соседние короткие предложения одного говорящего слипаются, пока клип < ~4 с |
 | Видео | H.264 High, **1304×540**, **CRF 28**, `yuv420p`, `+faststart`, **без аудиодорожки** (движок всегда держит видео muted). CRF 23 давал 14.2 МБ, 26 → 9.9, 28 → 7.7; на мягкой тёмной картинке 28 визуально неотличим от 23 |
 | Аудио пака | **MP3** — в локальном ffmpeg нет libvorbis, а Opus-in-Ogg ненадёжен в Safari |
-| JPEG-кадры реплик | **Не делаем.** `DubClip.image` — `Blob \| null`, `main.ts:377` штатно показывает плейсхолдер |
+| JPEG-кадры реплик | **Не делаем.** `DubClip.image` — `Blob \| null`, а экран реплики показывает вместо картинки само видео на паузе (см. раздел в конце) |
 
 ## Пайплайн
 
@@ -36,8 +110,12 @@ The Choicer Voicer **не требуется** — используем совр
 - files.pythonhosted.org из этой сети отдаёт 60–260 КБ/с: torch (76 МБ)
   качается 5–20 минут. Колёса складываем в `dc_dubpacks/wheels/`, чтобы не
   качать повторно
+- **numpy ставится отдельно**: demucs 4.1.0 его в зависимостях не тянет, а
+  без него падают и он сам, и наши скрипты (`pip install numpy`)
 - Машина: M2 / 8 ГБ. Demucs на 73 с укладывается в пару минут; при нехватке
-  памяти — `--segment 10`
+  памяти — `--segment 10`. Ключ `-d mps` обязателен, иначе считает на CPU
+- Всё лежит рядом с паками, вне git: venv в `dc_dubpacks/.venv`, модель
+  whisper в `dc_dubpacks/models/`, скачанные колёса в `dc_dubpacks/wheels/`
 
 ### 1. Извлечение аудио
 
@@ -47,8 +125,10 @@ The Choicer Voicer **не требуется** — используем совр
 
 ### 2. Разделение
 
-`demucs --two-stems=vocals -n htdemucs original.wav` → `vocals.wav`,
-`no_vocals.wav`.
+`python -m demucs --two-stems=vocals -n htdemucs -d mps -o work/sep work/original.wav`
+
+Стемы окажутся в `work/sep/htdemucs/<имя файла без расширения>/` —
+`vocals.wav` и `no_vocals.wav`, 16 бит стерео 44.1, той же длины что вход.
 
 Проверка: в `no_vocals` не должно оставаться разборчивых слов — в финальном
 монтаже они наложатся на дубль игрока и это сразу слышно. Если остаточный
@@ -222,15 +302,50 @@ NN_<latin>.ini           # [data] caption, dub_timestamps, dub_characters
 | `refine_onsets.py` | Уточняет границы по энергии стема `vocals`. Без `--apply` — только показывает таблицу сдвигов |
 | `check_bounds.py` | Проверяет, что ни одна реплика не обрезана по краю. Код 1 при находках |
 | `vad.py` | Общий поиск речи по энергии стема: `envelope`, `threshold`, `voiced_regions` |
-| `build_backing.py` | Гибридный `_backing_track` (или `--pure` для чистого стема) |
+| `build_backing.py` | Гибридный `_backing_track` (или `--pure` для чистого стема). Принимает **и** `no_vocals`, **и** `vocals` — второй нужен для VAD |
 | `build_pack.py` | Режет клипы, пишет все `ini`, иконку, `_backing_track.mp3` |
 
 Входной `clips.json` (авторская нарезка: роль + текст + окно из SRT) пока
 пишется руками — это единственный шаг, где нужна голова. Дальняя цель из
 `CLAUDE.md` — редактор паков в самом приложении; этот пайплайн его прототип.
 
-## Возможное улучшение движка
+## Публикация пака в галерею сайта
 
-Раз кадров-картинок больше нет, стоит показывать на экране реплики **видео,
-поставленное на паузу в `dub_timestamps[0]`**, вместо плейсхолдера
-`dub-noimage`. Тогда отсутствие `image` перестаёт быть визуальной потерей.
+Встроенные паки перечислены в `src/pack/preloaded.ts`; порядок в массиве =
+порядок в галерее.
+
+```bash
+cd app
+cp ../dc_dubpacks/<pack>/<pack>.zip public/packs/<id>.zip
+sips -Z 160 ../dc_dubpacks/<pack>/build/icon.png --out public/pack-icons/<id>.png
+stat -f "%z" public/packs/<id>.zip        # точный размер → в sizeBytes
+```
+
+Затем добавить запись в `PRELOADED_PACKS` (первым элементом, если пак должен
+идти первым):
+
+```ts
+{ id: "hpowl", title: "…", paths: ["packs/hpowl.zip"],
+  icon: "pack-icons/hpowl.png", sizeBytes: 10_789_652 },
+```
+
+- **`id` должен быть уникальным** — в списке уже есть `harrypotter` (другой
+  пак по тем же фильмам), так что новый назван `hpowl`
+- `sizeBytes` нужен точный: по нему считается прогресс скачивания
+- Иконка списка рисуется 44×44 с `object-fit: cover` — квадратная не исказится
+- В проде паки качаются с `raw.githubusercontent.com` (там есть CORS), а не
+  с Pages. Значит **пак должен быть закоммичен в `main`**, иначе прод его не
+  увидит, даже если сборка прошла
+- Деплой: `git push origin main` → Actions → Pages. Проверять именно прод:
+  в dev-режиме файлы берутся с локального сервера и путь до raw не тестируется
+
+## Кадр-заставка вместо превью-картинки (сделано)
+
+Раньше при отсутствии `image` экран реплики показывал плейсхолдер
+`dub-noimage`. Теперь `hideWatchVideo()` в `main.ts` не прячет слот с
+плеером, а оставляет видео **на паузе в `dub_timestamps[0]`** — поэтому
+пайплайн и не делает JPEG-кадров.
+
+Работает только для `videoKind === "native"` (mp4/webm): у ogv.js отрисовка
+кадра после перемотки на паузе ненадёжна, там остаётся старое поведение.
+Такие паки почти всегда идут со своими картинками, так что потери нет.
