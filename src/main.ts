@@ -4,6 +4,7 @@ import { DubPack, PackError } from "./pack/types";
 import { PRELOADED_PACKS, packUrls, fetchWithProgress, formatSize } from "./pack/preloaded";
 import { audioContext } from "./audio/context";
 import { MicRecorder, recordingToBuffer } from "./audio/recorder";
+import { matchLoudness } from "./audio/normalize";
 import { WaveformView } from "./audio/waveform";
 import { DubSession } from "./game/session";
 import { Composer } from "./game/composer";
@@ -583,12 +584,16 @@ btnRecord.addEventListener("click", async () => {
   updateDubButtons();
 });
 
-function finishRecording(auto = false): void {
+async function finishRecording(auto = false): Promise<void> {
   if (!session) return;
   stopMonitor();
   hideWatchVideo();
   const rec = auto ? recorder.snapshot() : recorder.stop();
-  if (rec.samples.length > 0) session.recordings.set(session.clipIndex, rec);
+  if (rec.samples.length > 0) {
+    matchLoudness(rec, await session.originalBuffer());
+    session.recordings.set(session.clipIndex, rec);
+    waveform?.setUserRecording(rec.samples, rec.samples.length);
+  }
   waveform?.setPlayhead(null);
   updateDubButtons();
 }
