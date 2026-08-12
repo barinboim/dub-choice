@@ -65,7 +65,6 @@ const dict = {
   videoError: { ru: "Не удалось открыть dub_video.ogv из пака.", en: "Couldn't open dub_video.ogv from the pack." },
 
   // Экран дубляжа
-  quit: { ru: "← Выйти", en: "← Quit" },
   clipCounter: { ru: "Реплика {i} из {n}", en: "Line {i} of {n}" },
   noCaption: { ru: "(без субтитра)", en: "(no caption)" },
   original: { ru: "▶ Оригинал", en: "▶ Original" },

@@ -3,7 +3,7 @@ import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/
 import { DubPack, PackError } from "./pack/types";
 import { PRELOADED_PACKS, packUrls, fetchWithProgress, formatSize } from "./pack/preloaded";
 import { audioContext } from "./audio/context";
-import { MicRecorder, recordingToBuffer } from "./audio/recorder";
+import { MicRecorder, recordingToBuffer, type Recording } from "./audio/recorder";
 import { matchLoudness } from "./audio/normalize";
 import { WaveformView, type WaveformColors } from "./audio/waveform";
 import { DubSession } from "./game/session";
@@ -353,6 +353,7 @@ const dubVideoSlot = $("dub-video-slot");
 const dubNoImage = $("dub-noimage");
 const btnRecord = $<HTMLButtonElement>("btn-record");
 const btnNext = $<HTMLButtonElement>("btn-next");
+const btnBack = $<HTMLButtonElement>("btn-dub-back");
 const btnOrig = $<HTMLButtonElement>("btn-orig");
 const btnPlayTake = $<HTMLButtonElement>("btn-play-take");
 const recordBadge = $("record-badge");
@@ -403,13 +404,20 @@ async function enterClip(index: number): Promise<void> {
   const existing = session.recordings.get(index);
   const buf = await session.originalBuffer(index);
   waveform.setOriginal(buf);
-  if (existing) {
-    waveform.setUserRecording(existing.samples, Math.floor(buf.duration * existing.sampleRate));
-  }
+  if (existing) waveform.setUserRecording(existing.samples, takeTimelineSamples(buf, existing));
   updateDubButtons();
 
   // Реплику сразу показываем целиком: видео + звук + бегущий по волне курсор
   void playOriginalVideo();
+}
+
+/**
+ * Шкала, по которой рисуется волна дубля, — всегда длина оригинальной реплики.
+ * Иначе досрочно остановленный дубль растягивался бы на всю ширину сразу после
+ * записи и сжимался при возврате к реплике.
+ */
+function takeTimelineSamples(original: AudioBuffer, rec: Recording): number {
+  return Math.max(Math.floor(original.duration * rec.sampleRate), rec.samples.length);
 }
 
 function updateDubButtons(): void {
@@ -427,6 +435,7 @@ function updateDubButtons(): void {
   btnPlayTake.hidden = !(session.rehearsal && hasTake) || recorder.isRecording;
   btnPlayTake.textContent = t("myTake");
   btnOrig.disabled = recorder.isRecording;
+  btnBack.disabled = recorder.isRecording;
   $("waveform-hint").textContent = recorder.isRecording
     ? t("hintRecording")
     : hasTake
@@ -637,9 +646,10 @@ async function finishRecording(auto = false): Promise<void> {
   hideWatchVideo();
   const rec = auto ? recorder.snapshot() : recorder.stop();
   if (rec.samples.length > 0) {
-    matchLoudness(rec, await session.originalBuffer());
+    const original = await session.originalBuffer();
+    matchLoudness(rec, original);
     session.recordings.set(session.clipIndex, rec);
-    waveform?.setUserRecording(rec.samples, rec.samples.length);
+    waveform?.setUserRecording(rec.samples, takeTimelineSamples(original, rec));
   }
   waveform?.setPlayhead(null);
   updateDubButtons();
@@ -656,10 +666,19 @@ btnNext.addEventListener("click", () => {
   }
 });
 
-$("btn-dub-quit").addEventListener("click", () => {
-  if (!confirm(t("quitConfirm"))) return;
-  abandonSession();
-  showScreen("home");
+// «Назад» шагает по репликам: можно вернуться и перезаписать дубль. С первой
+// реплики шаг назад выводит из сессии — там это единственный выход «вглубь».
+btnBack.addEventListener("click", () => {
+  if (!session || recorder.isRecording) return;
+  if (session.clipIndex === 0) {
+    if (session.recordings.size > 0 && !confirm(t("quitConfirm"))) return;
+    abandonSession();
+    showScreen(selectedPack ? "pack" : "home");
+    return;
+  }
+  stopPreview();
+  hideWatchVideo();
+  void enterClip(session.clipIndex - 1);
 });
 
 function abandonSession(): void {

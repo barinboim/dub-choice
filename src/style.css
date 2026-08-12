@@ -383,6 +383,9 @@ a:hover { color: #fff; }
 .screen-dub { display: flex; flex-direction: column; gap: 14px; }
 
 .dub-top { display: flex; align-items: center; gap: 14px; }
+/* Шаг назад по репликам — компактнее основных кнопок, чтобы не спорить с ними */
+.dub-back { padding: 8px 16px; font-size: 0.85rem; color: var(--ink-soft); }
+.dub-back:hover:not(:disabled) { color: var(--ink); }
 .dub-progress { flex: 1; display: flex; align-items: center; gap: 12px; }
 .dub-counter {
   white-space: nowrap;
