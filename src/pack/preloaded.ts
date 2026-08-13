@@ -58,7 +58,7 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     title: "Star Wars — You Were the Chosen One",
     paths: ["packs/chosenone.zip"],
     icon: "pack-icons/chosenone.png",
-    sizeBytes: 12_628_101,
+    sizeBytes: 12_628_399,
   },
   {
     id: "lotr",
