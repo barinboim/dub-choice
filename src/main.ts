@@ -13,7 +13,7 @@ import {
 import { matchLoudness } from "./audio/normalize";
 import { WaveformView, type WaveformColors } from "./audio/waveform";
 import { DubSession, ORIGINAL_LANG } from "./game/session";
-import { Composer, type MixMode } from "./game/composer";
+import { Composer, DEFAULT_VOICEOVER_GAIN, type MixMode } from "./game/composer";
 import { scoreTake, totalPercent, verdictKey } from "./game/score";
 import { createVideoPlayer, DubVideoPlayer } from "./video/player";
 import { t, lang, langName, setLang, Lang } from "./i18n";
@@ -51,6 +51,15 @@ const waveColors: WaveformColors = {
   midline: "rgba(255,255,255,0.5)",
 };
 let waveform: WaveformView | null = null;
+
+/**
+ * Как сводить финал: «Дубляж» (только фон + записи) или «Закадр»
+ * (оригинальные голоса остаются под дублем). Выбирается на карточке пака и
+ * меняется на экране премьеры; оба набора радиокнопок держим синхронно.
+ */
+let mixMode: MixMode = "dub";
+/** Громкость оригинала в закадре, 0..1 — слайдер на экране премьеры. */
+let voiceoverGain = DEFAULT_VOICEOVER_GAIN;
 
 // ---------- Язык ----------
 function syncLangButtons(): void {
@@ -415,6 +424,8 @@ function captureThumb(index: number): void {
 }
 
 let previewSource: AudioBufferSourceNode | null = null;
+/** Подложка сцены под дублем (фон или оригинал) — глушится вместе с превью. */
+let sceneSource: AudioBufferSourceNode | null = null;
 let monitorSource: AudioBufferSourceNode | null = null;
 let monitorGain: GainNode | null = null;
 let playheadRaf = 0;
@@ -516,11 +527,13 @@ function updateDubButtons(): void {
 function stopPreview(): void {
   cancelAnimationFrame(playheadRaf);
   waveform?.setPlayhead(null);
-  if (previewSource) {
-    try { previewSource.stop(); } catch { /* уже остановлен */ }
-    previewSource.disconnect();
-    previewSource = null;
+  for (const node of [previewSource, sceneSource]) {
+    if (!node) continue;
+    try { node.stop(); } catch { /* уже остановлен */ }
+    node.disconnect();
   }
+  previewSource = null;
+  sceneSource = null;
 }
 
 /**
@@ -579,7 +592,9 @@ async function startClipVideo(waitPlaying = false): Promise<boolean> {
  */
 async function playClipWithAudio(
   buffer: AudioBuffer,
-  cursor?: { lead: number; span: number }
+  cursor?: { lead: number; span: number },
+  /** Подложка под дубль: фон сцены или её оригинальный звук. */
+  scene?: { buffer: AudioBuffer; gain: number; offset: number; delay: number }
 ): Promise<void> {
   if (!session || !videoPlayer) return;
   stopPreview();
@@ -600,6 +615,17 @@ async function playClipWithAudio(
   const t0 = ctx.currentTime;
   src.start();
   previewSource = src;
+
+  // Сцена стартует на lead позже дубля: у записи впереди есть запас
+  if (scene) {
+    const sceneSrc = ctx.createBufferSource();
+    sceneSrc.buffer = scene.buffer;
+    const sceneGain = ctx.createGain();
+    sceneGain.gain.value = scene.gain;
+    sceneSrc.connect(sceneGain).connect(ctx.destination);
+    sceneSrc.start(t0 + scene.delay, scene.offset);
+    sceneSource = sceneSrc;
+  }
 
   // Курсор ведём по аудиочасам — они точнее, чем currentTime у ogv.js
   const animate = () => {
@@ -684,15 +710,38 @@ function hideWatchVideo(keepStill = true): void {
 
 btnOrig.addEventListener("click", () => void playOriginalVideo());
 
-btnPlayTake.addEventListener("click", () => {
+btnPlayTake.addEventListener("click", () => void playTake());
+
+/**
+ * Прослушивание своего дубля — так же, как он будет звучать в финале:
+ * в режиме дубляжа под голосом идёт фоновая дорожка, в закадре — оригинальный
+ * звук сцены, приглушённый ровно как в миксе.
+ */
+async function playTake(): Promise<void> {
   if (!session) return;
   const rec = session.recordings.get(session.clipIndex);
   if (!rec) return;
+  const original = await session.originalBuffer();
+  const at = session.clip.timestamps[0];
+
+  let scene: { buffer: AudioBuffer; gain: number; offset: number; delay: number } | undefined;
+  if (mixMode === "voiceover") {
+    scene = { buffer: original, gain: voiceoverGain, offset: 0, delay: rec.leadSec };
+  } else {
+    const backing = await session.backingBuffer();
+    // Фон — кусок общей дорожки, начиная с таймстампа реплики
+    if (backing && at < backing.duration) {
+      scene = { buffer: backing, gain: 1, offset: at, delay: rec.leadSec };
+    }
+  }
+
   // Дубль тоже с видео; курсор ведём по окну реплики, запас он проходит молча
-  void session.originalBuffer().then((original) =>
-    playClipWithAudio(recordingToBuffer(rec), { lead: rec.leadSec, span: original.duration })
+  await playClipWithAudio(
+    recordingToBuffer(rec),
+    { lead: rec.leadSec, span: original.duration },
+    scene
   );
-});
+}
 
 /**
  * Субтитр реплики: пиллы языков (только у паков с переводами), сам текст и
@@ -970,34 +1019,59 @@ const exportCanvas = $<HTMLCanvasElement>("export-canvas");
 let downloadRequested = false;
 let exportProgressTimer = 0;
 
-const mixModeInputs = [...document.querySelectorAll<HTMLInputElement>('input[name="mix-mode"]')];
+const mixModeInputs = [
+  ...document.querySelectorAll<HTMLInputElement>('input[name="mix-mode"], input[name="mix-mode-pack"]'),
+];
+const voiceoverRow = $("voiceover-volume-row");
+const voiceoverSlider = $<HTMLInputElement>("voiceover-volume");
+const voiceoverValue = $("voiceover-volume-value");
 
-function currentMixMode(): MixMode {
-  return mixModeInputs.find((i) => i.checked)?.value === "voiceover" ? "voiceover" : "dub";
+/** Обе группы радиокнопок и слайдер показывают одно и то же состояние. */
+function syncMixModeUi(): void {
+  for (const input of mixModeInputs) input.checked = input.value === mixMode;
+  voiceoverRow.hidden = mixMode !== "voiceover";
+  voiceoverSlider.value = String(Math.round(voiceoverGain * 100));
+  voiceoverValue.textContent = `${Math.round(voiceoverGain * 100)}%`;
 }
 
 /**
- * Смена режима меняет саму дорожку, поэтому ролик пересобирается и стартует
- * заново: записанный до этого файл экспорта уже не соответствует выбору.
+ * Смена режима или громкости меняет саму дорожку, поэтому ролик пересобирается
+ * и стартует заново: записанный до этого файл экспорта выбору уже не
+ * соответствует. На карточке пака пересобирать нечего — там сессии ещё нет.
  */
 async function applyMixMode(): Promise<void> {
-  if (!session || !composer) return;
+  syncMixModeUi();
+  if (!session || !composer || screens.final.hidden) return;
   composer.stop();
   stopExportUi();
   exportStatus.hidden = true;
   downloadRequested = false;
-  await composer.prepare(session, currentMixMode());
+  await composer.prepare(session, mixMode, voiceoverGain);
   startFinalPlayback();
 }
 
 for (const input of mixModeInputs) {
-  input.addEventListener("change", () => void applyMixMode());
+  input.addEventListener("change", () => {
+    if (!input.checked) return;
+    mixMode = input.value === "voiceover" ? "voiceover" : "dub";
+    void applyMixMode();
+  });
 }
+
+// Слайдер оригинала: пока тянут — только цифра, пересборка по отпусканию
+voiceoverSlider.addEventListener("input", () => {
+  voiceoverValue.textContent = `${voiceoverSlider.value}%`;
+});
+voiceoverSlider.addEventListener("change", () => {
+  voiceoverGain = Number(voiceoverSlider.value) / 100;
+  void applyMixMode();
+});
 
 async function enterFinal(): Promise<void> {
   if (!session || !composer || !videoPlayer) return;
   $("dub-progress-fill").style.width = "100%";
-  await composer.prepare(session, currentMixMode());
+  syncMixModeUi();
+  await composer.prepare(session, mixMode, voiceoverGain);
   hideWatchVideo(false); // плеер сейчас переедет в финальный слот
   finalSlot.replaceChildren(videoPlayer.element);
   exportStatus.hidden = true;

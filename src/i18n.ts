@@ -43,7 +43,7 @@ const dict = {
   author: { ru: "Автор", en: "By" },
   withBacking: { ru: "с фоновой дорожкой", en: "with backing track" },
   withoutBacking: { ru: "без фоновой дорожки", en: "no backing track" },
-  start: { ru: "Начать дубляж!", en: "Start dubbing!" },
+  start: { ru: "Озвучить!", en: "Voice it!" },
   micRequest: { ru: "Запрашиваю доступ к микрофону…", en: "Requesting microphone access…" },
   micError: {
     ru: "Микрофон недоступен. Разреши доступ к микрофону в браузере и попробуй ещё раз.",
@@ -114,6 +114,12 @@ const dict = {
     ru: "Выйти из дубляжа? Записи этой сессии пропадут.",
     en: "Quit dubbing? This session's takes will be lost.",
   },
+
+  mixChangeLater: {
+    ru: "Выбор можно будет поменять перед сохранением ролика",
+    en: "You can change this before saving the video",
+  },
+  voiceoverVolume: { ru: "Громкость оригинала", en: "Original volume" },
 
   // Финал
   mixDub: { ru: "Дубляж", en: "Dubbing" },

@@ -72,6 +72,23 @@
           </div>
         </div>
         <div id="pack-warnings" class="pack-warnings" hidden></div>
+        <div class="mix-modes" id="pack-mix-modes">
+          <label class="mix-mode">
+            <input type="radio" name="mix-mode-pack" value="dub" checked />
+            <span class="mix-mode-text">
+              <span class="mix-mode-title" data-i18n="mixDub"></span>
+              <small data-i18n="mixDubHint"></small>
+            </span>
+          </label>
+          <label class="mix-mode">
+            <input type="radio" name="mix-mode-pack" value="voiceover" />
+            <span class="mix-mode-text">
+              <span class="mix-mode-title" data-i18n="mixVoiceover"></span>
+              <small data-i18n="mixVoiceoverHint"></small>
+            </span>
+          </label>
+        </div>
+        <p class="mix-modes-note" data-i18n="mixChangeLater"></p>
         <div class="pack-start-row">
           <button id="btn-start" class="btn btn-primary btn-big" data-i18n="start"></button>
           <p id="mic-status" class="mic-status"></p>
@@ -101,8 +118,8 @@
             <div class="dub-controls">
               <button id="btn-orig" class="btn btn-pill" data-i18n="original"></button>
               <button id="btn-record" class="btn btn-record" data-i18n="record"></button>
-              <button id="btn-play-take" class="btn btn-pill" data-i18n="myTake" hidden></button>
               <button id="btn-next" class="btn btn-primary" data-i18n="next" disabled></button>
+              <button id="btn-play-take" class="btn btn-pill" data-i18n="myTake" hidden></button>
             </div>
             <div class="monitor-block">
               <label class="monitor-toggle">
@@ -158,6 +175,11 @@
               <small data-i18n="mixVoiceoverHint"></small>
             </span>
           </label>
+        </div>
+        <div id="voiceover-volume-row" class="voiceover-volume" hidden>
+          <span data-i18n="voiceoverVolume"></span>
+          <input id="voiceover-volume" type="range" min="0" max="100" value="30" />
+          <span id="voiceover-volume-value" class="monitor-volume-value">30%</span>
         </div>
         <div class="final-controls">
           <button id="btn-final-play" class="btn btn-primary btn-big" data-i18n="watch"></button>

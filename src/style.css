@@ -626,7 +626,47 @@ a:hover { color: #fff; }
   height: 100%;
 }
 .final-video-slot:empty { display: none; }
-/* Режим финального микса: дубляж или закадр */
+/* Режим микса: дубляж или закадр — выбирается на карточке и в финале */
+.mix-modes-note {
+  text-align: center;
+  color: var(--ink-dim);
+  font-size: 0.78rem;
+  margin: 8px 0 0;
+}
+.voiceover-volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  max-width: 420px;
+  margin: 14px auto 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.voiceover-volume input[type="range"] {
+  flex: 1;
+  appearance: none;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  outline: none;
+  cursor: pointer;
+}
+.voiceover-volume input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--wave-user);
+  cursor: pointer;
+}
+.voiceover-volume input[type="range"]::-moz-range-thumb {
+  width: 14px; height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--wave-user);
+  cursor: pointer;
+}
+
 .mix-modes {
   display: flex;
   gap: 10px;
@@ -756,7 +796,47 @@ a:hover { color: #fff; }
   .waveform { height: 96px; }
   .pack-card { flex-direction: column; align-items: flex-start; gap: 14px; }
   .pack-icon { width: 72px; height: 72px; }
-  /* Режим финального микса: дубляж или закадр */
+  /* Режим микса: дубляж или закадр — выбирается на карточке и в финале */
+.mix-modes-note {
+  text-align: center;
+  color: var(--ink-dim);
+  font-size: 0.78rem;
+  margin: 8px 0 0;
+}
+.voiceover-volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  max-width: 420px;
+  margin: 14px auto 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.voiceover-volume input[type="range"] {
+  flex: 1;
+  appearance: none;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  outline: none;
+  cursor: pointer;
+}
+.voiceover-volume input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--wave-user);
+  cursor: pointer;
+}
+.voiceover-volume input[type="range"]::-moz-range-thumb {
+  width: 14px; height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--wave-user);
+  cursor: pointer;
+}
+
 .mix-modes {
   display: flex;
   gap: 10px;

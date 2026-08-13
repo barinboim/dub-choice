@@ -11,8 +11,8 @@ import { DubSession } from "./session";
  */
 export type MixMode = "dub" | "voiceover";
 
-/** Насколько тише оригинальные голоса в закадровом режиме. */
-const VOICEOVER_GAIN = 0.3;
+/** Громкость оригинальных голосов в закадре по умолчанию (игрок её крутит). */
+export const DEFAULT_VOICEOVER_GAIN = 0.3;
 
 interface ScheduledCue {
   buffer: AudioBuffer;
@@ -89,7 +89,11 @@ export class Composer {
     this.video.onEnded(() => this.handleEnded());
   }
 
-  async prepare(session: DubSession, mode: MixMode = "dub"): Promise<void> {
+  async prepare(
+    session: DubSession,
+    mode: MixMode = "dub",
+    voiceoverGain = DEFAULT_VOICEOVER_GAIN
+  ): Promise<void> {
     this.backing = await session.backingBuffer();
     this.capturedBlob = null; // записи могли измениться — старый файл невалиден
     this.cues = [];
@@ -115,7 +119,7 @@ export class Composer {
       for (let i = 0; i < session.total; i++) {
         const original = await session.originalBuffer(i);
         for (const t of session.pack.clips[i].timestamps) {
-          this.cues.push({ buffer: original, at: t, gain: VOICEOVER_GAIN });
+          this.cues.push({ buffer: original, at: t, gain: voiceoverGain });
         }
       }
     }
