@@ -133,6 +133,18 @@ async function addPack(load: Promise<DubPack>): Promise<void> {
 
 // --- Встроенные паки ---
 const preloadedBusy = new Set<string>();
+/**
+ * Качается всегда только один пак: игрок кликнул «Скачать» у другого —
+ * предыдущая закачка обрывается. Иначе медленный пак, догрузившись позже,
+ * перебивал выбор и подменял пак, с которым игрок уже начал работать.
+ */
+let activeDownload: AbortController | null = null;
+
+/** Обрывает текущую закачку из галереи: игрок занялся другим паком. */
+function cancelDownload(): void {
+  activeDownload?.abort();
+  activeDownload = null;
+}
 /** Выбранный (подсвеченный) пак в галерее — у него видна кнопка «Скачать». */
 let selectedPreloadedId: string | null = null;
 
@@ -205,6 +217,9 @@ function renderPreloadedList(): void {
 async function loadPreloaded(id: string): Promise<void> {
   const pp = PRELOADED_PACKS.find((p) => p.id === id);
   if (!pp || preloadedBusy.has(id)) return;
+  cancelDownload();
+  const download = new AbortController();
+  activeDownload = download;
   preloadedBusy.add(id);
   homeError.hidden = true;
 
@@ -220,16 +235,26 @@ async function loadPreloaded(id: string): Promise<void> {
   item?.classList.add("loading");
 
   try {
-    const blob = await fetchWithProgress(packUrls(pp), pp.sizeBytes, (ratio) => {
-      if (barEl) barEl.style.width = `${ratio * 100}%`;
-      if (sizeEl) sizeEl.textContent = `${t("packLoading")} ${Math.round(ratio * 100)}%`;
-    });
+    const blob = await fetchWithProgress(
+      packUrls(pp),
+      pp.sizeBytes,
+      (ratio) => {
+        if (barEl) barEl.style.width = `${ratio * 100}%`;
+        if (sizeEl) sizeEl.textContent = `${t("packLoading")} ${Math.round(ratio * 100)}%`;
+      },
+      download.signal
+    );
     if (sizeEl) sizeEl.textContent = t("packUnpacking");
-    await addPack(loadPackFromZip(new File([blob], `${pp.id}.zip`)));
+    const pack = await loadPackFromZip(new File([blob], `${pp.id}.zip`));
+    // Пока распаковывались, игрок мог запустить другую закачку — она главнее
+    if (download.signal.aborted) return;
+    await addPack(Promise.resolve(pack));
   } catch (err) {
+    if (download.signal.aborted) return; // закачку оборвал сам игрок
     console.error(err);
     showHomeError(t("fetchError"));
   } finally {
+    if (activeDownload === download) activeDownload = null;
     preloadedBusy.delete(id);
     if (btnEl) {
       btnEl.disabled = false;
@@ -271,13 +296,19 @@ $("btn-pick-folder").addEventListener("click", () => $("input-folder").click());
 
 $<HTMLInputElement>("input-zip").addEventListener("change", (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
-  if (file) void addPack(loadPackFromZip(file));
+  if (file) {
+    cancelDownload(); // свой пак важнее того, что качается из галереи
+    void addPack(loadPackFromZip(file));
+  }
   (e.target as HTMLInputElement).value = "";
 });
 
 $<HTMLInputElement>("input-folder").addEventListener("change", (e) => {
   const files = (e.target as HTMLInputElement).files;
-  if (files?.length) void addPack(loadPackFromFiles(files));
+  if (files?.length) {
+    cancelDownload();
+    void addPack(loadPackFromFiles(files));
+  }
   (e.target as HTMLInputElement).value = "";
 });
 
@@ -292,6 +323,7 @@ dropZone.addEventListener("drop", (e) => {
   e.preventDefault();
   const dt = (e as DragEvent).dataTransfer;
   if (!dt) return;
+  cancelDownload();
   const single = dt.files.length === 1 ? dt.files[0] : null;
   if (single && single.name.toLowerCase().endsWith(".zip")) {
     void addPack(loadPackFromZip(single));
@@ -495,7 +527,7 @@ function updateDubButtons(): void {
   // Отсчёт занимает экран так же, как запись: соседние кнопки на это время
   // выключены, а «Записать» превращается в отмену
   const busy = recorder.isRecording || countdownActive;
-  btnNext.disabled = !hasTake || countdownActive;
+  btnNext.disabled = !hasTake || busy;
   btnNext.textContent = session.isLastClip ? t("nextFinal") : t("next");
   btnRecord.textContent = countdownActive
     ? t("cancelCountdown")

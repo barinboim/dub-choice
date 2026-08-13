@@ -98,12 +98,13 @@ export function packUrls(pack: PreloadedPack): string[] {
 export async function fetchWithProgress(
   urls: string[],
   expectedSize: number,
-  onProgress: (ratio: number) => void
+  onProgress: (ratio: number) => void,
+  signal?: AbortSignal
 ): Promise<Blob> {
   const chunks: BlobPart[] = [];
   let received = 0;
   for (const url of urls) {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     if (!res.body) {
       const blob = await res.blob();
