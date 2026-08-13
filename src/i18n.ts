@@ -43,14 +43,6 @@ const dict = {
   author: { ru: "Автор", en: "By" },
   withBacking: { ru: "с фоновой дорожкой", en: "with backing track" },
   withoutBacking: { ru: "без фоновой дорожки", en: "no backing track" },
-  rehearsalTitle: {
-    ru: "Режим репетиции — можно прослушивать свои дубли",
-    en: "Rehearsal mode — listen to your takes anytime",
-  },
-  rehearsalHint: {
-    ru: "По умолчанию, как в оригинале: свой голос впервые услышишь в готовом ролике 🙈",
-    en: "Default is like the original: you first hear yourself in the final cut 🙈",
-  },
   start: { ru: "Начать дубляж!", en: "Start dubbing!" },
   micRequest: { ru: "Запрашиваю доступ к микрофону…", en: "Requesting microphone access…" },
   micError: {
@@ -67,6 +59,26 @@ const dict = {
   // Экран дубляжа
   clipCounter: { ru: "Реплика {i} из {n}", en: "Line {i} of {n}" },
   noCaption: { ru: "(без субтитра)", en: "(no caption)" },
+  langOriginal: { ru: "Оригинал", en: "Original" },
+  // Названия языков для пиллов над репликой; коды без имени показываются как есть
+  langName_en: { ru: "Английский", en: "English" },
+  langName_ru: { ru: "Русский", en: "Russian" },
+  langName_de: { ru: "Немецкий", en: "German" },
+  langName_fr: { ru: "Французский", en: "French" },
+  langName_es: { ru: "Испанский", en: "Spanish" },
+  langName_it: { ru: "Итальянский", en: "Italian" },
+  langName_pt: { ru: "Португальский", en: "Portuguese" },
+  langName_pl: { ru: "Польский", en: "Polish" },
+  langName_uk: { ru: "Украинский", en: "Ukrainian" },
+  langName_ja: { ru: "Японский", en: "Japanese" },
+  langName_zh: { ru: "Китайский", en: "Chinese" },
+  captionEditHint: { ru: "Нажми, чтобы переписать текст под себя", en: "Tap to rewrite the line your way" },
+  captionDone: { ru: "Готово", en: "Done" },
+  tagTranslator: { ru: "Режим переводчика", en: "Translator mode" },
+  tagTranslatorTooltip: {
+    ru: "В паке есть субтитры на нескольких языках: можно переключить язык реплики и озвучить перевод",
+    en: "This pack ships captions in several languages: switch the line's language and dub the translation",
+  },
   original: { ru: "▶ Оригинал", en: "▶ Original" },
   record: { ru: "● Записать", en: "● Record" },
   reRecord: { ru: "● Переписать", en: "● Redo take" },
@@ -157,6 +169,15 @@ export function setLang(l: Lang): void {
 }
 
 /** Перевод с подстановками: t("clipCounter", { i: 1, n: 17 }). */
+/**
+ * Название языка на языке интерфейса: "en" → «Английский» / "English".
+ * Незнакомый код показываем как есть — пак может нести любой язык.
+ */
+export function langName(code: string): string {
+  const key = `langName_${code.toLowerCase()}` as MsgKey;
+  return key in dict ? t(key) : code.toUpperCase();
+}
+
 export function t(key: MsgKey, vars?: Record<string, string | number>): string {
   let text: string = dict[key][current];
   if (vars) {

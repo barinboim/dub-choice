@@ -3,14 +3,20 @@ import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/
 import { DubPack, PackError } from "./pack/types";
 import { PRELOADED_PACKS, packUrls, fetchWithProgress, formatSize } from "./pack/preloaded";
 import { audioContext } from "./audio/context";
-import { MicRecorder, recordingToBuffer, type Recording } from "./audio/recorder";
+import {
+  MicRecorder,
+  recordingToBuffer,
+  takeWindow,
+  windowedRecording,
+  type Recording,
+} from "./audio/recorder";
 import { matchLoudness } from "./audio/normalize";
 import { WaveformView, type WaveformColors } from "./audio/waveform";
-import { DubSession } from "./game/session";
+import { DubSession, ORIGINAL_LANG } from "./game/session";
 import { Composer } from "./game/composer";
 import { scoreTake, totalPercent, verdictKey } from "./game/score";
 import { createVideoPlayer, DubVideoPlayer } from "./video/player";
-import { t, lang, setLang, Lang } from "./i18n";
+import { t, lang, langName, setLang, Lang } from "./i18n";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -79,6 +85,7 @@ function refreshDynamicTexts(): void {
       i: session.clipIndex + 1,
       n: session.total,
     });
+    renderCaption(); // «Ориг.» на пилле и подсказка правки тоже переводятся
     updateDubButtons();
   }
   if (composer) {
@@ -147,8 +154,14 @@ function renderPreloadedList(): void {
       for (const tag of pp.tags ?? []) {
         const badge = document.createElement("span");
         badge.className = "pi-tag";
-        badge.textContent = tag;
-        if (tag === "18+") badge.title = t("tagAdultTooltip");
+        // "translator" — ключ, а не подпись: тег переводится вместе с интерфейсом
+        if (tag === "translator") {
+          badge.textContent = t("tagTranslator");
+          badge.title = t("tagTranslatorTooltip");
+        } else {
+          badge.textContent = tag;
+          if (tag === "18+") badge.title = t("tagAdultTooltip");
+        }
         titleRow.append(badge);
       }
       const size = document.createElement("div");
@@ -296,8 +309,15 @@ function fillPackCard(pack: DubPack): void {
   $("pack-authors").textContent = pack.authors.length
     ? `${t("author")}: ${pack.authors.join(", ")}`
     : "";
-  $("pack-stats").textContent =
-    `${pack.clips.length} ${t("clipsCount")} · ${pack.backingTrack ? t("withBacking") : t("withoutBacking")}`;
+  // Языки перевода — часть характеристик пака, как и фоновая дорожка
+  const stats = [
+    `${pack.clips.length} ${t("clipsCount")}`,
+    pack.backingTrack ? t("withBacking") : t("withoutBacking"),
+  ];
+  if (pack.translations.length > 0) {
+    stats.push(`${t("tagTranslator")}: ${pack.translations.map(langName).join(", ")}`);
+  }
+  $("pack-stats").textContent = stats.join(" · ");
   const warn = $("pack-warnings");
   warn.hidden = pack.warnings.length === 0;
   warn.textContent = pack.warnings.join(" ");
@@ -341,7 +361,7 @@ $("btn-start").addEventListener("click", async () => {
     micStatus.classList.add("error");
     return;
   }
-  session = new DubSession(selectedPack, $<HTMLInputElement>("toggle-rehearsal").checked);
+  session = new DubSession(selectedPack, lang());
   composer?.dispose();
   composer = new Composer(videoPlayer);
   // Экран показываем до загрузки клипа, чтобы canvas получил размеры
@@ -362,6 +382,11 @@ const recordBadge = $("record-badge");
 const toggleMonitor = $<HTMLInputElement>("toggle-monitor");
 const toggleCountdown = $<HTMLInputElement>("toggle-countdown");
 const dubCountdown = $("dub-countdown");
+const dubCaption = $("dub-caption");
+const captionLangsRow = $("dub-caption-langs");
+const captionEdit = $("dub-caption-edit");
+const captionInput = $<HTMLTextAreaElement>("dub-caption-input");
+const btnCaptionDone = $<HTMLButtonElement>("btn-caption-done");
 const monitorVolume = $<HTMLInputElement>("monitor-volume");
 const monitorVolumeValue = $("monitor-volume-value");
 
@@ -411,13 +436,14 @@ monitorVolume.addEventListener("input", () => {
 async function enterClip(index: number): Promise<void> {
   if (!session) return;
   cancelCountdown(); // отсчёт с прошлой реплики новой уже не нужен
+  closeCaptionEditor();
   session.clipIndex = index;
   session.prefetchAround();
   const clip = session.clip;
 
   $("dub-counter").textContent = t("clipCounter", { i: index + 1, n: session.total });
   $("dub-progress-fill").style.width = `${(index / session.total) * 100}%`;
-  $("dub-caption").textContent = clip.caption || t("noCaption");
+  renderCaption();
   $("dub-character").textContent = clip.characters.join(", ");
 
   if (clipImageUrl) URL.revokeObjectURL(clipImageUrl);
@@ -437,7 +463,10 @@ async function enterClip(index: number): Promise<void> {
   const existing = session.recordings.get(index);
   const buf = await session.originalBuffer(index);
   waveform.setOriginal(buf);
-  if (existing) waveform.setUserRecording(existing.samples, takeTimelineSamples(buf, existing));
+  if (existing) {
+    const existingWindow = takeWindow(existing, buf.duration);
+    waveform.setUserRecording(existingWindow, takeTimelineSamples(buf, existingWindow.length));
+  }
   updateDubButtons();
 
   // Реплику сразу показываем целиком: видео + звук + бегущий по волне курсор
@@ -449,8 +478,8 @@ async function enterClip(index: number): Promise<void> {
  * Иначе досрочно остановленный дубль растягивался бы на всю ширину сразу после
  * записи и сжимался при возврате к реплике.
  */
-function takeTimelineSamples(original: AudioBuffer, rec: Recording): number {
-  return Math.max(Math.floor(original.duration * rec.sampleRate), rec.samples.length);
+function takeTimelineSamples(original: AudioBuffer, takeSamples: number): number {
+  return Math.max(Math.floor(original.duration * audioContext().sampleRate), takeSamples);
 }
 
 function updateDubButtons(): void {
@@ -470,7 +499,7 @@ function updateDubButtons(): void {
         : t("record");
   btnRecord.classList.toggle("recording", recorder.isRecording);
   recordBadge.hidden = !recorder.isRecording;
-  btnPlayTake.hidden = !(session.rehearsal && hasTake) || busy;
+  btnPlayTake.hidden = !hasTake || busy;
   btnPlayTake.textContent = t("myTake");
   btnOrig.disabled = busy;
   btnBack.disabled = busy;
@@ -542,11 +571,20 @@ async function startClipVideo(waitPlaying = false): Promise<boolean> {
   return playing ? await playing : false;
 }
 
-/** Видео + аудиобуфер вместе: оригинал реплики или свой дубль. */
-async function playClipWithAudio(buffer: AudioBuffer): Promise<void> {
+/**
+ * Видео + аудиобуфер вместе: оригинал реплики или свой дубль.
+ * cursor задаёт, какой отрезок буфера считать самой репликой: у дубля вокруг
+ * неё есть запас, и без поправки курсор ехал бы не по волне.
+ */
+async function playClipWithAudio(
+  buffer: AudioBuffer,
+  cursor?: { lead: number; span: number }
+): Promise<void> {
   if (!session || !videoPlayer) return;
   stopPreview();
   const dur = buffer.duration;
+  const cursorLead = cursor?.lead ?? 0;
+  const cursorSpan = cursor?.span || dur;
   const token = ++watchToken;
   const clipIndex = session.clipIndex;
 
@@ -565,7 +603,7 @@ async function playClipWithAudio(buffer: AudioBuffer): Promise<void> {
   // Курсор ведём по аудиочасам — они точнее, чем currentTime у ogv.js
   const animate = () => {
     if (token !== watchToken) return;
-    const ratio = (ctx.currentTime - t0) / dur;
+    const ratio = (ctx.currentTime - t0 - cursorLead) / cursorSpan;
     if (ratio >= 1) {
       hideWatchVideo();
       return;
@@ -648,7 +686,77 @@ btnOrig.addEventListener("click", () => void playOriginalVideo());
 btnPlayTake.addEventListener("click", () => {
   if (!session) return;
   const rec = session.recordings.get(session.clipIndex);
-  if (rec) void playClipWithAudio(recordingToBuffer(rec)); // дубль тоже с видео
+  if (!rec) return;
+  // Дубль тоже с видео; курсор ведём по окну реплики, запас он проходит молча
+  void session.originalBuffer().then((original) =>
+    playClipWithAudio(recordingToBuffer(rec), { lead: rec.leadSec, span: original.duration })
+  );
+});
+
+/**
+ * Субтитр реплики: пиллы языков (только у паков с переводами), сам текст и
+ * скрытое поле правки. Свой вариант текста живёт в сессии и подставляется
+ * вместо субтитра — озвучивать можно ровно то, что видишь.
+ */
+function renderCaption(): void {
+  if (!session) return;
+  const langs = session.captionLangs;
+  captionLangsRow.hidden = langs.length === 0;
+  captionLangsRow.replaceChildren(
+    ...langs.map((lang) => {
+      const pill = document.createElement("button");
+      pill.className = "caption-lang";
+      pill.classList.toggle("active", lang === session!.captionLang);
+      pill.textContent = lang === ORIGINAL_LANG ? langLabel(session!.pack.lang) : langLabel(lang);
+      pill.addEventListener("click", () => {
+        if (!session) return;
+        session.captionLang = lang;
+        closeCaptionEditor();
+        renderCaption();
+      });
+      return pill;
+    })
+  );
+
+  const text = session.captionFor();
+  dubCaption.textContent = text || t("noCaption");
+  dubCaption.classList.toggle("edited", session.isCaptionEdited());
+  dubCaption.title = t("captionEditHint");
+}
+
+/** Ярлык на пилле: название языка, у пака без lang — «Оригинал». */
+function langLabel(lang: string): string {
+  return lang === ORIGINAL_LANG ? t("langOriginal") : langName(lang);
+}
+
+function openCaptionEditor(): void {
+  if (!session || recorder.isRecording || countdownActive) return;
+  captionInput.value = session.captionFor();
+  dubCaption.hidden = true;
+  captionEdit.hidden = false;
+  captionInput.focus();
+  captionInput.select();
+}
+
+function closeCaptionEditor(save = false): void {
+  if (captionEdit.hidden) return;
+  if (save && session) session.editCaption(captionInput.value.trim());
+  captionEdit.hidden = true;
+  dubCaption.hidden = false;
+  renderCaption();
+}
+
+dubCaption.addEventListener("click", openCaptionEditor);
+btnCaptionDone.addEventListener("click", () => closeCaptionEditor(true));
+captionInput.addEventListener("keydown", (e) => {
+  // Enter сохраняет, Shift+Enter — перенос строки, Esc отменяет
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    closeCaptionEditor(true);
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeCaptionEditor();
+  }
 });
 
 /** Токен отсчёта: инкремент отменяет уже идущий. */
@@ -720,6 +828,7 @@ btnRecord.addEventListener("click", async () => {
     return;
   }
   cancelWatch();
+  closeCaptionEditor(); // правку не бросаем открытой поверх записи
   const buf = await session.originalBuffer();
   const totalSamples = Math.floor(buf.duration * audioContext().sampleRate);
   const clipIndex = session.clipIndex;
@@ -728,9 +837,18 @@ btnRecord.addEventListener("click", async () => {
   if (!session || session.clipIndex !== clipIndex) return;
   waveform.beginUserRecording(totalSamples);
 
+  // Пишем шире реплики (запас с обоих концов), а рисуем ровно её окно:
+  // хвост за пределами хронометража в волну не лезет, но в записи остаётся
+  let drawn = 0;
   await recorder.start(
     buf.duration,
-    (chunk) => waveform?.appendUserChunk(chunk),
+    (chunk) => {
+      const room = totalSamples - drawn;
+      if (room <= 0) return;
+      const part = chunk.length <= room ? chunk : chunk.subarray(0, room);
+      drawn += part.length;
+      waveform?.appendUserChunk(part);
+    },
     () => finishRecording(true)
   );
   updateDubButtons(); // кнопка и бейдж откликаются сразу, ещё до первого кадра
@@ -744,6 +862,7 @@ btnRecord.addEventListener("click", async () => {
   if (!recorder.isRecording || session?.clipIndex !== clipIndex) return;
   if (started) {
     recorder.markStart();
+    drawn = 0;
     waveform.beginUserRecording(totalSamples); // волну рисуем от того же нуля
   }
   // Оригинал в ухо — вместе с видео, иначе подсказка сама себя рассинхронит
@@ -768,9 +887,12 @@ async function finishRecording(auto = false): Promise<void> {
   const rec = auto ? recorder.snapshot() : recorder.stop();
   if (rec.samples.length > 0) {
     const original = await session.originalBuffer();
-    matchLoudness(rec, original);
+    // На волне — окно самой реплики: запас с обоих концов в кадр не влезает,
+    // но в монтаж уходит запись целиком
+    const window = takeWindow(rec, original.duration);
+    matchLoudness(rec, original, window);
     session.recordings.set(session.clipIndex, rec);
-    waveform?.setUserRecording(rec.samples, takeTimelineSamples(original, rec));
+    waveform?.setUserRecording(window, takeTimelineSamples(original, window.length));
   }
   waveform?.setPlayhead(null);
   updateDubButtons();
@@ -892,7 +1014,8 @@ async function renderResults(): Promise<void> {
     const clip = sess.pack.clips[i];
     const original = await sess.originalBuffer(i);
     if (session !== sess) return; // сессию бросили, пока декодировали
-    const { score } = scoreTake(original, take);
+    // Оцениваем только окно реплики: запас по краям — не промах игрока
+    const { score } = scoreTake(original, windowedRecording(take, original.duration));
     scores.push(score);
 
     const row = document.createElement("div");
@@ -921,7 +1044,8 @@ async function renderResults(): Promise<void> {
     scoreEl.textContent = t("scoreLabel", { v: score.toFixed(2) });
     const caption = document.createElement("div");
     caption.className = "result-caption";
-    caption.textContent = clip.caption;
+    // Показываем ровно то, что игрок видел, когда дублировал: язык и его правку
+    caption.textContent = sess.captionFor(i);
     info.append(scoreEl, caption);
 
     const canvas = document.createElement("canvas");
@@ -952,7 +1076,8 @@ async function renderResults(): Promise<void> {
         if (!wave) continue;
         const view = new WaveformView(canvas, waveColors);
         view.setOriginal(wave.original);
-        view.setUserRecording(wave.take.samples, takeTimelineSamples(wave.original, wave.take));
+        const takeWave = takeWindow(wave.take, wave.original.duration);
+        view.setUserRecording(takeWave, takeTimelineSamples(wave.original, takeWave.length));
         resultViews.push(view);
       }
     },

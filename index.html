@@ -72,14 +72,6 @@
           </div>
         </div>
         <div id="pack-warnings" class="pack-warnings" hidden></div>
-        <label class="rehearsal-toggle">
-          <input id="toggle-rehearsal" type="checkbox" />
-          <span class="toggle-track"><span class="toggle-thumb"></span></span>
-          <span class="toggle-label">
-            <span data-i18n="rehearsalTitle"></span>
-            <small data-i18n="rehearsalHint"></small>
-          </span>
-        </label>
         <div class="pack-start-row">
           <button id="btn-start" class="btn btn-primary btn-big" data-i18n="start"></button>
           <p id="mic-status" class="mic-status"></p>
@@ -129,7 +121,12 @@
           </div>
         </div>
 
+        <div id="dub-caption-langs" class="caption-langs" hidden></div>
         <p id="dub-caption" class="dub-caption"></p>
+        <div id="dub-caption-edit" class="caption-edit" hidden>
+          <textarea id="dub-caption-input" class="caption-input" rows="2"></textarea>
+          <button id="btn-caption-done" class="btn btn-pill" data-i18n="captionDone"></button>
+        </div>
 
         <div class="waveform-wrap">
           <canvas id="dub-waveform" class="waveform"></canvas>

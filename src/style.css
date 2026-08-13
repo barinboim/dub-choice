@@ -343,39 +343,7 @@ a:hover { color: #fff; }
   font-size: 0.88rem;
 }
 
-.rehearsal-toggle {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  margin: 22px 4px;
-  cursor: pointer;
-  user-select: none;
-}
-.rehearsal-toggle input { display: none; }
-.toggle-track {
-  flex: 0 0 44px;
-  height: 26px;
-  border-radius: 999px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  position: relative;
-  transition: background 0.15s, border-color 0.15s;
-  margin-top: 1px;
-}
-.toggle-thumb {
-  position: absolute;
-  top: 2px; left: 2px;
-  width: 20px; height: 20px;
-  background: var(--ink-soft);
-  border-radius: 50%;
-  transition: left 0.15s, background 0.15s;
-}
-.rehearsal-toggle input:checked + .toggle-track { background: var(--wave-user); border-color: transparent; }
-.rehearsal-toggle input:checked + .toggle-track .toggle-thumb { left: 21px; background: #0b0b0b; }
-.toggle-label { line-height: 1.4; font-size: 0.95rem; }
-.toggle-label small { display: block; color: var(--ink-dim); margin-top: 2px; }
-
-.pack-start-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.pack-start-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 22px; }
 .mic-status { color: var(--ink-soft); margin: 0; font-size: 0.9rem; }
 .mic-status.error { color: #ff9c8f; }
 
@@ -507,6 +475,33 @@ a:hover { color: #fff; }
   font-variant-numeric: tabular-nums;
 }
 
+/* Режим переводчика: языки субтитра и правка текста под себя */
+.caption-langs {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.caption-lang {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.caption-lang:hover { color: var(--ink); }
+.caption-lang.active {
+  background: var(--wave-user);
+  border-color: transparent;
+  color: #0b0b0b;
+}
+
 .dub-caption {
   font-size: clamp(1.05rem, 3vw, 1.3rem);
   font-weight: 600;
@@ -515,7 +510,36 @@ a:hover { color: #fff; }
   max-width: 40ch;
   line-height: 1.4;
   min-height: 1.4em;
+  cursor: text;
+  border-radius: 8px;
+  padding: 2px 8px;
+  transition: background 0.15s;
 }
+.dub-caption:hover { background: var(--panel-2); }
+/* Свой вариант текста помечаем, чтобы не спутать с оригинальным субтитром */
+.dub-caption.edited { border-bottom: 2px dashed var(--wave-user); }
+
+.caption-edit {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 46ch;
+  margin: 0 auto;
+  width: 100%;
+}
+.caption-input {
+  flex: 1;
+  resize: vertical;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.caption-input:focus { outline: none; border-color: var(--wave-user); }
 
 .waveform-wrap {
   position: relative;

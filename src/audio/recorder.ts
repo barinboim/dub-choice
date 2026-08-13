@@ -29,11 +29,38 @@ function ensureWorklet(ctx: AudioContext): Promise<void> {
   return workletReady;
 }
 
+/**
+ * Запас вокруг реплики. Игрок почти никогда не укладывается ровно в чужой
+ * хронометраж: вступает раньше персонажа или договаривает после него.
+ * Пишем шире окна с обеих сторон и в монтаж отдаём запись целиком — реплики
+ * пака и так идут внахлёст, слоями микс их сложит.
+ */
+export const PRE_ROLL_SEC = 0.5;
+export const TAIL_SEC = 2;
+
 export interface Recording {
-  /** Моно PCM запись. */
+  /** Моно PCM запись, включая запас до и после реплики. */
   samples: Float32Array;
   sampleRate: number;
   durationSec: number;
+  /**
+   * Сколько секунд записано ДО начала реплики (запас-вступление). Монтаж
+   * сдвигает запись на это время назад, чтобы слово легло туда, где сказано.
+   */
+  leadSec: number;
+}
+
+/** Последние n сэмплов из цепочки кусков — запас-вступление перед репликой. */
+function tailOf(chunks: Float32Array[], n: number): Float32Array {
+  const out = new Float32Array(n);
+  let need = n;
+  for (let i = chunks.length - 1; i >= 0 && need > 0; i--) {
+    const chunk = chunks[i];
+    const take = Math.min(need, chunk.length);
+    out.set(chunk.subarray(chunk.length - take), need - take);
+    need -= take;
+  }
+  return need > 0 ? out.subarray(need) : out;
 }
 
 export class MicRecorder {
@@ -46,6 +73,13 @@ export class MicRecorder {
   private active = false;
   private onChunkCb: ((chunk: Float32Array) => void) | null = null;
   private onAutoStopCb: (() => void) | null = null;
+  /** Звук, пойманный до старта записи, — из него берётся запас-вступление. */
+  private preRoll: Float32Array[] = [];
+  private preRollSamples = 0;
+  /** Длина окна реплики и запаса в сэмплах — из них считается автостоп. */
+  private windowSamples = 0;
+  private tailSamples = 0;
+  private leadSamples = 0;
 
   /** Запрашивает доступ к микрофону (можно вызвать заранее, на экране пака). */
   async init(): Promise<void> {
@@ -65,8 +99,9 @@ export class MicRecorder {
 
   /**
    * Подключает микрофон к графу заранее, не начиная запись: поток успевает
-   * раскачаться, а AudioWorklet — загрузиться. Всё, что приходит до start(),
-   * отбрасывается. Вызывается на отсчёте перед записью.
+   * раскачаться, а AudioWorklet — загрузиться. Приходящий звук копится в
+   * коротком кольце — из него потом берётся запас-вступление, если игрок
+   * заговорил раньше персонажа. Вызывается на отсчёте перед записью.
    */
   async arm(): Promise<void> {
     await this.init();
@@ -89,7 +124,16 @@ export class MicRecorder {
   }
 
   private receive(data: Float32Array): void {
-    if (!this.active) return; // прогрев до start(): сэмплы никому не нужны
+    if (!this.active) {
+      // Прогрев до start(): держим короткое кольцо на случай раннего вступления
+      this.preRoll.push(data);
+      this.preRollSamples += data.length;
+      const keep = Math.ceil(PRE_ROLL_SEC * audioContext().sampleRate);
+      while (this.preRollSamples - this.preRoll[0].length >= keep) {
+        this.preRollSamples -= this.preRoll.shift()!.length;
+      }
+      return;
+    }
     let chunk = data;
     const remaining = this.maxSamples - this.totalSamples;
     if (chunk.length >= remaining) {
@@ -108,35 +152,45 @@ export class MicRecorder {
   }
 
   /**
-   * Начинает запись. maxDurationSec — автостоп (длина оригинальной реплики).
+   * Начинает запись. clipDurationSec — длина реплики; автостоп срабатывает
+   * на TAIL_SEC позже, чтобы договорённое после персонажа не срезалось.
    * onChunk вызывается с каждым куском сэмплов для живой отрисовки.
    */
   async start(
-    maxDurationSec: number,
+    clipDurationSec: number,
     onChunk: (chunk: Float32Array) => void,
     onAutoStop: () => void
   ): Promise<void> {
     await this.arm();
+    const sr = audioContext().sampleRate;
 
     this.chunks = [];
     this.totalSamples = 0;
-    this.maxSamples = Math.floor(maxDurationSec * audioContext().sampleRate);
+    this.leadSamples = 0;
+    this.windowSamples = Math.floor(clipDurationSec * sr);
+    this.tailSamples = Math.floor(TAIL_SEC * sr);
+    this.maxSamples = this.windowSamples + this.tailSamples;
     this.onChunkCb = onChunk;
     this.onAutoStopCb = onAutoStop;
     this.active = true;
   }
 
   /**
-   * Переносит начало дубля в «сейчас», выбрасывая уже накопленное. Нужно
-   * потому, что видео стартует не мгновенно: между кликом и первым кадром
-   * микрофон пишет пустоту, а игрок начинает говорить под картинку — без
-   * сброса весь дубль уезжает на время старта плеера. Автостоп по длине
-   * реплики тоже отсчитывается заново, от нового нуля.
+   * Отмечает начало реплики — момент, когда на экране пошли кадры. Всё, что
+   * записано раньше, отбрасывается, кроме последних PRE_ROLL_SEC: игрок
+   * нередко вступает до персонажа, и этот кусок сохраняется как lead.
+   * Автостоп отсчитывается от новой нулевой точки.
    */
   markStart(): void {
     if (!this.active) return;
-    this.chunks = [];
-    this.totalSamples = 0;
+    const sr = audioContext().sampleRate;
+    const want = Math.floor(PRE_ROLL_SEC * sr);
+    // Запас берём из всего пойманного: и до start(), и за время старта плеера
+    const lead = tailOf([...this.preRoll, ...this.chunks], want);
+    this.chunks = lead.length > 0 ? [lead] : [];
+    this.totalSamples = lead.length;
+    this.leadSamples = lead.length;
+    this.maxSamples = lead.length + this.windowSamples + this.tailSamples;
   }
 
   /** Останавливает запись и возвращает результат. */
@@ -158,6 +212,7 @@ export class MicRecorder {
       samples,
       sampleRate: ctx.sampleRate,
       durationSec: samples.length / ctx.sampleRate,
+      leadSec: this.leadSamples / ctx.sampleRate,
     };
   }
 
@@ -167,6 +222,8 @@ export class MicRecorder {
 
   private teardown(): void {
     this.active = false;
+    this.preRoll = [];
+    this.preRollSamples = 0;
     this.worklet?.port.close();
     this.worklet?.disconnect();
     this.source?.disconnect();
@@ -180,6 +237,45 @@ export class MicRecorder {
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
   }
+}
+
+/**
+ * Окно самой реплики внутри записи — без запаса с обоих концов. Волна и
+ * оценка работают по нему: игрок должен видеть и получать балл за то, что
+ * попало в хронометраж персонажа, а в монтаж уходит запись целиком.
+ */
+export function takeWindow(rec: Recording, clipDurationSec: number): Float32Array {
+  const from = Math.round(rec.leadSec * rec.sampleRate);
+  const to = Math.min(rec.samples.length, from + Math.round(clipDurationSec * rec.sampleRate));
+  return rec.samples.subarray(Math.min(from, rec.samples.length), Math.max(from, to));
+}
+
+/**
+ * Момент последнего звука в записи (сек). Нужен монтажу: за концом видео он
+ * ждёт хвост реплики, и ждать две секунды тишины, если игрок замолчал вовремя,
+ * незачем — иначе ролик всегда заканчивался бы фризом последнего кадра.
+ */
+export function voiceEndSec(rec: Recording): number {
+  const win = Math.max(1, Math.round(0.02 * rec.sampleRate));
+  const threshold = 0.01; // ≈ −40 dBFS: тише этого в хвосте только шум
+  for (let end = rec.samples.length; end > 0; end -= win) {
+    const from = Math.max(0, end - win);
+    let sumSq = 0;
+    for (let i = from; i < end; i++) sumSq += rec.samples[i] * rec.samples[i];
+    if (Math.sqrt(sumSq / (end - from)) > threshold) return end / rec.sampleRate;
+  }
+  return 0;
+}
+
+/** Та же запись, обрезанная до окна реплики, — для оценки дубля. */
+export function windowedRecording(rec: Recording, clipDurationSec: number): Recording {
+  const samples = takeWindow(rec, clipDurationSec);
+  return {
+    samples,
+    sampleRate: rec.sampleRate,
+    durationSec: samples.length / rec.sampleRate,
+    leadSec: 0,
+  };
 }
 
 /** Переводит моно-запись в AudioBuffer для воспроизведения/монтажа. */

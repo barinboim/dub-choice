@@ -1,13 +1,32 @@
 import { audioContext } from "../audio/context";
-import { recordingToBuffer } from "../audio/recorder";
+import { recordingToBuffer, voiceEndSec, TAIL_SEC } from "../audio/recorder";
 import { audioBufferToWav } from "../audio/wav";
 import { DubVideoPlayer } from "../video/player";
 import { DubSession } from "./session";
 
 interface ScheduledCue {
   buffer: AudioBuffer;
-  /** Момент в видео, куда синхронизирована запись. */
+  /**
+   * Момент в видео, куда ложится начало записи. Уже с поправкой на запас-
+   * вступление: если игрок заговорил до персонажа, запись начинается раньше
+   * таймстампа реплики. Может быть отрицательным — тогда обрезаем по нулю.
+   */
   at: number;
+}
+
+/**
+ * Мягкий лимитер на мастере. Реплики в паках часто идут внахлёст, каждый
+ * дубль нормализован почти под 0 dBFS, и сумма двух голосов уходила в
+ * клиппинг — на слух это провал и хрип ровно на стыках фраз.
+ */
+function createLimiter(ctx: BaseAudioContext): DynamicsCompressorNode {
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -6;
+  limiter.knee.value = 6;
+  limiter.ratio.value = 12;
+  limiter.attack.value = 0.003;
+  limiter.release.value = 0.25;
+  return limiter;
 }
 
 /**
@@ -23,6 +42,11 @@ export class Composer {
   private backing: AudioBuffer | null = null;
   private activeSources: AudioBufferSourceNode[] = [];
   private readonly masterGain: GainNode;
+  /** Мастер-лимитер: между masterGain и выходом (он же уходит в запись MP4). */
+  private readonly limiter: DynamicsCompressorNode;
+  /** Насколько последняя реплика переживает конец видео (сек). */
+  private overhangSec = 0;
+  private overhangTimer = 0;
 
   private capturedBlob: Blob | null = null;
   private capturing = false;
@@ -45,8 +69,11 @@ export class Composer {
   onCaptureFinished: ((blob: Blob | null) => void) | null = null;
 
   constructor(private readonly video: DubVideoPlayer) {
-    this.masterGain = audioContext().createGain();
-    this.masterGain.connect(audioContext().destination);
+    const ctx = audioContext();
+    this.masterGain = ctx.createGain();
+    this.limiter = createLimiter(ctx);
+    this.masterGain.connect(this.limiter);
+    this.limiter.connect(ctx.destination);
     this.video.onEnded(() => this.handleEnded());
   }
 
@@ -54,13 +81,25 @@ export class Composer {
     this.backing = await session.backingBuffer();
     this.capturedBlob = null; // записи могли измениться — старый файл невалиден
     this.cues = [];
+    const videoEnd = this.video.duration || 0;
+    let overhang = 0;
     session.pack.clips.forEach((clip, i) => {
       const rec = session.recordings.get(i);
       if (!rec || rec.samples.length === 0) return;
       const buffer = recordingToBuffer(rec);
-      for (const t of clip.timestamps) this.cues.push({ buffer, at: t });
+      // Считаем по последнему звуку, а не по длине буфера: молчаливый хвост
+      // задерживал бы финал фризом последнего кадра на ровном месте
+      const voiceEnd = voiceEndSec(rec);
+      // Запись длиннее реплики с обеих сторон — ставим её так, чтобы начало
+      // самой реплики совпало с таймстампом, а запас лёг вокруг
+      for (const t of clip.timestamps) {
+        const at = t - rec.leadSec;
+        this.cues.push({ buffer, at });
+        overhang = Math.max(overhang, at + voiceEnd - videoEnd);
+      }
     });
     this.cues.sort((a, b) => a.at - b.at);
+    this.overhangSec = overhang;
   }
 
   /** Готовый экспортированный ролик, если просмотр дошёл до конца. */
@@ -92,7 +131,12 @@ export class Composer {
     this.video.muted = true;
     this.video.currentTime = 0;
     if (captureCanvas && !this.capturedBlob) this.startCapture(captureCanvas);
+    // Звук привязываем к моменту, когда плеер реально показал кадр: иначе на
+    // медленном устройстве весь дубляж уезжает вперёд картинки и реплики
+    // звучат на чужих сценах
+    const playing = this.video.whenPlaying();
     await this.video.play().catch(() => {});
+    await playing;
     this.scheduleFrom(this.video.currentTime);
   }
 
@@ -106,6 +150,7 @@ export class Composer {
       src.buffer = buffer;
       src.connect(this.masterGain);
       const delay = at - videoTime;
+      // Запас-вступление первой реплики может уходить левее нуля видео
       if (delay >= 0) {
         src.start(t0 + delay);
       } else if (-delay < buffer.duration) {
@@ -131,7 +176,7 @@ export class Composer {
     const c2d = canvas.getContext("2d")!;
 
     this.audioDest = ctx.createMediaStreamDestination();
-    this.masterGain.connect(this.audioDest);
+    this.limiter.connect(this.audioDest); // после лимитера: в файл идёт то же, что слышно
 
     const stream = new MediaStream([
       ...canvas.captureStream(30).getVideoTracks(),
@@ -162,8 +207,22 @@ export class Composer {
     draw();
   }
 
-  /** Видео дошло до конца: звук глушим, фоновую запись финализируем как успешную. */
+  /**
+   * Видео дошло до конца. Если последняя реплика ещё звучит (игрок договаривал
+   * после персонажа), даём ей доиграть — и только потом глушим звук и
+   * закрываем запись, иначе в файл попадёт обрубленная фраза.
+   */
   private handleEnded(): void {
+    const wait = Math.min(this.overhangSec, TAIL_SEC);
+    if (wait <= 0.01) {
+      this.finishPlayback();
+      return;
+    }
+    clearTimeout(this.overhangTimer);
+    this.overhangTimer = window.setTimeout(() => this.finishPlayback(), wait * 1000);
+  }
+
+  private finishPlayback(): void {
     this.stopAudio();
     if (this.capturing) this.finishCapture(false);
   }
@@ -176,7 +235,7 @@ export class Composer {
     this.recorder?.stop();
     this.recorder = null;
     if (this.audioDest) {
-      this.masterGain.disconnect(this.audioDest);
+      this.limiter.disconnect(this.audioDest);
       this.audioDest = null;
     }
   }
@@ -201,11 +260,16 @@ export class Composer {
     if (durationSec <= 0) throw new Error("Нечего рендерить");
 
     const offline = new OfflineAudioContext(2, Math.ceil(durationSec * sampleRate), sampleRate);
+    const limiter = createLimiter(offline);
+    limiter.connect(offline.destination);
     const startSource = (buffer: AudioBuffer, at: number) => {
       const src = offline.createBufferSource();
       src.buffer = buffer;
-      src.connect(offline.destination);
-      src.start(at);
+      src.connect(limiter);
+      // Отрицательный at — реплика начинается раньше нуля видео: играем её
+      // с середины, иначе start() бросит исключение
+      if (at >= 0) src.start(at);
+      else if (-at < buffer.duration) src.start(0, -at);
     };
     if (this.backing) startSource(this.backing, 0);
     for (const cue of this.cues) startSource(cue.buffer, cue.at);
@@ -215,6 +279,7 @@ export class Composer {
 
   /** Останавливает просмотр; недописанная фоновая запись выбрасывается. */
   stop(): void {
+    clearTimeout(this.overhangTimer);
     if (this.capturing) this.finishCapture(true);
     this.stopAudio();
     this.video.pause();
@@ -224,5 +289,6 @@ export class Composer {
     this.onCaptureFinished = null;
     this.stop();
     this.masterGain.disconnect();
+    this.limiter.disconnect();
   }
 }

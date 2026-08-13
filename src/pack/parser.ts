@@ -14,6 +14,8 @@ const VIDEO_SOURCES: { name: string; kind: "native" | "ogv" }[] = [
   { name: "dub_video.webm", kind: "native" },
   { name: "dub_video.ogv", kind: "ogv" },
 ];
+/** Ключ перевода субтитра: caption_ru, caption_en, caption_pt-br. */
+const CAPTION_LANG_RE = /^caption_([a-z]{2,3}(?:-[a-z0-9]{2,8})?)$/i;
 
 /**
  * Собирает DubPack из плоской карты файлов (имя → Blob).
@@ -44,6 +46,7 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
   let subtitle = "";
   let authors: string[] = [];
   let iconName: string | null = null;
+  let lang = "";
   const packInfoBlob = find("_pack_info.ini");
   if (packInfoBlob) {
     const ini = parseIni(await packInfoBlob.text());
@@ -51,6 +54,7 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     title = iniString(data, "title", title);
     subtitle = iniString(data, "subtitle");
     authors = iniStringArray(data, "authors");
+    lang = iniString(data, "lang").toLowerCase();
     const icon = iniString(data, "icon");
     if (icon) iconName = icon;
   } else {
@@ -64,6 +68,7 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
   // Прочие txt (README, _subtitle) отсеиваются сами: в них нет dub_timestamps.
   const clips: DubClip[] = [];
   const seenBases = new Set<string>();
+  const translations = new Set<string>();
   for (const ext of [".ini", ".txt"]) {
     for (const { name, blob } of byLower.values()) {
       if (!name.toLowerCase().endsWith(ext)) continue;
@@ -84,9 +89,20 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
       seenBases.add(baseLower);
       // Явное поле image= в метаданных важнее совпадения по имени файла
       const explicitImage = iniString(data, "image");
+      // Переводы субтитра: caption_ru, caption_en… Пустые не считаем за язык,
+      // иначе пилл появился бы у реплики, для которой перевода нет
+      const captions: Record<string, string> = {};
+      for (const [key, value] of Object.entries(data ?? {})) {
+        const m = CAPTION_LANG_RE.exec(key);
+        if (!m || typeof value !== "string" || value.trim() === "") continue;
+        const code = m[1].toLowerCase();
+        captions[code] = value;
+        translations.add(code);
+      }
       clips.push({
         baseName: base,
         caption: iniString(data, "caption"),
+        captions,
         timestamps: [...timestamps].sort((a, b) => a - b),
         characters: iniStringArray(data, "dub_characters"),
         audio,
@@ -119,6 +135,9 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     videoKind: videoSource.kind,
     backingTrack: findByBase(byLower, "_backing_track", AUDIO_EXTS),
     clips,
+    lang,
+    // Язык оригинала переводом не считается, даже если пак его продублировал
+    translations: [...translations].filter((code) => code !== lang).sort(),
     warnings,
   };
 }

@@ -35,8 +35,10 @@ function bufferRms(buffer: AudioBuffer): number {
  * Поднимает громкость `rec.samples` до уровня `target` (мутирует запись на месте).
  * Никогда не тише оригинала не делает (gain < 1 игнорируется) и не усиливает тишину.
  */
-export function matchLoudness(rec: Recording, target: AudioBuffer): void {
-  const recRms = samplesRms(rec.samples);
+export function matchLoudness(rec: Recording, target: AudioBuffer, measure?: Float32Array): void {
+  // Уровень меряем по окну реплики, а не по всей записи: запас с краёв обычно
+  // тишина, из-за неё усиление задиралось бы и вытягивало шум
+  const recRms = samplesRms(measure ?? rec.samples);
   if (recRms < SILENCE_RMS) return;
   const targetRms = bufferRms(target);
   if (targetRms < SILENCE_RMS) return;
