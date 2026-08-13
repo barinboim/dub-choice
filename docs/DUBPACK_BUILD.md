@@ -44,6 +44,7 @@ python3 $S/safe_zone.py work/aligned2.json work/safezoned.json --duration=$DUR
 $PY $S/build_backing.py work/original.wav $V/no_vocals.wav $V/vocals.wav work/aligned2.json work/backing.wav
 python3 $S/build_pack.py work/safezoned.json work/original.wav work/backing.wav \
   build/dub_video.mp4 build --icon-at=45
+ffmpeg -y -i work/original.wav -c:a libmp3lame -b:a 128k -ac 2 build/_original_track.mp3
 (cd build && zip -q -X -r ../$PACK.zip . -x '.*')
 
 # 8. проверка парсером (скрипт обходит ПОДпапки указанного пути)
@@ -336,6 +337,23 @@ dub_timestamps=[33.352]
   характеристик на карточке пака
 - Игрок может переписать текст любой реплики под себя прямо в игре, но эта
   правка живёт только в текущей сессии и в пак не возвращается
+
+### 5б. Закадровый режим: `_original_track`
+
+В финале игрок выбирает, заменить голоса персонажей своими («Дубляж») или
+положить озвучку поверх приглушённого оригинала («Закадр»). Закадру нужна
+полная дорожка сцены **с голосами** — её и кладём в пак:
+
+```bash
+ffmpeg -i work/original.wav -c:a libmp3lame -b:a 128k -ac 2 build/_original_track.mp3
+```
+
+- Файл опциональный, но для своих паков делаем всегда: +0,8…5,5 МБ к архиву
+- Без него закадр собирается из `_backing_track` и кусков-реплик, а они
+  несут собственный фон — под репликами он выходит примерно на 2 дБ плотнее.
+  Для чужих паков только так, исходников у нас нет
+- Слайдер «громкость оригинала» на премьере ведёт всю эту дорожку целиком,
+  вместе с музыкой и шумами — как в настоящем закадровом переводе
 
 ### 6. Проверка
 
