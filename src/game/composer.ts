@@ -52,6 +52,8 @@ function createLimiter(ctx: BaseAudioContext): DynamicsCompressorNode {
 export class Composer {
   private cues: ScheduledCue[] = [];
   private backing: AudioBuffer | null = null;
+  /** Целая оригинальная дорожка для закадра; заменяет собой фон. */
+  private voiceoverTrack: { buffer: AudioBuffer; gain: number } | null = null;
   private activeSources: AudioBufferSourceNode[] = [];
   private readonly masterGain: GainNode;
   /** Мастер-лимитер: между masterGain и выходом (он же уходит в запись MP4). */
@@ -114,12 +116,21 @@ export class Composer {
         overhang = Math.max(overhang, at + voiceEnd - videoEnd);
       }
     });
-    // Закадр: оригинальные реплики возвращаются в микс, но тише дубля
+    // Закадр: оригинальный звук сцены возвращается в микс, но тише дубля.
+    // Целая дорожка — если пак её несёт: тогда фон играет ровно один раз.
+    // Иначе собираем оригинал из кусков-реплик поверх фона, и под ними фон
+    // получается чуть плотнее — с чужими паками иначе никак.
+    this.voiceoverTrack = null;
     if (mode === "voiceover") {
-      for (let i = 0; i < session.total; i++) {
-        const original = await session.originalBuffer(i);
-        for (const t of session.pack.clips[i].timestamps) {
-          this.cues.push({ buffer: original, at: t, gain: voiceoverGain });
+      const track = await session.originalTrackBuffer();
+      if (track) {
+        this.voiceoverTrack = { buffer: track, gain: voiceoverGain };
+      } else {
+        for (let i = 0; i < session.total; i++) {
+          const original = await session.originalBuffer(i);
+          for (const t of session.pack.clips[i].timestamps) {
+            this.cues.push({ buffer: original, at: t, gain: voiceoverGain });
+          }
         }
       }
     }
@@ -193,7 +204,11 @@ export class Composer {
       this.activeSources.push(src);
     };
 
-    if (this.backing) startSource(this.backing, 0);
+    if (this.voiceoverTrack) {
+      startSource(this.voiceoverTrack.buffer, 0, this.voiceoverTrack.gain);
+    } else if (this.backing) {
+      startSource(this.backing, 0);
+    }
     for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain);
   }
 
@@ -288,6 +303,9 @@ export class Composer {
     const sampleRate = audioContext().sampleRate;
     let durationSec = this.video.duration || 0;
     if (this.backing) durationSec = Math.max(durationSec, this.backing.duration);
+    if (this.voiceoverTrack) {
+      durationSec = Math.max(durationSec, this.voiceoverTrack.buffer.duration);
+    }
     for (const cue of this.cues) durationSec = Math.max(durationSec, cue.at + cue.buffer.duration);
     if (durationSec <= 0) throw new Error("Нечего рендерить");
 
@@ -309,7 +327,11 @@ export class Composer {
       if (at >= 0) src.start(at);
       else if (-at < buffer.duration) src.start(0, -at);
     };
-    if (this.backing) startSource(this.backing, 0);
+    if (this.voiceoverTrack) {
+      startSource(this.voiceoverTrack.buffer, 0, this.voiceoverTrack.gain);
+    } else if (this.backing) {
+      startSource(this.backing, 0);
+    }
     for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain);
 
     return audioBufferToWav(await offline.startRendering());

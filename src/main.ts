@@ -726,13 +726,21 @@ async function playTake(): Promise<void> {
 
   // Точно тот же набор слоёв, что уйдёт в финальный микс
   const scenes: Array<{ buffer: AudioBuffer; gain: number; offset: number; delay: number }> = [];
-  const backing = await session.backingBuffer();
-  // Фон — кусок общей дорожки, начиная с таймстампа реплики
-  if (backing && at < backing.duration) {
-    scenes.push({ buffer: backing, gain: 1, offset: at, delay: rec.leadSec });
-  }
-  if (mixMode === "voiceover") {
-    scenes.push({ buffer: original, gain: voiceoverGain, offset: 0, delay: rec.leadSec });
+  const voiceoverTrack = mixMode === "voiceover" ? await session.originalTrackBuffer() : null;
+  if (voiceoverTrack) {
+    // Пак несёт целую оригинальную дорожку — она и играет вместо фона
+    if (at < voiceoverTrack.duration) {
+      scenes.push({ buffer: voiceoverTrack, gain: voiceoverGain, offset: at, delay: rec.leadSec });
+    }
+  } else {
+    const backing = await session.backingBuffer();
+    // Фон — кусок общей дорожки, начиная с таймстампа реплики
+    if (backing && at < backing.duration) {
+      scenes.push({ buffer: backing, gain: 1, offset: at, delay: rec.leadSec });
+    }
+    if (mixMode === "voiceover") {
+      scenes.push({ buffer: original, gain: voiceoverGain, offset: 0, delay: rec.leadSec });
+    }
   }
 
   // Дубль тоже с видео; курсор ведём по окну реплики, запас он проходит молча

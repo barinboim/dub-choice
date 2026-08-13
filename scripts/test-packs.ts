@@ -25,7 +25,7 @@ for (const dir of readdirSync(packsRoot)) {
     const pack = await parsePack(files);
     console.log(
       `✅ ${dir}: «${pack.title}» — ${pack.clips.length} реплик, ` +
-        `backing=${!!pack.backingTrack}, icon=${!!pack.icon}` +
+        `backing=${!!pack.backingTrack}, original=${!!pack.originalTrack}, icon=${!!pack.icon}` +
         (pack.translations.length
           ? `, переводы: ${pack.translations.join(",")} (${pack.clips.filter((c) => Object.keys(c.captions).length > 0).length} реплик)`
           : "") +

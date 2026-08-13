@@ -134,6 +134,7 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     video: videoSource.blob!,
     videoKind: videoSource.kind,
     backingTrack: findByBase(byLower, "_backing_track", AUDIO_EXTS),
+    originalTrack: findByBase(byLower, "_original_track", AUDIO_EXTS),
     clips,
     lang,
     // Язык оригинала переводом не считается, даже если пак его продублировал

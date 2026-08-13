@@ -29,14 +29,14 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     title: "Гарри Поттер — Я вам не сова!",
     paths: ["packs/hpowl.zip"],
     icon: "pack-icons/hpowl.png",
-    sizeBytes: 11_506_784,
+    sizeBytes: 12_666_304,
   },
   {
     id: "slonik",
     title: "Зелёный слоник — Сколько истребителей?",
     paths: ["packs/slonik.zip"],
     icon: "pack-icons/slonik.png",
-    sizeBytes: 27_477_118,
+    sizeBytes: 32_784_254,
     tags: ["18+"],
   },
   {
@@ -44,7 +44,7 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     title: "The Room — Oh Hi Mark",
     paths: ["packs/theroom.zip"],
     icon: "pack-icons/theroom.png",
-    sizeBytes: 4_560_293,
+    sizeBytes: 5_342_073,
   },
   {
     id: "starwars",
@@ -58,7 +58,7 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     title: "Star Wars — You Were the Chosen One",
     paths: ["packs/chosenone.zip"],
     icon: "pack-icons/chosenone.png",
-    sizeBytes: 10_839_657,
+    sizeBytes: 12_628_101,
   },
   {
     id: "lotr",

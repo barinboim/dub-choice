@@ -20,6 +20,7 @@ export class DubSession {
   /** Декодированные оригинальные реплики (для waveform и прослушивания). */
   private readonly originals = new Map<number, AudioBuffer>();
   private backing: AudioBuffer | null | undefined;
+  private originalTrack: AudioBuffer | null | undefined;
 
   /**
    * uiLang — язык интерфейса: если пак несёт субтитры на нём, с них и
@@ -92,6 +93,16 @@ export class DubSession {
       this.backing = this.pack.backingTrack ? await decodeAudio(this.pack.backingTrack) : null;
     }
     return this.backing;
+  }
+
+  /** Полная оригинальная дорожка сцены, если пак её несёт. */
+  async originalTrackBuffer(): Promise<AudioBuffer | null> {
+    if (this.originalTrack === undefined) {
+      this.originalTrack = this.pack.originalTrack
+        ? await decodeAudio(this.pack.originalTrack)
+        : null;
+    }
+    return this.originalTrack;
   }
 
   /** Подгружает следующую реплику заранее, чтобы переходы были мгновенными. */

@@ -278,6 +278,9 @@ venv (в них numpy).
 ```
 dub_video.mp4            # H.264 1304×540 CRF 28, без звука
 _backing_track.mp3       # гибридный фон, 192 kbps stereo, полная длина видео
+_original_track.mp3      # полная сцена С голосами, 128 kbps stereo — для закадра:
+                         #   ffmpeg -i work/original.wav -c:a libmp3lame -b:a 128k \
+                         #     -ac 2 build/_original_track.mp3
 _pack_info.ini           # [data] title, subtitle, icon, authors, lang
 icon.png                 # кадр из видео, 512×512 (кроп по центру)
 NN_<latin>.mp3           # оригинал реплики (полный микс), 128 kbps
