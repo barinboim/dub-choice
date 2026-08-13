@@ -424,8 +424,8 @@ function captureThumb(index: number): void {
 }
 
 let previewSource: AudioBufferSourceNode | null = null;
-/** Подложка сцены под дублем (фон или оригинал) — глушится вместе с превью. */
-let sceneSource: AudioBufferSourceNode | null = null;
+/** Подложки сцены под дублем (фон и/или оригинал) — глушатся вместе с превью. */
+let sceneSources: AudioBufferSourceNode[] = [];
 let monitorSource: AudioBufferSourceNode | null = null;
 let monitorGain: GainNode | null = null;
 let playheadRaf = 0;
@@ -527,13 +527,13 @@ function updateDubButtons(): void {
 function stopPreview(): void {
   cancelAnimationFrame(playheadRaf);
   waveform?.setPlayhead(null);
-  for (const node of [previewSource, sceneSource]) {
+  for (const node of [previewSource, ...sceneSources]) {
     if (!node) continue;
     try { node.stop(); } catch { /* уже остановлен */ }
     node.disconnect();
   }
   previewSource = null;
-  sceneSource = null;
+  sceneSources = [];
 }
 
 /**
@@ -593,8 +593,8 @@ async function startClipVideo(waitPlaying = false): Promise<boolean> {
 async function playClipWithAudio(
   buffer: AudioBuffer,
   cursor?: { lead: number; span: number },
-  /** Подложка под дубль: фон сцены или её оригинальный звук. */
-  scene?: { buffer: AudioBuffer; gain: number; offset: number; delay: number }
+  /** Подложки под дубль: фон сцены и/или её оригинальный звук. */
+  scenes: Array<{ buffer: AudioBuffer; gain: number; offset: number; delay: number }> = []
 ): Promise<void> {
   if (!session || !videoPlayer) return;
   stopPreview();
@@ -617,14 +617,14 @@ async function playClipWithAudio(
   previewSource = src;
 
   // Сцена стартует на lead позже дубля: у записи впереди есть запас
-  if (scene) {
+  for (const scene of scenes) {
     const sceneSrc = ctx.createBufferSource();
     sceneSrc.buffer = scene.buffer;
     const sceneGain = ctx.createGain();
     sceneGain.gain.value = scene.gain;
     sceneSrc.connect(sceneGain).connect(ctx.destination);
     sceneSrc.start(t0 + scene.delay, scene.offset);
-    sceneSource = sceneSrc;
+    sceneSources.push(sceneSrc);
   }
 
   // Курсор ведём по аудиочасам — они точнее, чем currentTime у ogv.js
@@ -724,22 +724,22 @@ async function playTake(): Promise<void> {
   const original = await session.originalBuffer();
   const at = session.clip.timestamps[0];
 
-  let scene: { buffer: AudioBuffer; gain: number; offset: number; delay: number } | undefined;
+  // Точно тот же набор слоёв, что уйдёт в финальный микс
+  const scenes: Array<{ buffer: AudioBuffer; gain: number; offset: number; delay: number }> = [];
+  const backing = await session.backingBuffer();
+  // Фон — кусок общей дорожки, начиная с таймстампа реплики
+  if (backing && at < backing.duration) {
+    scenes.push({ buffer: backing, gain: 1, offset: at, delay: rec.leadSec });
+  }
   if (mixMode === "voiceover") {
-    scene = { buffer: original, gain: voiceoverGain, offset: 0, delay: rec.leadSec };
-  } else {
-    const backing = await session.backingBuffer();
-    // Фон — кусок общей дорожки, начиная с таймстампа реплики
-    if (backing && at < backing.duration) {
-      scene = { buffer: backing, gain: 1, offset: at, delay: rec.leadSec };
-    }
+    scenes.push({ buffer: original, gain: voiceoverGain, offset: 0, delay: rec.leadSec });
   }
 
   // Дубль тоже с видео; курсор ведём по окну реплики, запас он проходит молча
   await playClipWithAudio(
     recordingToBuffer(rec),
     { lead: rec.leadSec, span: original.duration },
-    scene
+    scenes
   );
 }
 
