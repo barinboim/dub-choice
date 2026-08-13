@@ -530,6 +530,32 @@ a:hover { color: #fff; }
   height: 128px;
   border-radius: var(--radius-sm);
 }
+/* Отсчёт перед записью: цифра поверх кадра, чтобы взгляд не уходил с экрана */
+.dub-countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: clamp(3.5rem, 18vh, 8rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.dub-countdown span {
+  display: block;
+  animation: countdown-tick 1s ease-out;
+}
+@keyframes countdown-tick {
+  0% { transform: scale(1.35); opacity: 0; }
+  18% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.92); opacity: 0.55; }
+}
+
 .record-badge {
   position: absolute;
   top: 16px; right: 20px;

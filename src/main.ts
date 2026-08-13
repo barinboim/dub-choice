@@ -360,6 +360,8 @@ const btnOrig = $<HTMLButtonElement>("btn-orig");
 const btnPlayTake = $<HTMLButtonElement>("btn-play-take");
 const recordBadge = $("record-badge");
 const toggleMonitor = $<HTMLInputElement>("toggle-monitor");
+const toggleCountdown = $<HTMLInputElement>("toggle-countdown");
+const dubCountdown = $("dub-countdown");
 const monitorVolume = $<HTMLInputElement>("monitor-volume");
 const monitorVolumeValue = $("monitor-volume-value");
 
@@ -408,6 +410,7 @@ monitorVolume.addEventListener("input", () => {
 
 async function enterClip(index: number): Promise<void> {
   if (!session) return;
+  cancelCountdown(); // отсчёт с прошлой реплики новой уже не нужен
   session.clipIndex = index;
   session.prefetchAround();
   const clip = session.clip;
@@ -453,24 +456,31 @@ function takeTimelineSamples(original: AudioBuffer, rec: Recording): number {
 function updateDubButtons(): void {
   if (!session) return;
   const hasTake = session.recordings.has(session.clipIndex);
-  btnNext.disabled = !hasTake;
+  // Отсчёт занимает экран так же, как запись: соседние кнопки на это время
+  // выключены, а «Записать» превращается в отмену
+  const busy = recorder.isRecording || countdownActive;
+  btnNext.disabled = !hasTake || countdownActive;
   btnNext.textContent = session.isLastClip ? t("nextFinal") : t("next");
-  btnRecord.textContent = recorder.isRecording
-    ? t("stopRec")
-    : hasTake
-      ? t("reRecord")
-      : t("record");
+  btnRecord.textContent = countdownActive
+    ? t("cancelCountdown")
+    : recorder.isRecording
+      ? t("stopRec")
+      : hasTake
+        ? t("reRecord")
+        : t("record");
   btnRecord.classList.toggle("recording", recorder.isRecording);
   recordBadge.hidden = !recorder.isRecording;
-  btnPlayTake.hidden = !(session.rehearsal && hasTake) || recorder.isRecording;
+  btnPlayTake.hidden = !(session.rehearsal && hasTake) || busy;
   btnPlayTake.textContent = t("myTake");
-  btnOrig.disabled = recorder.isRecording;
-  btnBack.disabled = recorder.isRecording;
-  $("waveform-hint").textContent = recorder.isRecording
-    ? t("hintRecording")
-    : hasTake
-      ? t("hintHasTake")
-      : t("hintIdle");
+  btnOrig.disabled = busy;
+  btnBack.disabled = busy;
+  $("waveform-hint").textContent = countdownActive
+    ? t("hintCountdown")
+    : recorder.isRecording
+      ? t("hintRecording")
+      : hasTake
+        ? t("hintHasTake")
+        : t("hintIdle");
 }
 
 function stopPreview(): void {
@@ -641,6 +651,55 @@ btnPlayTake.addEventListener("click", () => {
   if (rec) void playClipWithAudio(recordingToBuffer(rec)); // дубль тоже с видео
 });
 
+/** Токен отсчёта: инкремент отменяет уже идущий. */
+let countdownToken = 0;
+let countdownActive = false;
+
+function cancelCountdown(): void {
+  if (!countdownActive) return;
+  countdownToken++;
+  countdownActive = false;
+  dubCountdown.hidden = true;
+  recorder.disarm(); // микрофон подключали под запись, которой не будет
+  updateDubButtons();
+}
+
+/**
+ * Отсчёт 3–2–1 перед записью (по галочке). Пауза нужна не только игроку:
+ * за эти секунды микрофон подключается к графу и раскачивается, а плеер
+ * встаёт на нужный кадр — к старту записи всё уже прогрето и первый кадр
+ * приходит без задержки. false — отсчёт отменили.
+ */
+async function runCountdown(): Promise<boolean> {
+  const token = ++countdownToken;
+  countdownActive = true;
+  updateDubButtons();
+
+  // Отсчёт могли отменить, пока микрофон подключался, — тогда сразу отпускаем
+  void recorder
+    .arm()
+    .then(() => {
+      if (token !== countdownToken) recorder.disarm();
+    })
+    .catch(() => {}); // ошибку доступа поймает start() после отсчёта
+  if (videoPlayer && session) {
+    videoPlayer.pause(); // предпросмотр мог ещё идти
+    videoPlayer.currentTime = session.clip.timestamps[0];
+  }
+
+  for (const n of [3, 2, 1]) {
+    const digit = document.createElement("span");
+    digit.textContent = String(n);
+    dubCountdown.replaceChildren(digit);
+    dubCountdown.hidden = false;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (token !== countdownToken) return false;
+  }
+  dubCountdown.hidden = true;
+  countdownActive = false;
+  return true;
+}
+
 function stopMonitor(): void {
   if (monitorSource) {
     try { monitorSource.stop(); } catch { /* уже остановлен */ }
@@ -652,6 +711,10 @@ function stopMonitor(): void {
 
 btnRecord.addEventListener("click", async () => {
   if (!session || !waveform) return;
+  if (countdownActive) {
+    cancelCountdown();
+    return;
+  }
   if (recorder.isRecording) {
     finishRecording();
     return;
@@ -660,6 +723,9 @@ btnRecord.addEventListener("click", async () => {
   const buf = await session.originalBuffer();
   const totalSamples = Math.floor(buf.duration * audioContext().sampleRate);
   const clipIndex = session.clipIndex;
+
+  if (toggleCountdown.checked && !(await runCountdown())) return;
+  if (!session || session.clipIndex !== clipIndex) return;
   waveform.beginUserRecording(totalSamples);
 
   await recorder.start(
@@ -737,6 +803,7 @@ btnBack.addEventListener("click", () => {
 });
 
 function abandonSession(): void {
+  cancelCountdown();
   stopPreview();
   stopMonitor();
   hideWatchVideo(false); // плеер сейчас уничтожат — заставку показывать не на чем

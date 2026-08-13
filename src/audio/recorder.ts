@@ -64,6 +64,50 @@ export class MicRecorder {
   }
 
   /**
+   * Подключает микрофон к графу заранее, не начиная запись: поток успевает
+   * раскачаться, а AudioWorklet — загрузиться. Всё, что приходит до start(),
+   * отбрасывается. Вызывается на отсчёте перед записью.
+   */
+  async arm(): Promise<void> {
+    await this.init();
+    const ctx = audioContext();
+    await ensureWorklet(ctx);
+    if (this.worklet) return;
+
+    this.source = ctx.createMediaStreamSource(this.stream!);
+    this.worklet = new AudioWorkletNode(ctx, "dub-capture", {
+      numberOfInputs: 1,
+      numberOfOutputs: 0,
+    });
+    this.worklet.port.onmessage = (e: MessageEvent<Float32Array>) => this.receive(e.data);
+    this.source.connect(this.worklet);
+  }
+
+  /** Отпускает микрофон, если запись так и не началась (отменённый отсчёт). */
+  disarm(): void {
+    if (!this.active) this.teardown();
+  }
+
+  private receive(data: Float32Array): void {
+    if (!this.active) return; // прогрев до start(): сэмплы никому не нужны
+    let chunk = data;
+    const remaining = this.maxSamples - this.totalSamples;
+    if (chunk.length >= remaining) {
+      chunk = chunk.subarray(0, remaining);
+      this.chunks.push(chunk);
+      this.totalSamples += chunk.length;
+      this.onChunkCb?.(chunk);
+      const autoStop = this.onAutoStopCb;
+      this.teardown();
+      autoStop?.();
+      return;
+    }
+    this.chunks.push(chunk);
+    this.totalSamples += chunk.length;
+    this.onChunkCb?.(chunk);
+  }
+
+  /**
    * Начинает запись. maxDurationSec — автостоп (длина оригинальной реплики).
    * onChunk вызывается с каждым куском сэмплов для живой отрисовки.
    */
@@ -72,40 +116,13 @@ export class MicRecorder {
     onChunk: (chunk: Float32Array) => void,
     onAutoStop: () => void
   ): Promise<void> {
-    await this.init();
-    const ctx = audioContext();
-    await ensureWorklet(ctx);
+    await this.arm();
 
     this.chunks = [];
     this.totalSamples = 0;
-    this.maxSamples = Math.floor(maxDurationSec * ctx.sampleRate);
+    this.maxSamples = Math.floor(maxDurationSec * audioContext().sampleRate);
     this.onChunkCb = onChunk;
     this.onAutoStopCb = onAutoStop;
-
-    this.source = ctx.createMediaStreamSource(this.stream!);
-    this.worklet = new AudioWorkletNode(ctx, "dub-capture", {
-      numberOfInputs: 1,
-      numberOfOutputs: 0,
-    });
-    this.worklet.port.onmessage = (e: MessageEvent<Float32Array>) => {
-      if (!this.active) return;
-      let chunk = e.data;
-      const remaining = this.maxSamples - this.totalSamples;
-      if (chunk.length >= remaining) {
-        chunk = chunk.subarray(0, remaining);
-        this.chunks.push(chunk);
-        this.totalSamples += chunk.length;
-        this.onChunkCb?.(chunk);
-        const autoStop = this.onAutoStopCb;
-        this.teardown();
-        autoStop?.();
-        return;
-      }
-      this.chunks.push(chunk);
-      this.totalSamples += chunk.length;
-      this.onChunkCb?.(chunk);
-    };
-    this.source.connect(this.worklet);
     this.active = true;
   }
 

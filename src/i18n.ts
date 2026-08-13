@@ -75,10 +75,16 @@ const dict = {
   next: { ru: "Готово →", en: "Done →" },
   nextFinal: { ru: "Готово — смотреть! 🎬", en: "Done — watch! 🎬" },
   monitorLabel: { ru: "Оригинал в ухо при записи", en: "Original in your ear while recording" },
+  countdownLabel: { ru: "Отсчёт 3–2–1 перед записью", en: "3–2–1 countdown before recording" },
+  cancelCountdown: { ru: "✕ Отмена", en: "✕ Cancel" },
   recBadge: { ru: "● ЗАПИСЬ", en: "● REC" },
   hintIdle: {
     ru: "Нажми «Записать» и озвучь реплику — твоя волна перепишет оригинал",
     en: "Hit “Record” and voice the line — your wave overwrites the original",
+  },
+  hintCountdown: {
+    ru: "Приготовься — запись начнётся сразу после отсчёта",
+    en: "Get ready — recording starts right after the countdown",
   },
   hintRecording: {
     ru: "Говори! Запись остановится сама в конце реплики",
