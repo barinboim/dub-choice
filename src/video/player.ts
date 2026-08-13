@@ -15,6 +15,13 @@ export interface DubVideoPlayer {
   play(): Promise<void>;
   pause(): void;
   readonly paused: boolean;
+  /**
+   * Резолвится, когда после play() на экране реально пошли кадры, — момент,
+   * от которого честно отсчитывать дубль. false — сигнала не дождались
+   * (медленный декодер, капризный ogv.js): звать до play(), иначе событие
+   * успеет пройти мимо.
+   */
+  whenPlaying(timeoutMs?: number): Promise<boolean>;
   readonly videoWidth: number;
   readonly videoHeight: number;
   /** Источник кадров для отрисовки на canvas при экспорте. */
@@ -22,6 +29,40 @@ export interface DubVideoPlayer {
   onEnded(cb: () => void): void;
   onTimeUpdate(cb: () => void): void;
   dispose(): void;
+}
+
+/** Время, после которого перестаём ждать старт кадров и работаем как раньше. */
+const PLAYING_TIMEOUT_MS = 1200;
+
+/**
+ * Ждёт события «воспроизведение реально пошло». Слушать нужно до play():
+ * событие приходит быстро и подписка постфактум его теряет. Слушаем именно
+ * playing, а не первый кадр: перемотка на паузе тоже рисует кадр, и отсчёт
+ * дубля стартовал бы раньше времени.
+ */
+function waitForPlaying(
+  target: { addEventListener(type: string, cb: () => void): void; removeEventListener?(type: string, cb: () => void): void },
+  events: string[],
+  timeoutMs: number,
+  refine?: (done: () => void) => void
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      for (const e of events) target.removeEventListener?.(e, onEvent);
+      resolve(ok);
+    };
+    const onEvent = () => {
+      // refine доводит момент до реально показанного кадра (rVFC)
+      if (refine) refine(() => finish(true));
+      else finish(true);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    for (const e of events) target.addEventListener(e, onEvent);
+  });
 }
 
 let theoraSupported: boolean | null = null;
@@ -63,6 +104,17 @@ function createNativePlayer(blob: Blob): Promise<DubVideoPlayer> {
     play: () => video.play(),
     pause: () => video.pause(),
     get paused() { return video.paused; },
+    whenPlaying: (timeoutMs = PLAYING_TIMEOUT_MS) =>
+      waitForPlaying(video, ["playing"], timeoutMs, (done) => {
+        // rVFC доводит момент до кадра, реально показанного на экране;
+        // где его нет (Firefox) — довольствуемся playing
+        const rvfc = (video as HTMLVideoElement & {
+          requestVideoFrameCallback?: (cb: () => void) => number;
+        }).requestVideoFrameCallback;
+        if (!rvfc) return done();
+        rvfc.call(video, () => done());
+        setTimeout(done, 150); // кадр так и не приехал — не ждём дальше
+      }),
     get videoWidth() { return video.videoWidth; },
     get videoHeight() { return video.videoHeight; },
     frameSource: () => video,
@@ -110,6 +162,9 @@ async function createOgvPlayer(blob: Blob): Promise<DubVideoPlayer> {
     },
     pause: () => video.pause(),
     get paused() { return video.paused; },
+    // У ogv.js playing приходит не всегда — принимаем и первый timeupdate
+    whenPlaying: (timeoutMs = PLAYING_TIMEOUT_MS) =>
+      waitForPlaying(video, ["playing", "timeupdate"], timeoutMs),
     get videoWidth() { return video.videoWidth || 640; },
     get videoHeight() { return video.videoHeight || 360; },
     // OGVPlayer рендерит в canvas внутри элемента <ogvjs>

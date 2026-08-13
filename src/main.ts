@@ -519,13 +519,17 @@ function fitFrameWhenReady(frame: HTMLElement | null): void {
  * Запускает видеофрагмент реплики (всегда без звука видео — звук ведём сами
  * через Web Audio: аудиотракт ogv.js ненадёжен в Safari/Arc).
  */
-async function startClipVideo(): Promise<void> {
-  if (!session || !videoPlayer) return;
+async function startClipVideo(waitPlaying = false): Promise<boolean> {
+  if (!session || !videoPlayer) return false;
   showWatchVideo();
   fitFrameWhenReady(document.querySelector(".dub-screen-frame"));
   videoPlayer.muted = true;
   videoPlayer.currentTime = session.clip.timestamps[0];
+  // Подписка строго между перемоткой и play: перемотка сама шлёт события,
+  // а после play() сигнал можно уже не застать
+  const playing = waitPlaying ? videoPlayer.whenPlaying() : null;
   await videoPlayer.play().catch(() => {});
+  return playing ? await playing : false;
 }
 
 /** Видео + аудиобуфер вместе: оригинал реплики или свой дубль. */
@@ -609,10 +613,19 @@ function showStillFrame(): boolean {
  * покидают совсем (финал, выход из сессии): там плеер либо уезжает в другой
  * слот, либо уничтожается, и трогать его незачем.
  */
-function hideWatchVideo(keepStill = true): void {
+/**
+ * Отменяет активный просмотр фрагмента, не трогая сам плеер: перед записью
+ * видео нужно не прятать, а сразу пускать — лишняя пауза со стоп-кадром
+ * стоит на слабых устройствах ещё одной перемотки.
+ */
+function cancelWatch(): void {
   watchToken++;
   clearTimeout(watchTimer);
   stopPreview(); // глушим и звук фрагмента, если он ещё шёл
+}
+
+function hideWatchVideo(keepStill = true): void {
+  cancelWatch();
   videoPlayer?.pause();
   const still = keepStill && !clipImageUrl && showStillFrame();
   if (!still) dubVideoSlot.hidden = true;
@@ -643,13 +656,31 @@ btnRecord.addEventListener("click", async () => {
     finishRecording();
     return;
   }
-  stopPreview();
-  hideWatchVideo();
+  cancelWatch();
   const buf = await session.originalBuffer();
   const totalSamples = Math.floor(buf.duration * audioContext().sampleRate);
+  const clipIndex = session.clipIndex;
   waveform.beginUserRecording(totalSamples);
 
-  // Опциональный мониторинг: оригинал в ухо (лучше в наушниках)
+  await recorder.start(
+    buf.duration,
+    (chunk) => waveform?.appendUserChunk(chunk),
+    () => finishRecording(true)
+  );
+  updateDubButtons(); // кнопка и бейдж откликаются сразу, ещё до первого кадра
+
+  // Во время записи сцена играет без звука — дублируешь прямо под видео.
+  // Начало дубля отсчитываем не от клика, а от первого кадра на экране:
+  // на медленном устройстве плеер стартует не мгновенно, и без этого запись
+  // набирает пустоту, а голос игрока уезжает на то же время — и в финальном
+  // ролике, и в оценке (score.ts компенсирует лишь ±0,3 с).
+  const started = await startClipVideo(true);
+  if (!recorder.isRecording || session?.clipIndex !== clipIndex) return;
+  if (started) {
+    recorder.markStart();
+    waveform.beginUserRecording(totalSamples); // волну рисуем от того же нуля
+  }
+  // Оригинал в ухо — вместе с видео, иначе подсказка сама себя рассинхронит
   if (toggleMonitor.checked) {
     const ctx = audioContext();
     stopMonitor();
@@ -662,15 +693,6 @@ btnRecord.addEventListener("click", async () => {
     monitorSource = src;
     monitorGain = gain;
   }
-
-  await recorder.start(
-    buf.duration,
-    (chunk) => waveform?.appendUserChunk(chunk),
-    () => finishRecording(true)
-  );
-  // Во время записи сцена играет без звука — дублируешь прямо под видео
-  void startClipVideo();
-  updateDubButtons();
 });
 
 async function finishRecording(auto = false): Promise<void> {
