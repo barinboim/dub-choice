@@ -161,6 +161,11 @@ const dict = {
     en: "The score is how well your take matched the original's rhythm: starts, pauses and accents in the same places. Tap a line to redo it.",
   },
   resultRedub: { ru: "Переписать эту реплику", en: "Redo this line" },
+  resultsJump: { ru: "Результаты и баллы", en: "Results and scores" },
+  retryConfirm: {
+    ru: "Переозвучить заново сотрёт все записанные реплики.\n\nЕсли нужно переписать только одну фразу — закрой это окно и выбери нужную сцену в результатах ниже.",
+    en: "Redubbing from scratch erases every take you recorded.\n\nTo redo just one line, close this and pick the scene in the results below.",
+  },
   scoreLabel: { ru: "Балл: {v}", en: "Score: {v}" },
   verdictAce: { ru: "Тебя берут на дубляж!", en: "You're hired for the dub!" },
   verdictGreat: { ru: "Отличная работа!", en: "Great work!" },

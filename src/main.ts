@@ -35,6 +35,7 @@ const screens = {
 
 function showScreen(name: keyof typeof screens): void {
   for (const [key, el] of Object.entries(screens)) el.hidden = key !== name;
+  if (name !== "final") hideResultsJump();
 }
 
 // ---------- Состояние приложения ----------
@@ -1168,6 +1169,35 @@ async function enterFinal(): Promise<void> {
   void renderResults();
 }
 
+/**
+ * Результаты уходят под сгиб экрана, и о них просто не догадываются: зовём
+ * вниз плавающей кнопкой, пока сама секция не попала в кадр.
+ */
+const resultsJump = $<HTMLButtonElement>("results-jump");
+let resultsJumpWatcher: IntersectionObserver | null = null;
+
+function hideResultsJump(): void {
+  resultsJumpWatcher?.disconnect();
+  resultsJumpWatcher = null;
+  resultsJump.hidden = true;
+}
+
+function watchResultsJump(section: HTMLElement): void {
+  resultsJumpWatcher?.disconnect();
+  resultsJumpWatcher = new IntersectionObserver(
+    ([entry]) => {
+      resultsJump.hidden = entry.isIntersecting || screens.final.hidden;
+    },
+    { threshold: 0.15 }
+  );
+  resultsJumpWatcher.observe(section);
+}
+
+resultsJump.addEventListener("click", () => {
+  resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  resultsJump.hidden = true;
+});
+
 // ---------- Результаты дубляжа ----------
 const resultsSection = $("results");
 const resultsList = $("results-list");
@@ -1178,6 +1208,7 @@ let resultsResizeObserver: ResizeObserver | null = null;
 let resultsVisibility: IntersectionObserver | null = null;
 
 function clearResults(): void {
+  hideResultsJump();
   resultsSection.hidden = true;
   resultsVisibility?.disconnect();
   resultsVisibility = null;
@@ -1264,6 +1295,7 @@ async function renderResults(): Promise<void> {
   $("results-percent").textContent = `${percent.toFixed(2)}%`;
   $("results-verdict").textContent = t(verdictKey(percent));
   resultsSection.hidden = false;
+  watchResultsJump(resultsSection);
 
   // Волны рисуем лениво, по мере прокрутки: сразу после финала на этом же
   // потоке идёт запись ролика в файл, и полсотни канвасов разом её тормозят
@@ -1389,6 +1421,7 @@ $("btn-final-back").addEventListener("click", () => {
 
 $("btn-retry").addEventListener("click", () => {
   if (!session) return;
+  if (session.recordings.size > 0 && !confirm(t("retryConfirm"))) return;
   composer?.stop();
   stopExportUi();
   clearResults();
