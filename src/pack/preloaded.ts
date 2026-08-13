@@ -54,6 +54,13 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     sizeBytes: 10_093_767,
   },
   {
+    id: "chosenone",
+    title: "Star Wars — You Were the Chosen One",
+    paths: ["packs/chosenone.zip"],
+    icon: "pack-icons/chosenone.png",
+    sizeBytes: 10_839_183,
+  },
+  {
     id: "lotr",
     title: "LOTR — Bridge of Khazad-dûm",
     paths: ["packs/lotr.zip"],
