@@ -154,14 +154,8 @@ function renderPreloadedList(): void {
       for (const tag of pp.tags ?? []) {
         const badge = document.createElement("span");
         badge.className = "pi-tag";
-        // "translator" — ключ, а не подпись: тег переводится вместе с интерфейсом
-        if (tag === "translator") {
-          badge.textContent = t("tagTranslator");
-          badge.title = t("tagTranslatorTooltip");
-        } else {
-          badge.textContent = tag;
-          if (tag === "18+") badge.title = t("tagAdultTooltip");
-        }
+        badge.textContent = tag;
+        if (tag === "18+") badge.title = t("tagAdultTooltip");
         titleRow.append(badge);
       }
       const size = document.createElement("div");
@@ -315,7 +309,7 @@ function fillPackCard(pack: DubPack): void {
     pack.backingTrack ? t("withBacking") : t("withoutBacking"),
   ];
   if (pack.translations.length > 0) {
-    stats.push(`${t("tagTranslator")}: ${pack.translations.map(langName).join(", ")}`);
+    stats.push(`${t("captionsLabel")}: ${[pack.lang, ...pack.translations].filter(Boolean).map(langName).join(", ")}`);
   }
   $("pack-stats").textContent = stats.join(" · ");
   const warn = $("pack-warnings");
@@ -436,6 +430,7 @@ monitorVolume.addEventListener("input", () => {
 async function enterClip(index: number): Promise<void> {
   if (!session) return;
   cancelCountdown(); // отсчёт с прошлой реплики новой уже не нужен
+  savingTail = false;
   closeCaptionEditor();
   session.clipIndex = index;
   session.prefetchAround();
@@ -492,20 +487,25 @@ function updateDubButtons(): void {
   btnNext.textContent = session.isLastClip ? t("nextFinal") : t("next");
   btnRecord.textContent = countdownActive
     ? t("cancelCountdown")
-    : recorder.isRecording
-      ? t("stopRec")
-      : hasTake
-        ? t("reRecord")
-        : t("record");
-  btnRecord.classList.toggle("recording", recorder.isRecording);
-  recordBadge.hidden = !recorder.isRecording;
+    : savingTail
+      ? t("savingTake")
+      : recorder.isRecording
+        ? t("stopRec")
+        : hasTake
+          ? t("reRecord")
+          : t("record");
+  btnRecord.disabled = savingTail; // дозапись хвоста прервать нечем — она мгновенная
+  btnRecord.classList.toggle("recording", recorder.isRecording && !savingTail);
+  recordBadge.hidden = !recorder.isRecording || savingTail;
   btnPlayTake.hidden = !hasTake || busy;
   btnPlayTake.textContent = t("myTake");
   btnOrig.disabled = busy;
   btnBack.disabled = busy;
   $("waveform-hint").textContent = countdownActive
     ? t("hintCountdown")
-    : recorder.isRecording
+    : savingTail
+      ? t("hintSaving")
+      : recorder.isRecording
       ? t("hintRecording")
       : hasTake
         ? t("hintHasTake")
@@ -759,6 +759,13 @@ captionInput.addEventListener("keydown", (e) => {
   }
 });
 
+/**
+ * Реплика доиграла, идёт дозапись хвоста. Для игрока запись уже кончилась:
+ * видео убрано, бейдж погашен, кнопка показывает «Сохраняю…». Хвост нужен,
+ * только чтобы не срезать договорённое после персонажа.
+ */
+let savingTail = false;
+
 /** Токен отсчёта: инкремент отменяет уже идущий. */
 let countdownToken = 0;
 let countdownActive = false;
@@ -849,7 +856,15 @@ btnRecord.addEventListener("click", async () => {
       drawn += part.length;
       waveform?.appendUserChunk(part);
     },
-    () => finishRecording(true)
+    () => finishRecording(true),
+    () => {
+      // Реплика кончилась: для игрока запись завершена, хвост дописываем молча
+      savingTail = true;
+      hideWatchVideo();
+      stopMonitor();
+      waveform?.setPlayhead(null);
+      updateDubButtons();
+    }
   );
   updateDubButtons(); // кнопка и бейдж откликаются сразу, ещё до первого кадра
 
@@ -882,6 +897,7 @@ btnRecord.addEventListener("click", async () => {
 
 async function finishRecording(auto = false): Promise<void> {
   if (!session) return;
+  savingTail = false;
   stopMonitor();
   hideWatchVideo();
   const rec = auto ? recorder.snapshot() : recorder.stop();
@@ -926,6 +942,7 @@ btnBack.addEventListener("click", () => {
 
 function abandonSession(): void {
   cancelCountdown();
+  savingTail = false;
   stopPreview();
   stopMonitor();
   hideWatchVideo(false); // плеер сейчас уничтожат — заставку показывать не на чем

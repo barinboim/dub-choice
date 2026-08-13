@@ -52,14 +52,13 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     paths: ["packs/starwars.zip"],
     icon: "pack-icons/starwars.png",
     sizeBytes: 10_056_062,
-    tags: ["translator"],
   },
   {
     id: "chosenone",
     title: "Star Wars — You Were the Chosen One",
     paths: ["packs/chosenone.zip"],
     icon: "pack-icons/chosenone.png",
-    sizeBytes: 10_839_183,
+    sizeBytes: 10_839_657,
   },
   {
     id: "lotr",
@@ -67,15 +66,13 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     paths: ["packs/lotr.zip"],
     icon: "pack-icons/lotr.png",
     sizeBytes: 11_180_551,
-    tags: ["translator"],
   },
   {
     id: "breakingbad",
     title: "Breaking Bad — I Am the Danger",
     paths: ["packs/breakingbad.zip"],
     icon: "pack-icons/breakingbad.png",
-    sizeBytes: 14_833_352,
-    tags: ["translator"],
+    sizeBytes: 13_420_362,
   },
   {
     id: "shrek",
@@ -83,7 +80,6 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     paths: ["packs/shrek.zip"],
     icon: "pack-icons/shrek.png",
     sizeBytes: 17_865_680,
-    tags: ["translator"],
   },
   {
     id: "harrypotter",
@@ -91,7 +87,6 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     paths: ["packs/harrypotter.zip"],
     icon: "pack-icons/harrypotter.png",
     sizeBytes: 14_794_986,
-    tags: ["translator"],
   },
 ];
 

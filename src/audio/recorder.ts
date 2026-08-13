@@ -36,7 +36,7 @@ function ensureWorklet(ctx: AudioContext): Promise<void> {
  * пака и так идут внахлёст, слоями микс их сложит.
  */
 export const PRE_ROLL_SEC = 0.5;
-export const TAIL_SEC = 2;
+export const TAIL_SEC = 0.75;
 
 export interface Recording {
   /** Моно PCM запись, включая запас до и после реплики. */
@@ -73,6 +73,9 @@ export class MicRecorder {
   private active = false;
   private onChunkCb: ((chunk: Float32Array) => void) | null = null;
   private onAutoStopCb: (() => void) | null = null;
+  /** Реплика доиграла, дальше пишется только хвост — для игрока запись «уже всё». */
+  private onWindowEndCb: (() => void) | null = null;
+  private windowEnded = false;
   /** Звук, пойманный до старта записи, — из него берётся запас-вступление. */
   private preRoll: Float32Array[] = [];
   private preRollSamples = 0;
@@ -149,6 +152,10 @@ export class MicRecorder {
     this.chunks.push(chunk);
     this.totalSamples += chunk.length;
     this.onChunkCb?.(chunk);
+    if (!this.windowEnded && this.totalSamples >= this.leadSamples + this.windowSamples) {
+      this.windowEnded = true;
+      this.onWindowEndCb?.();
+    }
   }
 
   /**
@@ -159,7 +166,8 @@ export class MicRecorder {
   async start(
     clipDurationSec: number,
     onChunk: (chunk: Float32Array) => void,
-    onAutoStop: () => void
+    onAutoStop: () => void,
+    onWindowEnd?: () => void
   ): Promise<void> {
     await this.arm();
     const sr = audioContext().sampleRate;
@@ -172,6 +180,8 @@ export class MicRecorder {
     this.maxSamples = this.windowSamples + this.tailSamples;
     this.onChunkCb = onChunk;
     this.onAutoStopCb = onAutoStop;
+    this.onWindowEndCb = onWindowEnd ?? null;
+    this.windowEnded = false;
     this.active = true;
   }
 
@@ -190,6 +200,7 @@ export class MicRecorder {
     this.chunks = lead.length > 0 ? [lead] : [];
     this.totalSamples = lead.length;
     this.leadSamples = lead.length;
+    this.windowEnded = false;
     this.maxSamples = lead.length + this.windowSamples + this.tailSamples;
   }
 

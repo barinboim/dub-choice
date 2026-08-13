@@ -74,11 +74,7 @@ const dict = {
   langName_zh: { ru: "Китайский", en: "Chinese" },
   captionEditHint: { ru: "Нажми, чтобы переписать текст под себя", en: "Tap to rewrite the line your way" },
   captionDone: { ru: "Готово", en: "Done" },
-  tagTranslator: { ru: "Режим переводчика", en: "Translator mode" },
-  tagTranslatorTooltip: {
-    ru: "В паке есть субтитры на нескольких языках: можно переключить язык реплики и озвучить перевод",
-    en: "This pack ships captions in several languages: switch the line's language and dub the translation",
-  },
+  captionsLabel: { ru: "Субтитры", en: "Captions" },
   original: { ru: "▶ Оригинал", en: "▶ Original" },
   record: { ru: "● Записать", en: "● Record" },
   reRecord: { ru: "● Переписать", en: "● Redo take" },
@@ -89,6 +85,7 @@ const dict = {
   monitorLabel: { ru: "Слышать оригинал", en: "Hear the original" },
   countdownLabel: { ru: "Отсчёт 3–2–1 перед записью", en: "3–2–1 countdown before recording" },
   cancelCountdown: { ru: "✕ Отмена", en: "✕ Cancel" },
+  savingTake: { ru: "Сохраняю…", en: "Saving…" },
   recBadge: { ru: "● ЗАПИСЬ", en: "● REC" },
   hintIdle: {
     ru: "Нажми «Записать» и озвучь реплику — твоя волна перепишет оригинал",
@@ -101,6 +98,10 @@ const dict = {
   hintRecording: {
     ru: "Говори! Запись остановится сама в конце реплики",
     en: "Speak! Recording stops by itself at the end of the line",
+  },
+  hintSaving: {
+    ru: "Сохраняю дубль…",
+    en: "Saving your take…",
   },
   hintHasTake: {
     ru: "Можно переписать дубль или нажать «Готово»",
