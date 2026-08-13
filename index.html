@@ -122,6 +122,7 @@
         </div>
 
         <div id="dub-caption-langs" class="caption-langs" hidden></div>
+        <p class="caption-edit-hint" data-i18n="captionEditHint"></p>
         <p id="dub-caption" class="dub-caption"></p>
         <div id="dub-caption-edit" class="caption-edit" hidden>
           <textarea id="dub-caption-input" class="caption-input" rows="2"></textarea>
@@ -141,6 +142,22 @@
         <div class="final-screen-frame">
           <div id="final-video-slot" class="final-video-slot"></div>
           <canvas id="export-canvas" hidden></canvas>
+        </div>
+        <div class="mix-modes">
+          <label class="mix-mode">
+            <input type="radio" name="mix-mode" value="dub" checked />
+            <span class="mix-mode-text">
+              <span class="mix-mode-title" data-i18n="mixDub"></span>
+              <small data-i18n="mixDubHint"></small>
+            </span>
+          </label>
+          <label class="mix-mode">
+            <input type="radio" name="mix-mode" value="voiceover" />
+            <span class="mix-mode-text">
+              <span class="mix-mode-title" data-i18n="mixVoiceover"></span>
+              <small data-i18n="mixVoiceoverHint"></small>
+            </span>
+          </label>
         </div>
         <div class="final-controls">
           <button id="btn-final-play" class="btn btn-primary btn-big" data-i18n="watch"></button>

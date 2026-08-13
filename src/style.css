@@ -496,6 +496,12 @@ a:hover { color: #fff; }
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .caption-lang:hover { color: var(--ink); }
+.caption-edit-hint {
+  text-align: center;
+  color: var(--ink-dim);
+  font-size: 0.72rem;
+  margin: 6px 0 0;
+}
 .caption-lang.active {
   background: var(--wave-user);
   border-color: transparent;
@@ -620,6 +626,35 @@ a:hover { color: #fff; }
   height: 100%;
 }
 .final-video-slot:empty { display: none; }
+/* Режим финального микса: дубляж или закадр */
+.mix-modes {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.mix-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  max-width: 320px;
+  flex: 1 1 260px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.mix-mode:hover { border-color: var(--line-strong); }
+.mix-mode:has(input:checked) { border-color: var(--wave-user); background: var(--panel-2); }
+.mix-mode input { accent-color: var(--wave-user); margin-top: 3px; flex-shrink: 0; }
+.mix-mode-text { line-height: 1.35; }
+.mix-mode-title { font-size: 0.95rem; font-weight: 600; }
+.mix-mode-text small { display: block; color: var(--ink-dim); font-size: 0.78rem; margin-top: 2px; }
+
 .final-controls {
   display: flex;
   gap: 10px;
@@ -721,7 +756,36 @@ a:hover { color: #fff; }
   .waveform { height: 96px; }
   .pack-card { flex-direction: column; align-items: flex-start; gap: 14px; }
   .pack-icon { width: 72px; height: 72px; }
-  .final-controls { flex-direction: column; }
+  /* Режим финального микса: дубляж или закадр */
+.mix-modes {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.mix-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  max-width: 320px;
+  flex: 1 1 260px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.mix-mode:hover { border-color: var(--line-strong); }
+.mix-mode:has(input:checked) { border-color: var(--wave-user); background: var(--panel-2); }
+.mix-mode input { accent-color: var(--wave-user); margin-top: 3px; flex-shrink: 0; }
+.mix-mode-text { line-height: 1.35; }
+.mix-mode-title { font-size: 0.95rem; font-weight: 600; }
+.mix-mode-text small { display: block; color: var(--ink-dim); font-size: 0.78rem; margin-top: 2px; }
+
+.final-controls { flex-direction: column; }
   .final-controls .btn { width: 100%; }
   .result-row {
     grid-template-columns: 84px 1fr;

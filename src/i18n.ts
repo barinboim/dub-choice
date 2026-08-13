@@ -72,7 +72,10 @@ const dict = {
   langName_uk: { ru: "Украинский", en: "Ukrainian" },
   langName_ja: { ru: "Японский", en: "Japanese" },
   langName_zh: { ru: "Китайский", en: "Chinese" },
-  captionEditHint: { ru: "Нажми, чтобы переписать текст под себя", en: "Tap to rewrite the line your way" },
+  captionEditHint: {
+    ru: "нажми на текст, если хочешь отредактировать",
+    en: "tap the text if you want to edit it",
+  },
   captionDone: { ru: "Готово", en: "Done" },
   captionsLabel: { ru: "Субтитры", en: "Captions" },
   original: { ru: "▶ Оригинал", en: "▶ Original" },
@@ -113,6 +116,16 @@ const dict = {
   },
 
   // Финал
+  mixDub: { ru: "Дубляж", en: "Dubbing" },
+  mixDubHint: {
+    ru: "твоя озвучка полностью заменит голоса персонажей",
+    en: "your voice fully replaces the characters' voices",
+  },
+  mixVoiceover: { ru: "Закадр", en: "Voice-over" },
+  mixVoiceoverHint: {
+    ru: "твоя озвучка ляжет поверх приглушённых оригинальных голосов",
+    en: "your voice goes over the original voices, turned down",
+  },
   premiere: { ru: "🍿 Премьера твоего дубляжа!", en: "🍿 Your dub premiere!" },
   watch: { ru: "▶ Смотреть", en: "▶ Watch" },
   downloadVideo: { ru: "⬇ Скачать видео ({fmt})", en: "⬇ Download video ({fmt})" },

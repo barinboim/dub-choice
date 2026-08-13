@@ -4,8 +4,20 @@ import { audioBufferToWav } from "../audio/wav";
 import { DubVideoPlayer } from "../video/player";
 import { DubSession } from "./session";
 
+/**
+ * Что делать с оригинальными голосами:
+ * dub — их нет вовсе (звучит только фон и запись игрока),
+ * voiceover — они остаются приглушёнными под дублем, как закадровый перевод.
+ */
+export type MixMode = "dub" | "voiceover";
+
+/** Насколько тише оригинальные голоса в закадровом режиме. */
+const VOICEOVER_GAIN = 0.3;
+
 interface ScheduledCue {
   buffer: AudioBuffer;
+  /** Множитель громкости; у оригинала в закадре он ниже единицы. */
+  gain?: number;
   /**
    * Момент в видео, куда ложится начало записи. Уже с поправкой на запас-
    * вступление: если игрок заговорил до персонажа, запись начинается раньше
@@ -77,7 +89,7 @@ export class Composer {
     this.video.onEnded(() => this.handleEnded());
   }
 
-  async prepare(session: DubSession): Promise<void> {
+  async prepare(session: DubSession, mode: MixMode = "dub"): Promise<void> {
     this.backing = await session.backingBuffer();
     this.capturedBlob = null; // записи могли измениться — старый файл невалиден
     this.cues = [];
@@ -98,6 +110,16 @@ export class Composer {
         overhang = Math.max(overhang, at + voiceEnd - videoEnd);
       }
     });
+    // Закадр: оригинальные реплики возвращаются в микс, но тише дубля
+    if (mode === "voiceover") {
+      for (let i = 0; i < session.total; i++) {
+        const original = await session.originalBuffer(i);
+        for (const t of session.pack.clips[i].timestamps) {
+          this.cues.push({ buffer: original, at: t, gain: VOICEOVER_GAIN });
+        }
+      }
+    }
+
     this.cues.sort((a, b) => a.at - b.at);
     this.overhangSec = overhang;
   }
@@ -145,10 +167,16 @@ export class Composer {
     const ctx = audioContext();
     const t0 = ctx.currentTime + 0.05;
 
-    const startSource = (buffer: AudioBuffer, at: number) => {
+    const startSource = (buffer: AudioBuffer, at: number, gain?: number) => {
       const src = ctx.createBufferSource();
       src.buffer = buffer;
-      src.connect(this.masterGain);
+      if (gain === undefined) {
+        src.connect(this.masterGain);
+      } else {
+        const node = ctx.createGain();
+        node.gain.value = gain;
+        src.connect(node).connect(this.masterGain);
+      }
       const delay = at - videoTime;
       // Запас-вступление первой реплики может уходить левее нуля видео
       if (delay >= 0) {
@@ -162,7 +190,7 @@ export class Composer {
     };
 
     if (this.backing) startSource(this.backing, 0);
-    for (const cue of this.cues) startSource(cue.buffer, cue.at);
+    for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain);
   }
 
   private startCapture(canvas: HTMLCanvasElement): void {
@@ -262,17 +290,23 @@ export class Composer {
     const offline = new OfflineAudioContext(2, Math.ceil(durationSec * sampleRate), sampleRate);
     const limiter = createLimiter(offline);
     limiter.connect(offline.destination);
-    const startSource = (buffer: AudioBuffer, at: number) => {
+    const startSource = (buffer: AudioBuffer, at: number, gain?: number) => {
       const src = offline.createBufferSource();
       src.buffer = buffer;
-      src.connect(limiter);
+      if (gain === undefined) {
+        src.connect(limiter);
+      } else {
+        const node = offline.createGain();
+        node.gain.value = gain;
+        src.connect(node).connect(limiter);
+      }
       // Отрицательный at — реплика начинается раньше нуля видео: играем её
       // с середины, иначе start() бросит исключение
       if (at >= 0) src.start(at);
       else if (-at < buffer.duration) src.start(0, -at);
     };
     if (this.backing) startSource(this.backing, 0);
-    for (const cue of this.cues) startSource(cue.buffer, cue.at);
+    for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain);
 
     return audioBufferToWav(await offline.startRendering());
   }

@@ -13,7 +13,7 @@ import {
 import { matchLoudness } from "./audio/normalize";
 import { WaveformView, type WaveformColors } from "./audio/waveform";
 import { DubSession, ORIGINAL_LANG } from "./game/session";
-import { Composer } from "./game/composer";
+import { Composer, type MixMode } from "./game/composer";
 import { scoreTake, totalPercent, verdictKey } from "./game/score";
 import { createVideoPlayer, DubVideoPlayer } from "./video/player";
 import { t, lang, langName, setLang, Lang } from "./i18n";
@@ -379,6 +379,7 @@ const dubCountdown = $("dub-countdown");
 const dubCaption = $("dub-caption");
 const captionLangsRow = $("dub-caption-langs");
 const captionEdit = $("dub-caption-edit");
+const captionEditHint = document.querySelector<HTMLElement>(".caption-edit-hint")!;
 const captionInput = $<HTMLTextAreaElement>("dub-caption-input");
 const btnCaptionDone = $<HTMLButtonElement>("btn-caption-done");
 const monitorVolume = $<HTMLInputElement>("monitor-volume");
@@ -733,6 +734,7 @@ function openCaptionEditor(): void {
   if (!session || recorder.isRecording || countdownActive) return;
   captionInput.value = session.captionFor();
   dubCaption.hidden = true;
+  captionEditHint.hidden = true; // подсказка уже сработала
   captionEdit.hidden = false;
   captionInput.focus();
   captionInput.select();
@@ -742,6 +744,7 @@ function closeCaptionEditor(save = false): void {
   if (captionEdit.hidden) return;
   if (save && session) session.editCaption(captionInput.value.trim());
   captionEdit.hidden = true;
+  captionEditHint.hidden = false;
   dubCaption.hidden = false;
   renderCaption();
 }
@@ -967,10 +970,34 @@ const exportCanvas = $<HTMLCanvasElement>("export-canvas");
 let downloadRequested = false;
 let exportProgressTimer = 0;
 
+const mixModeInputs = [...document.querySelectorAll<HTMLInputElement>('input[name="mix-mode"]')];
+
+function currentMixMode(): MixMode {
+  return mixModeInputs.find((i) => i.checked)?.value === "voiceover" ? "voiceover" : "dub";
+}
+
+/**
+ * Смена режима меняет саму дорожку, поэтому ролик пересобирается и стартует
+ * заново: записанный до этого файл экспорта уже не соответствует выбору.
+ */
+async function applyMixMode(): Promise<void> {
+  if (!session || !composer) return;
+  composer.stop();
+  stopExportUi();
+  exportStatus.hidden = true;
+  downloadRequested = false;
+  await composer.prepare(session, currentMixMode());
+  startFinalPlayback();
+}
+
+for (const input of mixModeInputs) {
+  input.addEventListener("change", () => void applyMixMode());
+}
+
 async function enterFinal(): Promise<void> {
   if (!session || !composer || !videoPlayer) return;
   $("dub-progress-fill").style.width = "100%";
-  await composer.prepare(session);
+  await composer.prepare(session, currentMixMode());
   hideWatchVideo(false); // плеер сейчас переедет в финальный слот
   finalSlot.replaceChildren(videoPlayer.element);
   exportStatus.hidden = true;
