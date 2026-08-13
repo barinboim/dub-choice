@@ -7,6 +7,7 @@ import {
   MicRecorder,
   recordingToBuffer,
   takeWindow,
+  voiceEndSec,
   windowedRecording,
   type Recording,
 } from "./audio/recorder";
@@ -640,11 +641,13 @@ async function playClipWithAudio(
   /** Подложки под дубль: фон сцены и/или её оригинальный звук. */
   scenes: Array<{ buffer: AudioBuffer; gain: number; offset: number; delay: number }> = [],
   /** Громкость основного буфера — у дубля она задаётся слайдером в финале. */
-  gain = 1
+  gain = 1,
+  /** Сколько секунд показывать; по умолчанию — весь буфер. */
+  playSec?: number
 ): Promise<void> {
   if (!session || !videoPlayer) return;
   stopPreview();
-  const dur = buffer.duration;
+  const dur = Math.min(playSec ?? buffer.duration, buffer.duration);
   const cursorLead = cursor?.lead ?? 0;
   const cursorSpan = cursor?.span || dur;
   const token = ++watchToken;
@@ -802,11 +805,16 @@ async function playTake(): Promise<void> {
   }
 
   // Дубль тоже с видео; курсор ведём по окну реплики, запас он проходит молча
+  // Досматриваем до конца реплики, а если игрок договаривал после неё —
+  // до конца его речи. Молчаливый хвост показывать незачем: это выглядело бы
+  // как лишняя секунда сцены
+  const playSec = Math.max(rec.leadSec + original.duration, voiceEndSec(rec));
   await playClipWithAudio(
     recordingToBuffer(rec),
     { lead: rec.leadSec, span: original.duration },
     scenes,
-    takeGain()
+    takeGain(),
+    playSec
   );
 }
 
