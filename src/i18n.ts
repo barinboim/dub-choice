@@ -83,6 +83,7 @@ const dict = {
   reRecord: { ru: "● Переписать", en: "● Redo take" },
   stopRec: { ru: "■ Стоп", en: "■ Stop" },
   myTake: { ru: "▶ Мой дубль", en: "▶ My take" },
+  toPremiere: { ru: "🎬 К премьере", en: "🎬 To the premiere" },
   next: { ru: "Готово →", en: "Done →" },
   nextFinal: { ru: "Готово — смотреть! 🎬", en: "Done — watch! 🎬" },
   monitorLabel: { ru: "Слышать оригинал", en: "Hear the original" },

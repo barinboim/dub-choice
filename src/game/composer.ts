@@ -24,6 +24,11 @@ interface ScheduledCue {
   /** Множитель громкости; у оригинала в закадре он ниже единицы. */
   gain?: number;
   /**
+   * Докуда играть буфер (сек от его начала). У записей игрока это конец
+   * речи: дальше идёт только молчаливый запас, тянуть его незачем.
+   */
+  until?: number;
+  /**
    * Момент в видео, куда ложится начало записи. Уже с поправкой на запас-
    * вступление: если игрок заговорил до персонажа, запись начинается раньше
    * таймстампа реплики. Может быть отрицательным — тогда обрезаем по нулю.
@@ -65,8 +70,8 @@ export class Composer {
   private readonly masterGain: GainNode;
   /** Мастер-лимитер: между masterGain и выходом (он же уходит в запись MP4). */
   private readonly limiter: DynamicsCompressorNode;
-  /** Насколько последняя реплика переживает конец видео (сек). */
-  private overhangSec = 0;
+  /** Момент по часам AudioContext, когда доиграет последний источник. */
+  private audioEndsAt = 0;
   private overhangTimer = 0;
 
   private capturedBlob: Blob | null = null;
@@ -107,21 +112,17 @@ export class Composer {
     this.backing = await session.backingBuffer();
     this.capturedBlob = null; // записи могли измениться — старый файл невалиден
     this.cues = [];
-    const videoEnd = this.video.duration || 0;
-    let overhang = 0;
     session.pack.clips.forEach((clip, i) => {
       const rec = session.recordings.get(i);
       if (!rec || rec.samples.length === 0) return;
       const buffer = recordingToBuffer(rec);
-      // Считаем по последнему звуку, а не по длине буфера: молчаливый хвост
-      // задерживал бы финал фризом последнего кадра на ровном месте
-      const voiceEnd = voiceEndSec(rec);
+      // Играем до конца речи, а не до конца буфера: молчаливый запас в
+      // хвосте задерживал бы финал фризом последнего кадра на ровном месте
+      const until = voiceEndSec(rec);
       // Запись длиннее реплики с обеих сторон — ставим её так, чтобы начало
       // самой реплики совпало с таймстампом, а запас лёг вокруг
       for (const t of clip.timestamps) {
-        const at = t - rec.leadSec;
-        this.cues.push({ buffer, at, gain: takeGain });
-        overhang = Math.max(overhang, at + voiceEnd - videoEnd);
+        this.cues.push({ buffer, at: t - rec.leadSec, gain: takeGain, until });
       }
     });
     // Закадр: оригинальный звук сцены возвращается в микс, но тише дубля.
@@ -147,7 +148,6 @@ export class Composer {
     }
 
     this.cues.sort((a, b) => a.at - b.at);
-    this.overhangSec = overhang;
   }
 
   /** Готовый экспортированный ролик, если просмотр дошёл до конца. */
@@ -193,7 +193,8 @@ export class Composer {
     const ctx = audioContext();
     const t0 = ctx.currentTime + 0.05;
 
-    const startSource = (buffer: AudioBuffer, at: number, gain?: number) => {
+    this.audioEndsAt = 0;
+    const startSource = (buffer: AudioBuffer, at: number, gain?: number, until?: number) => {
       const src = ctx.createBufferSource();
       src.buffer = buffer;
       if (gain === undefined) {
@@ -212,6 +213,14 @@ export class Composer {
       } else {
         return;
       }
+      // Конец этого источника по часам контекста — по нему потом решаем,
+      // сколько держать последний кадр, чтобы не срезать договорённое
+      const playFor = Math.min(until ?? buffer.duration, buffer.duration) - Math.max(-delay, 0);
+      if (playFor > 0) {
+        const endsAt = t0 + Math.max(delay, 0) + playFor;
+        src.stop(endsAt);
+        this.audioEndsAt = Math.max(this.audioEndsAt, endsAt);
+      }
       this.activeSources.push(src);
     };
 
@@ -220,7 +229,7 @@ export class Composer {
     } else if (this.backing) {
       startSource(this.backing, 0, this.backingGain);
     }
-    for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain);
+    for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain, cue.until);
   }
 
   private startCapture(canvas: HTMLCanvasElement): void {
@@ -271,7 +280,8 @@ export class Composer {
    * закрываем запись, иначе в файл попадёт обрубленная фраза.
    */
   private handleEnded(): void {
-    const wait = Math.min(this.overhangSec, TAIL_SEC);
+    const left = this.audioEndsAt - audioContext().currentTime;
+    const wait = Math.min(Math.max(left, 0), TAIL_SEC);
     if (wait <= 0.01) {
       this.finishPlayback();
       return;
@@ -317,13 +327,16 @@ export class Composer {
     if (this.voiceoverTrack) {
       durationSec = Math.max(durationSec, this.voiceoverTrack.buffer.duration);
     }
-    for (const cue of this.cues) durationSec = Math.max(durationSec, cue.at + cue.buffer.duration);
+    for (const cue of this.cues) {
+      // Хвост WAV-а — по концу речи, иначе файл тянет молчаливый запас
+      durationSec = Math.max(durationSec, cue.at + Math.min(cue.until ?? Infinity, cue.buffer.duration));
+    }
     if (durationSec <= 0) throw new Error("Нечего рендерить");
 
     const offline = new OfflineAudioContext(2, Math.ceil(durationSec * sampleRate), sampleRate);
     const limiter = createLimiter(offline);
     limiter.connect(offline.destination);
-    const startSource = (buffer: AudioBuffer, at: number, gain?: number) => {
+    const startSource = (buffer: AudioBuffer, at: number, gain?: number, until?: number) => {
       const src = offline.createBufferSource();
       src.buffer = buffer;
       if (gain === undefined) {
@@ -337,13 +350,15 @@ export class Composer {
       // с середины, иначе start() бросит исключение
       if (at >= 0) src.start(at);
       else if (-at < buffer.duration) src.start(0, -at);
+      else return;
+      if (until !== undefined && until < buffer.duration) src.stop(Math.max(at, 0) + until);
     };
     if (this.voiceoverTrack) {
       startSource(this.voiceoverTrack.buffer, 0, this.voiceoverTrack.gain);
     } else if (this.backing) {
       startSource(this.backing, 0, this.backingGain);
     }
-    for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain);
+    for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain, cue.until);
 
     return audioBufferToWav(await offline.startRendering());
   }

@@ -426,6 +426,7 @@ const btnNext = $<HTMLButtonElement>("btn-next");
 const btnBack = $<HTMLButtonElement>("btn-dub-back");
 const btnOrig = $<HTMLButtonElement>("btn-orig");
 const btnPlayTake = $<HTMLButtonElement>("btn-play-take");
+const btnToFinal = $<HTMLButtonElement>("btn-to-final");
 const recordBadge = $("record-badge");
 const toggleMonitor = $<HTMLInputElement>("toggle-monitor");
 const toggleCountdown = $<HTMLInputElement>("toggle-countdown");
@@ -556,6 +557,10 @@ function updateDubButtons(): void {
   recordBadge.hidden = !recorder.isRecording || savingTail;
   btnPlayTake.hidden = !hasTake || busy;
   btnPlayTake.textContent = t("myTake");
+  // Когда весь ролик озвучен, к премьере можно уйти с любой реплики —
+  // не пролистывая до последней
+  btnToFinal.hidden = !session.allRecorded || busy;
+  btnToFinal.textContent = t("toPremiere");
   btnOrig.disabled = busy;
   btnBack.disabled = busy;
   $("waveform-hint").textContent = countdownActive
@@ -770,6 +775,13 @@ function hideWatchVideo(keepStill = true): void {
 btnOrig.addEventListener("click", () => void playOriginalVideo());
 
 btnPlayTake.addEventListener("click", () => void playTake());
+
+btnToFinal.addEventListener("click", () => {
+  if (!session) return;
+  stopPreview();
+  hideWatchVideo();
+  void enterFinal();
+});
 
 /**
  * Прослушивание своего дубля — так же, как он будет звучать в финале:
