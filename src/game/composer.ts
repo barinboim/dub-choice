@@ -11,8 +11,13 @@ import { DubSession } from "./session";
  */
 export type MixMode = "dub" | "voiceover";
 
-/** Громкость оригинальных голосов в закадре по умолчанию (игрок её крутит). */
+/** Громкость оригинального звука в закадре по умолчанию (игрок её крутит). */
 export const DEFAULT_VOICEOVER_GAIN = 0.3;
+/**
+ * Положение слайдера озвучки, которое означает «как записано». Правее —
+ * усиление (лимитер на мастере не даст перегрузить), левее — тише.
+ */
+export const TAKE_VOLUME_UNITY = 75;
 
 interface ScheduledCue {
   buffer: AudioBuffer;
@@ -54,6 +59,8 @@ export class Composer {
   private backing: AudioBuffer | null = null;
   /** Целая оригинальная дорожка для закадра; заменяет собой фон. */
   private voiceoverTrack: { buffer: AudioBuffer; gain: number } | null = null;
+  /** Громкость фоновой дорожки: в закадре она приглушается вместе с голосами. */
+  private backingGain = 1;
   private activeSources: AudioBufferSourceNode[] = [];
   private readonly masterGain: GainNode;
   /** Мастер-лимитер: между masterGain и выходом (он же уходит в запись MP4). */
@@ -94,7 +101,8 @@ export class Composer {
   async prepare(
     session: DubSession,
     mode: MixMode = "dub",
-    voiceoverGain = DEFAULT_VOICEOVER_GAIN
+    voiceoverGain = DEFAULT_VOICEOVER_GAIN,
+    takeGain = 1
   ): Promise<void> {
     this.backing = await session.backingBuffer();
     this.capturedBlob = null; // записи могли измениться — старый файл невалиден
@@ -112,7 +120,7 @@ export class Composer {
       // самой реплики совпало с таймстампом, а запас лёг вокруг
       for (const t of clip.timestamps) {
         const at = t - rec.leadSec;
-        this.cues.push({ buffer, at });
+        this.cues.push({ buffer, at, gain: takeGain });
         overhang = Math.max(overhang, at + voiceEnd - videoEnd);
       }
     });
@@ -120,6 +128,9 @@ export class Composer {
     // Целая дорожка — если пак её несёт: тогда фон играет ровно один раз.
     // Иначе собираем оригинал из кусков-реплик поверх фона, и под ними фон
     // получается чуть плотнее — с чужими паками иначе никак.
+    // В закадре тише становится вся оригинальная звуковая картина, включая
+    // фон: слайдер называется «громкость оригинала», а не «громкость голосов»
+    this.backingGain = mode === "voiceover" ? voiceoverGain : 1;
     this.voiceoverTrack = null;
     if (mode === "voiceover") {
       const track = await session.originalTrackBuffer();
@@ -207,7 +218,7 @@ export class Composer {
     if (this.voiceoverTrack) {
       startSource(this.voiceoverTrack.buffer, 0, this.voiceoverTrack.gain);
     } else if (this.backing) {
-      startSource(this.backing, 0);
+      startSource(this.backing, 0, this.backingGain);
     }
     for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain);
   }
@@ -330,7 +341,7 @@ export class Composer {
     if (this.voiceoverTrack) {
       startSource(this.voiceoverTrack.buffer, 0, this.voiceoverTrack.gain);
     } else if (this.backing) {
-      startSource(this.backing, 0);
+      startSource(this.backing, 0, this.backingGain);
     }
     for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain);
 

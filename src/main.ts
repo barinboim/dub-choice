@@ -13,7 +13,12 @@ import {
 import { matchLoudness } from "./audio/normalize";
 import { WaveformView, type WaveformColors } from "./audio/waveform";
 import { DubSession, ORIGINAL_LANG } from "./game/session";
-import { Composer, DEFAULT_VOICEOVER_GAIN, type MixMode } from "./game/composer";
+import {
+  Composer,
+  DEFAULT_VOICEOVER_GAIN,
+  TAKE_VOLUME_UNITY,
+  type MixMode,
+} from "./game/composer";
 import { scoreTake, totalPercent, verdictKey } from "./game/score";
 import { createVideoPlayer, DubVideoPlayer } from "./video/player";
 import { t, lang, langName, setLang, Lang } from "./i18n";
@@ -60,6 +65,12 @@ let waveform: WaveformView | null = null;
 let mixMode: MixMode = "dub";
 /** Громкость оригинала в закадре, 0..1 — слайдер на экране премьеры. */
 let voiceoverGain = DEFAULT_VOICEOVER_GAIN;
+/** Положение слайдера озвучки: TAKE_VOLUME_UNITY — «как записано». */
+let takeVolume = TAKE_VOLUME_UNITY;
+/** Множитель громкости дубля: правее середины — усиление. */
+function takeGain(): number {
+  return takeVolume / TAKE_VOLUME_UNITY;
+}
 
 // ---------- Язык ----------
 function syncLangButtons(): void {
@@ -626,7 +637,9 @@ async function playClipWithAudio(
   buffer: AudioBuffer,
   cursor?: { lead: number; span: number },
   /** Подложки под дубль: фон сцены и/или её оригинальный звук. */
-  scenes: Array<{ buffer: AudioBuffer; gain: number; offset: number; delay: number }> = []
+  scenes: Array<{ buffer: AudioBuffer; gain: number; offset: number; delay: number }> = [],
+  /** Громкость основного буфера — у дубля она задаётся слайдером в финале. */
+  gain = 1
 ): Promise<void> {
   if (!session || !videoPlayer) return;
   stopPreview();
@@ -643,7 +656,13 @@ async function playClipWithAudio(
   const ctx = audioContext();
   const src = ctx.createBufferSource();
   src.buffer = buffer;
-  src.connect(ctx.destination);
+  if (gain === 1) {
+    src.connect(ctx.destination);
+  } else {
+    const node = ctx.createGain();
+    node.gain.value = gain;
+    src.connect(node).connect(ctx.destination);
+  }
   const t0 = ctx.currentTime;
   src.start();
   previewSource = src;
@@ -766,9 +785,11 @@ async function playTake(): Promise<void> {
     }
   } else {
     const backing = await session.backingBuffer();
-    // Фон — кусок общей дорожки, начиная с таймстампа реплики
+    // Фон — кусок общей дорожки, начиная с таймстампа реплики; в закадре он
+    // приглушён вместе с голосами, это одна оригинальная звуковая картина
     if (backing && at < backing.duration) {
-      scenes.push({ buffer: backing, gain: 1, offset: at, delay: rec.leadSec });
+      const gain = mixMode === "voiceover" ? voiceoverGain : 1;
+      scenes.push({ buffer: backing, gain, offset: at, delay: rec.leadSec });
     }
     if (mixMode === "voiceover") {
       scenes.push({ buffer: original, gain: voiceoverGain, offset: 0, delay: rec.leadSec });
@@ -779,7 +800,8 @@ async function playTake(): Promise<void> {
   await playClipWithAudio(
     recordingToBuffer(rec),
     { lead: rec.leadSec, span: original.duration },
-    scenes
+    scenes,
+    takeGain()
   );
 }
 
@@ -1065,6 +1087,8 @@ const mixModeInputs = [
 const voiceoverRow = $("voiceover-volume-row");
 const voiceoverSlider = $<HTMLInputElement>("voiceover-volume");
 const voiceoverValue = $("voiceover-volume-value");
+const takeSlider = $<HTMLInputElement>("take-volume");
+const takeValue = $("take-volume-value");
 
 /** Обе группы радиокнопок и слайдер показывают одно и то же состояние. */
 function syncMixModeUi(): void {
@@ -1072,6 +1096,8 @@ function syncMixModeUi(): void {
   voiceoverRow.hidden = mixMode !== "voiceover";
   voiceoverSlider.value = String(Math.round(voiceoverGain * 100));
   voiceoverValue.textContent = `${Math.round(voiceoverGain * 100)}%`;
+  takeSlider.value = String(takeVolume);
+  takeValue.textContent = `${takeVolume}%`;
 }
 
 /**
@@ -1086,7 +1112,7 @@ async function applyMixMode(): Promise<void> {
   stopExportUi();
   exportStatus.hidden = true;
   downloadRequested = false;
-  await composer.prepare(session, mixMode, voiceoverGain);
+  await composer.prepare(session, mixMode, voiceoverGain, takeGain());
   startFinalPlayback();
 }
 
@@ -1107,11 +1133,19 @@ voiceoverSlider.addEventListener("change", () => {
   void applyMixMode();
 });
 
+takeSlider.addEventListener("input", () => {
+  takeValue.textContent = `${takeSlider.value}%`;
+});
+takeSlider.addEventListener("change", () => {
+  takeVolume = Number(takeSlider.value);
+  void applyMixMode();
+});
+
 async function enterFinal(): Promise<void> {
   if (!session || !composer || !videoPlayer) return;
   $("dub-progress-fill").style.width = "100%";
   syncMixModeUi();
-  await composer.prepare(session, mixMode, voiceoverGain);
+  await composer.prepare(session, mixMode, voiceoverGain, takeGain());
   hideWatchVideo(false); // плеер сейчас переедет в финальный слот
   finalSlot.replaceChildren(videoPlayer.element);
   exportStatus.hidden = true;

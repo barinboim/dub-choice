@@ -120,6 +120,7 @@ const dict = {
     en: "You can change this before saving the video",
   },
   voiceoverVolume: { ru: "Громкость оригинала", en: "Original volume" },
+  takeVolume: { ru: "Громкость озвучки", en: "Your voice volume" },
 
   // Финал
   mixDub: { ru: "Дубляж", en: "Dubbing" },
