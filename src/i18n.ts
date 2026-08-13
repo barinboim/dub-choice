@@ -74,7 +74,7 @@ const dict = {
   myTake: { ru: "▶ Мой дубль", en: "▶ My take" },
   next: { ru: "Готово →", en: "Done →" },
   nextFinal: { ru: "Готово — смотреть! 🎬", en: "Done — watch! 🎬" },
-  monitorLabel: { ru: "Оригинал в ухо при записи", en: "Original in your ear while recording" },
+  monitorLabel: { ru: "Слышать оригинал", en: "Hear the original" },
   countdownLabel: { ru: "Отсчёт 3–2–1 перед записью", en: "3–2–1 countdown before recording" },
   cancelCountdown: { ru: "✕ Отмена", en: "✕ Cancel" },
   recBadge: { ru: "● ЗАПИСЬ", en: "● REC" },
