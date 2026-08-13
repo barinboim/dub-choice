@@ -1212,6 +1212,16 @@ async function renderResults(): Promise<void> {
 
     const row = document.createElement("div");
     row.className = "result-row";
+    // Клик по строке ведёт на эту реплику: переписать конкретную фразу
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.title = t("resultRedub");
+    row.addEventListener("click", () => backToClips(i));
+    row.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      backToClips(i);
+    });
 
     const thumbSrc = clip.image ? URL.createObjectURL(clip.image) : clipThumbs.get(i);
     if (clip.image && thumbSrc) resultImageUrls.push(thumbSrc);
@@ -1357,6 +1367,24 @@ $<HTMLButtonElement>("btn-export-audio").addEventListener("click", async (e) => 
   } finally {
     btn.disabled = false;
   }
+});
+
+/**
+ * Возврат с премьеры к записи с сохранением дублей: переписать одну неудачную
+ * реплику, не начиная всё заново. Готовый экспорт после этого невалиден —
+ * `composer.prepare` соберёт дорожку заново при следующем входе в финал.
+ */
+function backToClips(index: number): void {
+  if (!session) return;
+  composer?.stop();
+  stopExportUi();
+  clearResults();
+  showScreen("dub");
+  void enterClip(Math.min(Math.max(index, 0), session.total - 1));
+}
+
+$("btn-final-back").addEventListener("click", () => {
+  if (session) backToClips(session.total - 1);
 });
 
 $("btn-retry").addEventListener("click", () => {

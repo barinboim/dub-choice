@@ -739,6 +739,9 @@ a:hover { color: #fff; }
 }
 .results-list { display: flex; flex-direction: column; gap: 10px; }
 .result-row {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  outline: none;
   display: grid;
   grid-template-columns: 108px minmax(120px, 1fr) minmax(0, 2.2fr);
   align-items: center;
@@ -747,6 +750,10 @@ a:hover { color: #fff; }
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 10px;
+}
+.result-row:hover, .result-row:focus-visible {
+  border-color: var(--line-strong);
+  background: var(--panel-2);
 }
 .result-thumb {
   width: 108px;

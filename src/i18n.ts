@@ -133,6 +133,7 @@ const dict = {
     ru: "твоя озвучка ляжет поверх приглушённых оригинальных голосов",
     en: "your voice goes over the original voices, turned down",
   },
+  backToClips: { ru: "← К репликам", en: "← Back to lines" },
   premiere: { ru: "🍿 Премьера твоего дубляжа!", en: "🍿 Your dub premiere!" },
   watch: { ru: "▶ Смотреть", en: "▶ Watch" },
   downloadVideo: { ru: "⬇ Скачать видео ({fmt})", en: "⬇ Download video ({fmt})" },
@@ -156,9 +157,10 @@ const dict = {
   // Результаты
   resultsTitle: { ru: "Результаты", en: "Results" },
   resultsHint: {
-    ru: "Балл — насколько твой дубль попал в ритм оригинала: вовремя начал, вовремя замолчал, там же сделал акценты.",
-    en: "The score is how well your take matched the original's rhythm: starts, pauses and accents in the same places.",
+    ru: "Балл — насколько твой дубль попал в ритм оригинала: вовремя начал, вовремя замолчал, там же сделал акценты. Нажми на реплику, чтобы переписать её.",
+    en: "The score is how well your take matched the original's rhythm: starts, pauses and accents in the same places. Tap a line to redo it.",
   },
+  resultRedub: { ru: "Переписать эту реплику", en: "Redo this line" },
   scoreLabel: { ru: "Балл: {v}", en: "Score: {v}" },
   verdictAce: { ru: "Тебя берут на дубляж!", en: "You're hired for the dub!" },
   verdictGreat: { ru: "Отличная работа!", en: "Great work!" },
