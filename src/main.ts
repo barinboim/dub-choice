@@ -679,17 +679,21 @@ async function playClipWithAudio(
     sceneSources.push(sceneSrc);
   }
 
-  // Курсор ведём по аудиочасам — они точнее, чем currentTime у ogv.js
+  // Курсор ведём по аудиочасам — они точнее, чем currentTime у ogv.js.
+  // Досматриваем до конца буфера, а не до конца окна реплики: у дубля вокруг
+  // неё есть запас, и обрывать на нём и звук, и видео — значит показывать
+  // игроку не то, что записалось
   const animate = () => {
     if (token !== watchToken) return;
-    const ratio = (ctx.currentTime - t0 - cursorLead) / cursorSpan;
-    if (ratio >= 1) {
+    const elapsed = ctx.currentTime - t0;
+    if (elapsed >= dur) {
       hideWatchVideo();
       return;
     }
+    const ratio = (elapsed - cursorLead) / cursorSpan;
     // Середина фрагмента — там персонаж уже точно в кадре и говорит
     if (ratio > 0.45) captureThumb(clipIndex);
-    waveform?.setPlayhead(Math.max(ratio, 0));
+    waveform?.setPlayhead(Math.min(Math.max(ratio, 0), 1));
     playheadRaf = requestAnimationFrame(animate);
   };
   playheadRaf = requestAnimationFrame(animate);
