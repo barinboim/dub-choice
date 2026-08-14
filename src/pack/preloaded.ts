@@ -43,6 +43,17 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     sizeBytes: 16_326_903,
   },
   {
+    id: "dontlookup",
+    title: "Don't Look Up — The President is Lying (EN+RU)",
+    paths: [
+      "packs/dontlookup.zip.aa", "packs/dontlookup.zip.ab",
+      "packs/dontlookup.zip.ac",
+    ],
+    icon: "pack-icons/dontlookup.png",
+    sizeBytes: 9_284_615,
+    tags: ["18+"],
+  },
+  {
     id: "landa",
     title: "Inglorious Basterds — Hans Landa (En+Ru)",
     paths: [
