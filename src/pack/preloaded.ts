@@ -57,7 +57,13 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
   {
     id: "forrestgump",
     title: "Forrest Gump — Run Forrest Run (+Лесной Болван subs)",
-    paths: ["packs/forrestgump.zip"],
+    // По частям: пуш целым файлом рвался, а склейка тут штатная
+    paths: [
+      "packs/forrestgump.zip.aa", "packs/forrestgump.zip.ab",
+      "packs/forrestgump.zip.ac", "packs/forrestgump.zip.ad",
+      "packs/forrestgump.zip.ae", "packs/forrestgump.zip.af",
+      "packs/forrestgump.zip.ag",
+    ],
     icon: "pack-icons/forrestgump.png",
     sizeBytes: 26_235_295,
   },
@@ -71,7 +77,10 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
   {
     id: "chosenone",
     title: "Star Wars — You Were the Chosen One",
-    paths: ["packs/chosenone.zip"],
+    paths: [
+      "packs/chosenone.zip.aa", "packs/chosenone.zip.ab",
+      "packs/chosenone.zip.ac", "packs/chosenone.zip.ad",
+    ],
     icon: "pack-icons/chosenone.png",
     sizeBytes: 13_463_318,
   },
