@@ -14,8 +14,14 @@ const VIDEO_SOURCES: { name: string; kind: "native" | "ogv" }[] = [
   { name: "dub_video.webm", kind: "native" },
   { name: "dub_video.ogv", kind: "ogv" },
 ];
-/** Ключ перевода субтитра: caption_ru, caption_en, caption_pt-br. */
-const CAPTION_LANG_RE = /^caption_([a-z]{2,3}(?:-[a-z0-9]{2,8})?)$/i;
+/**
+ * Ключ перевода субтитра: caption_ru, caption_pt-br, caption_lesnoy.
+ * Код не обязан быть кодом ISO: пак может говорить на выдуманном языке, и
+ * тогда студия делает код из его названия, а подпись несёт в langname_*.
+ */
+const CAPTION_LANG_RE = /^caption_([a-z][a-z0-9-]{1,15})$/i;
+/** Название языка от автора пака: langname_elvish_ru. */
+const LANG_NAME_RE = /^langname_([a-z0-9-]{2,12})_(ru|en)$/i;
 
 /**
  * Собирает DubPack из плоской карты файлов (имя → Blob).
@@ -47,6 +53,7 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
   let authors: string[] = [];
   let iconName: string | null = null;
   let lang = "";
+  const langNames: Record<string, { ru: string; en: string }> = {};
   const packInfoBlob = find("_pack_info.ini");
   if (packInfoBlob) {
     const ini = parseIni(await packInfoBlob.text());
@@ -55,6 +62,15 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     subtitle = iniString(data, "subtitle");
     authors = iniStringArray(data, "authors");
     lang = iniString(data, "lang").toLowerCase();
+    // Названия языков от автора пака: langname_elvish_ru="Эльфийский"
+    for (const [key, value] of Object.entries(data ?? {})) {
+      const m = LANG_NAME_RE.exec(key);
+      if (!m || typeof value !== "string" || value.trim() === "") continue;
+      const code = m[1].toLowerCase();
+      const slot = m[2].toLowerCase() as "ru" | "en";
+      const cur = langNames[code] ?? { ru: "", en: "" };
+      langNames[code] = { ...cur, [slot]: value.trim() };
+    }
     const icon = iniString(data, "icon");
     if (icon) iconName = icon;
   } else {
@@ -137,6 +153,7 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     originalTrack: findByBase(byLower, "_original_track", AUDIO_EXTS),
     clips,
     lang,
+    langNames,
     // Язык оригинала переводом не считается, даже если пак его продублировал
     translations: [...translations].filter((code) => code !== lang).sort(),
     warnings,

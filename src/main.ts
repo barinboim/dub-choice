@@ -894,9 +894,13 @@ function renderCaption(): void {
   dubCaption.title = t("captionEditHint");
 }
 
-/** Ярлык на пилле: название языка, у пака без lang — «Оригинал». */
-function langLabel(lang: string): string {
-  return lang === ORIGINAL_LANG ? t("langOriginal") : langName(lang);
+/** Ярлык на пилле: название языка, у пака без lang — «Оригинал».
+ *  Названия из самого пака важнее словаря: только автор знает, как
+ *  подписать язык, которого в словаре нет (выдуманный, диалект). */
+function langLabel(code: string): string {
+  if (code === ORIGINAL_LANG) return t("langOriginal");
+  const own = session?.pack.langNames?.[code];
+  return own?.[lang()] || own?.ru || own?.en || langName(code);
 }
 
 function openCaptionEditor(): void {

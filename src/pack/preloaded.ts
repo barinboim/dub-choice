@@ -55,6 +55,13 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     sizeBytes: 5_342_073,
   },
   {
+    id: "forrestgump",
+    title: "Forrest Gump — Run Forrest Run (+Лесной Болван subs)",
+    paths: ["packs/forrestgump.zip"],
+    icon: "pack-icons/forrestgump.png",
+    sizeBytes: 26_235_295,
+  },
+  {
     id: "starwars",
     title: "Star Wars — You Turned Her Against Me",
     paths: ["packs/starwars.zip"],
@@ -66,7 +73,7 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     title: "Star Wars — You Were the Chosen One",
     paths: ["packs/chosenone.zip"],
     icon: "pack-icons/chosenone.png",
-    sizeBytes: 12_628_399,
+    sizeBytes: 13_463_318,
   },
   {
     id: "lotr",
