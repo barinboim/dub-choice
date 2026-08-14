@@ -833,79 +833,12 @@ a:hover { color: #fff; }
     gap: 8px;
   }
   .dub-controls .btn { padding: 12px 10px; font-size: 0.9rem; }
+  /* Блок настроек переезжает в конец экрана (перенос — в main.ts) */
+  .screen-dub > .monitor-block { order: 10; border-top: 1px solid var(--line); }
   .waveform { height: 96px; }
   .pack-card { flex-direction: column; align-items: flex-start; gap: 14px; }
   .pack-icon { width: 72px; height: 72px; }
-  /* Режим микса: дубляж или закадр — выбирается на карточке и в финале */
-.mix-modes-note {
-  text-align: center;
-  color: var(--ink-dim);
-  font-size: 0.78rem;
-  margin: 8px 0 0;
-}
-.voiceover-volume {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: center;
-  max-width: 420px;
-  margin: 14px auto 0;
-  color: var(--ink-soft);
-  font-size: 0.85rem;
-}
-.voiceover-volume input[type="range"] {
-  flex: 1;
-  appearance: none;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--line-strong);
-  outline: none;
-  cursor: pointer;
-}
-.voiceover-volume input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  background: var(--wave-user);
-  cursor: pointer;
-}
-.voiceover-volume input[type="range"]::-moz-range-thumb {
-  width: 14px; height: 14px;
-  border: none;
-  border-radius: 50%;
-  background: var(--wave-user);
-  cursor: pointer;
-}
-
-.mix-modes {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-top: 18px;
-}
-.mix-mode {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  max-width: 320px;
-  flex: 1 1 260px;
-  padding: 11px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--panel);
-  cursor: pointer;
-  user-select: none;
-  transition: border-color 0.15s, background 0.15s;
-}
-.mix-mode:hover { border-color: var(--line-strong); }
-.mix-mode:has(input:checked) { border-color: var(--wave-user); background: var(--panel-2); }
-.mix-mode input { accent-color: var(--wave-user); margin-top: 3px; flex-shrink: 0; }
-.mix-mode-text { line-height: 1.35; }
-.mix-mode-title { font-size: 0.95rem; font-weight: 600; }
-.mix-mode-text small { display: block; color: var(--ink-dim); font-size: 0.78rem; margin-top: 2px; }
-
-.final-controls { flex-direction: column; }
+  .final-controls { flex-direction: column; }
   .final-controls .btn { width: 100%; }
   .result-row {
     grid-template-columns: 84px 1fr;

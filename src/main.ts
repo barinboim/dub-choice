@@ -427,6 +427,24 @@ const btnBack = $<HTMLButtonElement>("btn-dub-back");
 const btnOrig = $<HTMLButtonElement>("btn-orig");
 const btnPlayTake = $<HTMLButtonElement>("btn-play-take");
 const btnToFinal = $<HTMLButtonElement>("btn-to-final");
+
+/**
+ * Узкий экран: длинная подпись на кнопке не влезает, а настройки записи
+ * (отсчёт, мониторинг) на телефоне должны лежать ниже всего — под волной,
+ * чтобы не отжимать сцену и текст реплики. Переносим блок в DOM: вытащить
+ * его из колонки одним CSS нельзя, он вложен в `.dub-side`.
+ */
+const narrowScreen = window.matchMedia("(max-width: 700px)");
+const monitorBlock = document.querySelector<HTMLElement>(".monitor-block")!;
+const dubSide = document.querySelector<HTMLElement>(".dub-side")!;
+
+function applyNarrowLayout(): void {
+  const host = narrowScreen.matches ? screens.dub : dubSide;
+  if (monitorBlock.parentElement !== host) host.append(monitorBlock);
+  if (session) updateDubButtons();
+}
+
+narrowScreen.addEventListener("change", applyNarrowLayout);
 const recordBadge = $("record-badge");
 const toggleMonitor = $<HTMLInputElement>("toggle-monitor");
 const toggleCountdown = $<HTMLInputElement>("toggle-countdown");
@@ -542,7 +560,9 @@ function updateDubButtons(): void {
   // выключены, а «Записать» превращается в отмену
   const busy = recorder.isRecording || countdownActive;
   btnNext.disabled = !hasTake || busy;
-  btnNext.textContent = session.isLastClip ? t("nextFinal") : t("next");
+  btnNext.textContent = session.isLastClip
+    ? t(narrowScreen.matches ? "nextFinalShort" : "nextFinal")
+    : t("next");
   btnRecord.textContent = countdownActive
     ? t("cancelCountdown")
     : savingTail
@@ -1460,6 +1480,7 @@ $("btn-home").addEventListener("click", () => {
 });
 
 // ---------- Старт ----------
+applyNarrowLayout();
 setLang(lang()); // применяет переводы к статике и <html lang>
 syncLangButtons();
 renderPreloadedList();
