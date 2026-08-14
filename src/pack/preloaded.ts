@@ -50,8 +50,7 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
       "packs/dontlookup.zip.ac",
     ],
     icon: "pack-icons/dontlookup.png",
-    sizeBytes: 9_284_615,
-    tags: ["18+"],
+    sizeBytes: 9_284_800,
   },
   {
     id: "landa",
