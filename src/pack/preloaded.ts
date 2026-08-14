@@ -32,6 +32,29 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     sizeBytes: 12_666_304,
   },
   {
+    id: "shrekride",
+    title: "Шрек — Мы уже приехали?",
+    paths: [
+      "packs/shrekride.zip.aa", "packs/shrekride.zip.ab",
+      "packs/shrekride.zip.ac", "packs/shrekride.zip.ad",
+      "packs/shrekride.zip.ae",
+    ],
+    icon: "pack-icons/shrekride.png",
+    sizeBytes: 16_326_903,
+  },
+  {
+    id: "landa",
+    title: "Inglorious Basterds — Hans Landa (En+Ru)",
+    paths: [
+      "packs/landa.zip.aa", "packs/landa.zip.ab", "packs/landa.zip.ac",
+      "packs/landa.zip.ad", "packs/landa.zip.ae", "packs/landa.zip.af",
+      "packs/landa.zip.ag", "packs/landa.zip.ah", "packs/landa.zip.ai",
+      "packs/landa.zip.aj",
+    ],
+    icon: "pack-icons/landa.png",
+    sizeBytes: 36_331_773,
+  },
+  {
     id: "gofman",
     title: "Игорь Гофман — Репортаж из квартиры на Пейсах",
     paths: ["packs/gofman.zip"],
