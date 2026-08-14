@@ -557,9 +557,9 @@ function updateDubButtons(): void {
   recordBadge.hidden = !recorder.isRecording || savingTail;
   btnPlayTake.hidden = !hasTake || busy;
   btnPlayTake.textContent = t("myTake");
-  // Когда весь ролик озвучен, к премьере можно уйти с любой реплики —
-  // не пролистывая до последней
-  btnToFinal.hidden = !session.allRecorded || busy;
+  // Когда весь ролик озвучен, к премьере можно уйти с любой реплики — кроме
+  // последней: там в финал и так ведёт «Готово», две кнопки об одном лишние
+  btnToFinal.hidden = !session.allRecorded || busy || session.isLastClip;
   btnToFinal.textContent = t("toPremiere");
   btnOrig.disabled = busy;
   btnBack.disabled = busy;
