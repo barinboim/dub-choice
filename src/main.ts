@@ -1,4 +1,5 @@
 import "./style.css";
+import { trackEvent } from "./analytics";
 import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/loader";
 import { DubPack, PackError } from "./pack/types";
 import { PRELOADED_PACKS, packUrls, fetchWithProgress, formatSize } from "./pack/preloaded";
@@ -127,14 +128,14 @@ function showHomeError(message: string): void {
   homeError.hidden = false;
 }
 
-async function addPack(load: Promise<DubPack>): Promise<void> {
+async function addPack(load: Promise<DubPack>, sourceId: string | null = null): Promise<void> {
   homeError.hidden = true;
   dropZone.classList.remove("dragover");
   try {
     const pack = await load;
     packs.push(pack);
     renderPackList();
-    selectPack(pack);
+    selectPack(pack, sourceId ?? "custom");
   } catch (err) {
     if (err instanceof PackError) showHomeError(err.message);
     else {
@@ -261,7 +262,7 @@ async function loadPreloaded(id: string): Promise<void> {
     const pack = await loadPackFromZip(new File([blob], `${pp.id}.zip`));
     // Пока распаковывались, игрок мог запустить другую закачку — она главнее
     if (download.signal.aborted) return;
-    await addPack(Promise.resolve(pack));
+    await addPack(Promise.resolve(pack), pp.id);
   } catch (err) {
     if (download.signal.aborted) return; // закачку оборвал сам игрок
     console.error(err);
@@ -371,12 +372,17 @@ function fillPackCard(pack: DubPack): void {
   warn.textContent = pack.warnings.join(" ");
 }
 
-function selectPack(pack: DubPack): void {
+/** ID пака для аналитики: слаг встроенного, либо "custom" для своего ZIP/папки. */
+let currentPackSlug = "custom";
+
+function selectPack(pack: DubPack, sourceId = "custom"): void {
   selectedPack = pack;
+  currentPackSlug = sourceId;
   fillPackCard(pack);
   micStatus.textContent = "";
   micStatus.classList.remove("error");
   showScreen("pack");
+  trackEvent(`pack-select/${currentPackSlug}`);
 }
 
 $("btn-pack-back").addEventListener("click", () => showScreen("home"));
@@ -414,6 +420,7 @@ $("btn-start").addEventListener("click", async () => {
   composer = new Composer(videoPlayer);
   // Экран показываем до загрузки клипа, чтобы canvas получил размеры
   showScreen("dub");
+  trackEvent(`dub-start/${currentPackSlug}`);
   await enterClip(0);
 });
 
@@ -1215,6 +1222,7 @@ async function enterFinal(): Promise<void> {
   };
   showScreen("final");
   startFinalPlayback();
+  trackEvent(`dub-complete/${currentPackSlug}`);
   // Только после showScreen: волнам нужна реальная ширина канвасов
   void renderResults();
 }
