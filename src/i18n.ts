@@ -15,6 +15,10 @@ const dict = {
   },
   dropTitle: { ru: "Перетащи сюда dub-пак", en: "Drop a dub pack here" },
   dropHint: { ru: "ZIP-архив или папка с файлами пака", en: "A ZIP archive or a pack folder" },
+  dropMorePacks: {
+    ru: "Готовые dub-паки можно найти на",
+    en: "Find ready-made dub packs on",
+  },
   pickZip: { ru: "Выбрать ZIP", en: "Choose ZIP" },
   pickFolder: { ru: "Выбрать папку", en: "Choose folder" },
   galleryTitle: { ru: "Встроенные паки", en: "Built-in packs" },
