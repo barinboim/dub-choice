@@ -32,6 +32,14 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     sizeBytes: 12_666_304,
   },
   {
+    id: "gofman",
+    title: "Игорь Гофман — Репортаж из квартиры на Пейсах",
+    paths: ["packs/gofman.zip"],
+    icon: "pack-icons/gofman.png",
+    sizeBytes: 17_419_842,
+    tags: ["18+"],
+  },
+  {
     id: "slonik",
     title: "Зелёный слоник — Сколько истребителей?",
     paths: ["packs/slonik.zip"],
