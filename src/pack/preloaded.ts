@@ -36,7 +36,7 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
     title: "Игорь Гофман — Репортаж из квартиры на Пейсах",
     paths: ["packs/gofman.zip"],
     icon: "pack-icons/gofman.png",
-    sizeBytes: 17_419_842,
+    sizeBytes: 18_878_881,
     tags: ["18+"],
   },
   {
