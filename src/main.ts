@@ -622,17 +622,22 @@ function fitFrameWhenReady(frame: HTMLElement | null): void {
  * Запускает видеофрагмент реплики (всегда без звука видео — звук ведём сами
  * через Web Audio: аудиотракт ogv.js ненадёжен в Safari/Arc).
  */
-async function startClipVideo(waitPlaying = false): Promise<boolean> {
+async function startClipVideo(): Promise<boolean> {
   if (!session || !videoPlayer) return false;
-  showWatchVideo();
   fitFrameWhenReady(document.querySelector(".dub-screen-frame"));
   videoPlayer.muted = true;
   videoPlayer.currentTime = session.clip.timestamps[0];
   // Подписка строго между перемоткой и play: перемотка сама шлёт события,
   // а после play() сигнал можно уже не застать
-  const playing = waitPlaying ? videoPlayer.whenPlaying() : null;
+  const playing = videoPlayer.whenPlaying();
   await videoPlayer.play().catch(() => {});
-  return playing ? await playing : false;
+  const started = await playing;
+  // Слот с видео открываем только когда кадр реально готов: если перемотка
+  // попала в середину GOP (редкие ключевые кадры — see docs/DUBPACK_BUILD.md),
+  // декодер может отдавать кадр не сразу, и без этой отсрочки под заглушкой
+  // на секунду-другую мелькал бы чёрный экран
+  showWatchVideo();
+  return started;
 }
 
 /**
@@ -1012,7 +1017,7 @@ btnRecord.addEventListener("click", async () => {
   // на медленном устройстве плеер стартует не мгновенно, и без этого запись
   // набирает пустоту, а голос игрока уезжает на то же время — и в финальном
   // ролике, и в оценке (score.ts компенсирует лишь ±0,3 с).
-  const started = await startClipVideo(true);
+  const started = await startClipVideo();
   if (!recorder.isRecording || session?.clipIndex !== clipIndex) return;
   if (started) {
     recorder.markStart();
