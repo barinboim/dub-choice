@@ -647,6 +647,12 @@ async function startClipVideo(waitPlaying = false): Promise<boolean> {
   showWatchVideo();
   fitFrameWhenReady(document.querySelector(".dub-screen-frame"));
   videoPlayer.muted = true;
+  // play() на уже играющем <video> (клип ещё шёл в предпросмотре) не шлёт
+  // "playing" в Safari — whenPlaying() тогда всегда бьётся в таймаут, и
+  // мониторинг с markStart() опаздывают на весь PLAYING_TIMEOUT_MS. Пауза
+  // перед seek не стоит лишней перемотки, но нужна только нативному mp4/webm:
+  // ogv.js (Theora) ждём по timeupdate, там play-после-play не проблема.
+  if (waitPlaying && session.pack.videoKind === "native" && !videoPlayer.paused) videoPlayer.pause();
   videoPlayer.currentTime = session.clip.timestamps[0];
   // Подписка строго между перемоткой и play: перемотка сама шлёт события,
   // а после play() сигнал можно уже не застать
