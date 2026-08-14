@@ -496,6 +496,47 @@ a:hover { color: #fff; }
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .caption-lang:hover { color: var(--ink); }
+/* Звук и субтитры — в одну строку, включая мобильную. Если не влезает,
+   подписи языков ужимаются до кодов (класс compact ставит main.ts). */
+.lang-rows {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: nowrap;
+  /* Крайний случай — очень узкий экран и длинные названия: строка остаётся
+     одной, но её можно протянуть пальцем, а не обрезать молча. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.lang-rows::-webkit-scrollbar { display: none; }
+.lang-row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.lang-rows.compact { gap: 10px; }
+.lang-rows.compact .caption-lang { padding: 3px 8px; }
+.lang-row-label {
+  white-space: nowrap;
+  color: var(--ink-dim);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.lang-pills { display: flex; gap: 6px; flex-wrap: nowrap; justify-content: center; }
+.results-track .lang-pills { flex-wrap: wrap; }
+/* Вопрос о дорожке: пока не ответили, баллов нет — угадывать нечего */
+.results-track { text-align: center; margin-bottom: 14px; }
+.results-track-q { color: var(--ink); margin: 0 0 8px; font-weight: 600; }
+select.lang-select {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
 .caption-edit-hint {
   text-align: center;
   color: var(--ink-dim);

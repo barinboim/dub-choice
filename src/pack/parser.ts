@@ -53,6 +53,7 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
   let authors: string[] = [];
   let iconName: string | null = null;
   let lang = "";
+  let audioLangs: string[] = [];
   const langNames: Record<string, { ru: string; en: string }> = {};
   const packInfoBlob = find("_pack_info.ini");
   if (packInfoBlob) {
@@ -62,6 +63,7 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     subtitle = iniString(data, "subtitle");
     authors = iniStringArray(data, "authors");
     lang = iniString(data, "lang").toLowerCase();
+    audioLangs = iniStringArray(data, "audio_langs").map((c) => c.toLowerCase());
     // Названия языков от автора пака: langname_elvish_ru="Эльфийский"
     for (const [key, value] of Object.entries(data ?? {})) {
       const m = LANG_NAME_RE.exec(key);
@@ -151,6 +153,12 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     videoKind: videoSource.kind,
     backingTrack: findByBase(byLower, "_backing_track", AUDIO_EXTS),
     originalTrack: findByBase(byLower, "_original_track", AUDIO_EXTS),
+    // Дорожка объявлена в _pack_info.ini, но файла может не быть — берём
+    // только те, что реально лежат в паке
+    voiceTracks: audioLangs.flatMap((code) => {
+      const blob = findByBase(byLower, `_voices_${code}`, AUDIO_EXTS);
+      return blob ? [{ lang: code, blob }] : [];
+    }),
     clips,
     lang,
     langNames,

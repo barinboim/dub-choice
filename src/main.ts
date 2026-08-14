@@ -416,6 +416,7 @@ $("btn-start").addEventListener("click", async () => {
     return;
   }
   session = new DubSession(selectedPack, lang());
+  scoreLang = null;
   composer?.dispose();
   composer = new Composer(videoPlayer);
   // Экран показываем до загрузки клипа, чтобы canvas получил размеры
@@ -458,6 +459,9 @@ const toggleCountdown = $<HTMLInputElement>("toggle-countdown");
 const dubCountdown = $("dub-countdown");
 const dubCaption = $("dub-caption");
 const captionLangsRow = $("dub-caption-langs");
+const captionPills = $("dub-caption-pills");
+const audioLangsRow = $("dub-audio-langs");
+const audioPills = $("dub-audio-pills");
 const captionEdit = $("dub-caption-edit");
 const captionEditHint = document.querySelector<HTMLElement>(".caption-edit-hint")!;
 const captionInput = $<HTMLTextAreaElement>("dub-caption-input");
@@ -538,13 +542,7 @@ async function enterClip(index: number): Promise<void> {
   waveform.clearUserRecording();
   waveform.setPlayhead(null);
 
-  const existing = session.recordings.get(index);
-  const buf = await session.originalBuffer(index);
-  waveform.setOriginal(buf);
-  if (existing) {
-    const existingWindow = takeWindow(existing, buf.duration);
-    waveform.setUserRecording(existingWindow, takeTimelineSamples(buf, existingWindow.length));
-  }
+  await refreshOriginalWave();
   updateDubButtons();
 
   // Реплику сразу показываем целиком: видео + звук + бегущий по волне курсор
@@ -744,9 +742,26 @@ async function playClipWithAudio(
   watchTimer = window.setTimeout(() => hideWatchVideo(), (dur + 2) * 1000);
 }
 
+/**
+ * Пурпурная волна — по выбранной звуковой дорожке. При смене языка звука
+ * она перерисовывается: игрок целится в ту речь, которую слышит.
+ */
+async function refreshOriginalWave(): Promise<void> {
+  if (!session || !waveform) return;
+  const index = session.clipIndex;
+  const buf = await session.clipBuffer(index);
+  if (!session || session.clipIndex !== index) return; // ушли, пока декодировали
+  waveform.setOriginal(buf);
+  const existing = session.recordings.get(index);
+  if (existing) {
+    const win = takeWindow(existing, buf.duration);
+    waveform.setUserRecording(win, takeTimelineSamples(buf, win.length));
+  }
+}
+
 async function playOriginalVideo(): Promise<void> {
   if (!session) return;
-  await playClipWithAudio(await session.originalBuffer());
+  await playClipWithAudio(await session.clipBuffer());
 }
 
 function showWatchVideo(): void {
@@ -825,13 +840,27 @@ async function playTake(): Promise<void> {
   if (!session) return;
   const rec = session.recordings.get(session.clipIndex);
   if (!rec) return;
-  const original = await session.originalBuffer();
+  const original = await session.clipBuffer();
   const at = session.clip.timestamps[0];
 
   // Точно тот же набор слоёв, что уйдёт в финальный микс
   const scenes: Array<{ buffer: AudioBuffer; gain: number; offset: number; delay: number }> = [];
-  const voiceoverTrack = mixMode === "voiceover" ? await session.originalTrackBuffer() : null;
-  if (voiceoverTrack) {
+  // Дорожка дубляжа — только голос, поэтому фон к ней добавляет бэкинг;
+  // у оригинала целая дорожка есть, и она играет вместо бэкинга
+  const dubTrack = session.audioLang
+    ? await session.voicesBuffer(session.audioLang)
+    : null;
+  const voiceoverTrack =
+    mixMode === "voiceover" && !dubTrack ? await session.originalTrackBuffer() : null;
+  if (mixMode === "voiceover" && dubTrack) {
+    const backing = await session.backingBuffer();
+    if (backing && at < backing.duration) {
+      scenes.push({ buffer: backing, gain: voiceoverGain, offset: at, delay: rec.leadSec });
+    }
+    if (at < dubTrack.duration) {
+      scenes.push({ buffer: dubTrack, gain: voiceoverGain, offset: at, delay: rec.leadSec });
+    }
+  } else if (voiceoverTrack) {
     // Пак несёт целую оригинальную дорожку — она и играет вместо фона
     if (at < voiceoverTrack.duration) {
       scenes.push({ buffer: voiceoverTrack, gain: voiceoverGain, offset: at, delay: rec.leadSec });
@@ -868,25 +897,114 @@ async function playTake(): Promise<void> {
  * скрытое поле правки. Свой вариант текста живёт в сессии и подставляется
  * вместо субтитра — озвучивать можно ровно то, что видишь.
  */
-function renderCaption(): void {
-  if (!session) return;
-  const langs = session.captionLangs;
-  captionLangsRow.hidden = langs.length === 0;
-  captionLangsRow.replaceChildren(
+/** Подпись варианта: у оригинала это язык самого пака, если он известен. */
+function trackLabel(lang: string, short = false): string {
+  const code = lang === ORIGINAL_LANG ? session?.pack.lang ?? "" : lang;
+  const full = lang === ORIGINAL_LANG && !code ? t("langOriginal") : langLabel(code);
+  if (!short) return full;
+  // Ужимаемся до кода языка: «Английский» → «EN». Своего кода у языка может
+  // и не быть (выдуманный) — тогда обрезаем название.
+  return code ? code.slice(0, 3).toUpperCase() : full.slice(0, 3).toUpperCase();
+}
+
+/**
+ * Звук и субтитры живут в одной строке — и на телефоне тоже. Если не
+ * помещаются, подписи схлопываются до кодов языков; решаем это замером, а
+ * не порогом ширины экрана: длина названий зависит от пака и языка.
+ */
+let langRowsObserver: ResizeObserver | null = null;
+let fitting = false;
+
+function fitLangRows(): void {
+  if (fitting) return;              // перерисовка внутри замера — не повод мерить снова
+  const rows = $("dub-lang-rows");
+  if (!langRowsObserver) {
+    // Поворот телефона меняет ширину — пересчитываем, а не гадаем один раз
+    langRowsObserver = new ResizeObserver(() => {
+      if (session) fitLangRows();
+    });
+    langRowsObserver.observe(rows);
+  }
+  fitting = true;
+  try {
+    rows.classList.remove("compact");
+    if (rows.scrollWidth > rows.clientWidth) {
+      rows.classList.add("compact");
+      renderLangPills(true);
+    }
+  } finally {
+    fitting = false;
+  }
+}
+
+/** Больше этого числа вариантов — пиллы не влезают, нужен список. */
+const PILL_LIMIT = 3;
+
+/**
+ * Ряд выбора языка: до трёх вариантов — пиллы, дальше выпадающий список.
+ * Одна и та же механика обслуживает и звук, и субтитры.
+ */
+function renderLangRow(
+  host: HTMLElement,
+  langs: string[],
+  current: string,
+  short: boolean,
+  onPick: (lang: string) => void
+): void {
+  if (langs.length > PILL_LIMIT) {
+    const select = document.createElement("select");
+    select.className = "lang-select";
+    for (const lang of langs) {
+      const opt = document.createElement("option");
+      opt.value = lang;
+      opt.textContent = trackLabel(lang, short);
+      opt.selected = lang === current;
+      select.append(opt);
+    }
+    select.addEventListener("change", () => onPick(select.value));
+    host.replaceChildren(select);
+    return;
+  }
+  host.replaceChildren(
     ...langs.map((lang) => {
       const pill = document.createElement("button");
       pill.className = "caption-lang";
-      pill.classList.toggle("active", lang === session!.captionLang);
-      pill.textContent = lang === ORIGINAL_LANG ? langLabel(session!.pack.lang) : langLabel(lang);
-      pill.addEventListener("click", () => {
-        if (!session) return;
-        session.captionLang = lang;
-        closeCaptionEditor();
-        renderCaption();
-      });
+      pill.classList.toggle("active", lang === current);
+      pill.textContent = trackLabel(lang, short);
+      pill.addEventListener("click", () => onPick(lang));
       return pill;
     })
   );
+}
+
+/** Оба ряда пилл: субтитры и звуковые дорожки. */
+function renderLangPills(short = false): void {
+  if (!session) return;
+  const langs = session.captionLangs;
+  captionLangsRow.hidden = langs.length === 0;
+  renderLangRow(captionPills, langs, session.captionLang, short, (lang) => {
+    if (!session) return;
+    session.captionLang = lang;
+    closeCaptionEditor();
+    renderCaption();
+  });
+
+  // Звуковые дорожки — своя ось: игрок может слушать оригинал и озвучивать
+  // по русскому тексту, как на настоящем дубляже. Связывать их не будем.
+  const tracks = session.audioLangs;
+  audioLangsRow.hidden = tracks.length === 0;
+  renderLangRow(audioPills, tracks, session.audioLang, short, (lang) => {
+    if (!session || lang === session.audioLang) return;
+    session.audioLang = lang;
+    renderCaption();
+    void refreshOriginalWave();
+  });
+}
+
+function renderCaption(): void {
+  if (!session) return;
+  renderLangPills();
+  fitLangRows();
 
   const text = session.captionFor();
   dubCaption.textContent = text || t("noCaption");
@@ -1078,7 +1196,7 @@ async function finishRecording(auto = false): Promise<void> {
   hideWatchVideo();
   const rec = auto ? recorder.snapshot() : recorder.stop();
   if (rec.samples.length > 0) {
-    const original = await session.originalBuffer();
+    const original = await session.clipBuffer();
     // На волне — окно самой реплики: запас с обоих концов в кадр не влезает,
     // но в монтаж уходит запись целиком
     const window = takeWindow(rec, original.duration);
@@ -1284,10 +1402,41 @@ function clearResults(): void {
  * Экран результатов как в оригинале: кадр реплики, балл и наложенные волны
  * (пурпур оригинала под бирюзой дубля) — сразу видно, где промахнулся.
  */
+/**
+ * По какой дорожке считать баллы. Пока не выбрано — null: угадывать нельзя.
+ * Игрок мог слушать оригинал и озвучивать перевод, а мог повторять дубляж —
+ * это его решение, и спросить дешевле, чем ошибиться.
+ */
+let scoreLang: string | null = null;
+
+/** Вопрос о дорожке; возвращает false, если ответа ещё нет. */
+function askScoreTrack(sess: DubSession): boolean {
+  const tracks = sess.audioLangs;
+  const box = $("results-track");
+  if (tracks.length === 0) {
+    box.hidden = true;
+    scoreLang = ORIGINAL_LANG;
+    return true;
+  }
+  box.hidden = false;
+  renderLangRow($("results-track-pills"), tracks, scoreLang ?? "\u0000", false, (lang) => {
+    scoreLang = lang;
+    void renderResults();
+  });
+  return scoreLang !== null;
+}
+
 async function renderResults(): Promise<void> {
   if (!session) return;
   clearResults();
   const sess = session;
+  const answered = askScoreTrack(sess);
+  $("results-total").hidden = !answered;
+  resultsSection.hidden = false;
+  if (!answered) {
+    watchResultsJump(resultsSection);
+    return;
+  }
 
   const rows: HTMLElement[] = [];
   const waves: Array<{ canvas: HTMLCanvasElement; original: AudioBuffer; take: Recording }> = [];
@@ -1297,7 +1446,7 @@ async function renderResults(): Promise<void> {
     const take = sess.recordings.get(i);
     if (!take) continue; // реплику пропустили — оценивать нечего
     const clip = sess.pack.clips[i];
-    const original = await sess.originalBuffer(i);
+    const original = await sess.clipBuffer(i, scoreLang ?? ORIGINAL_LANG);
     if (session !== sess) return; // сессию бросили, пока декодировали
     // Оцениваем только окно реплики: запас по краям — не промах игрока
     const { score } = scoreTake(original, windowedRecording(take, original.duration));

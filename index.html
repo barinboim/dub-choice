@@ -153,7 +153,16 @@
           </div>
         </div>
 
-        <div id="dub-caption-langs" class="caption-langs" hidden></div>
+        <div id="dub-lang-rows" class="lang-rows">
+          <div id="dub-audio-langs" class="lang-row" hidden>
+            <span class="lang-row-label" data-i18n="audioTrackLabel"></span>
+            <span id="dub-audio-pills" class="lang-pills"></span>
+          </div>
+          <div id="dub-caption-langs" class="lang-row" hidden>
+            <span class="lang-row-label" data-i18n="captionsLabel"></span>
+            <span id="dub-caption-pills" class="lang-pills"></span>
+          </div>
+        </div>
         <p class="caption-edit-hint" data-i18n="captionEditHint"></p>
         <p id="dub-caption" class="dub-caption"></p>
         <div id="dub-caption-edit" class="caption-edit" hidden>
@@ -214,7 +223,11 @@
         <!-- Результаты: попадание дубля в оригинальные реплики -->
         <section id="results" class="results" hidden>
           <h3 class="results-title" data-i18n="resultsTitle"></h3>
-          <div class="results-total">
+          <div id="results-track" class="results-track" hidden>
+            <p class="results-track-q" data-i18n="scoreTrackQuestion"></p>
+            <div id="results-track-pills" class="lang-pills"></div>
+          </div>
+          <div id="results-total" class="results-total">
             <span id="results-percent" class="results-percent"></span>
             <span id="results-verdict" class="results-verdict"></span>
           </div>

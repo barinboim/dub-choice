@@ -134,12 +134,18 @@ export class Composer {
     this.backingGain = mode === "voiceover" ? voiceoverGain : 1;
     this.voiceoverTrack = null;
     if (mode === "voiceover") {
-      const track = await session.originalTrackBuffer();
+      // Под голосом игрока звучит та дорожка, которую он выбрал. У дубляжа
+      // в паке лежит только голос, поэтому фон к нему добавляет бэкинг —
+      // он общий для всех языков, музыка-то одна и та же.
+      const dub = session.audioLang
+        ? await session.voicesBuffer(session.audioLang)
+        : null;
+      const track = dub ?? (await session.originalTrackBuffer());
       if (track) {
         this.voiceoverTrack = { buffer: track, gain: voiceoverGain };
       } else {
         for (let i = 0; i < session.total; i++) {
-          const original = await session.originalBuffer(i);
+          const original = await session.clipBuffer(i);
           for (const t of session.pack.clips[i].timestamps) {
             this.cues.push({ buffer: original, at: t, gain: voiceoverGain });
           }

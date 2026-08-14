@@ -64,6 +64,11 @@ const dict = {
   clipCounter: { ru: "Реплика {i} из {n}", en: "Line {i} of {n}" },
   noCaption: { ru: "(без субтитра)", en: "(no caption)" },
   langOriginal: { ru: "Оригинал", en: "Original" },
+  audioTrackLabel: { ru: "Звук", en: "Audio" },
+  scoreTrackQuestion: {
+    ru: "По какой дорожке считаем ваши баллы?",
+    en: "Which track should we score you against?",
+  },
   // Названия языков для пиллов над репликой; коды без имени показываются как есть
   langName_en: { ru: "Английский", en: "English" },
   langName_ru: { ru: "Русский", en: "Russian" },

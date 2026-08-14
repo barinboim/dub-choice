@@ -1,4 +1,4 @@
-import { decodeAudio } from "../audio/context";
+import { audioContext, decodeAudio } from "../audio/context";
 import { Recording } from "../audio/recorder";
 import { DubPack } from "../pack/types";
 
@@ -15,12 +15,21 @@ export class DubSession {
    * Держится на всю сессию — переключать на каждой реплике заново незачем.
    */
   captionLang = ORIGINAL_LANG;
+  /**
+   * Выбранная звуковая дорожка: ORIGINAL_LANG или код дубляжа. Ось
+   * независима от субтитров намеренно — игрок может слушать английский,
+   * а озвучивать по русскому тексту, ровно как на настоящем дубляже.
+   */
+  audioLang = ORIGINAL_LANG;
   /** Правки текста игроком: `индекс:язык` → текст. Живут только в сессии. */
   private readonly captionEdits = new Map<string, string>();
   /** Декодированные оригинальные реплики (для waveform и прослушивания). */
   private readonly originals = new Map<number, AudioBuffer>();
   private backing: AudioBuffer | null | undefined;
   private originalTrack: AudioBuffer | null | undefined;
+  /** Дорожки дубляжа целиком и нарезанные из них реплики. */
+  private readonly voices = new Map<string, AudioBuffer | null>();
+  private readonly dubbed = new Map<string, AudioBuffer>();
 
   /**
    * uiLang — язык интерфейса: если пак несёт субтитры на нём, с них и
@@ -50,6 +59,13 @@ export class DubSession {
 
   get allRecorded() {
     return this.pack.clips.every((_, i) => this.recordings.has(i));
+  }
+
+  /** Дорожки в переключателе: оригинал первым. Пусто — выбирать нечего. */
+  get audioLangs(): string[] {
+    return this.pack.voiceTracks.length > 0
+      ? [ORIGINAL_LANG, ...this.pack.voiceTracks.map((t) => t.lang)]
+      : [];
   }
 
   /** Языки в переключателе: оригинал первым, дальше переводы пака. */
@@ -86,6 +102,45 @@ export class DubSession {
       this.originals.set(index, buf);
     }
     return buf;
+  }
+
+  /** Дорожка дубляжа целиком; декодируется один раз, по требованию. */
+  async voicesBuffer(lang: string): Promise<AudioBuffer | null> {
+    if (!this.voices.has(lang)) {
+      const track = this.pack.voiceTracks.find((t) => t.lang === lang);
+      this.voices.set(lang, track ? await decodeAudio(track.blob) : null);
+    }
+    return this.voices.get(lang) ?? null;
+  }
+
+  /**
+   * Реплика на выбранной дорожке. Куски дубляжа не возятся отдельными
+   * файлами — режем их из дорожки по таймкоду и длине оригинальной
+   * реплики: окно записи одно и то же для всех языков.
+   */
+  async clipBuffer(index = this.clipIndex,
+                   lang = this.audioLang): Promise<AudioBuffer> {
+    const orig = await this.originalBuffer(index);
+    if (lang === ORIGINAL_LANG) return orig;
+    const key = `${lang}:${index}`;
+    const done = this.dubbed.get(key);
+    if (done) return done;
+    const track = await this.voicesBuffer(lang);
+    if (!track) return orig;
+
+    const at = this.pack.clips[index].timestamps[0] ?? 0;
+    const from = Math.max(0, Math.round(at * track.sampleRate));
+    const len = Math.min(Math.round(orig.duration * track.sampleRate),
+                         Math.max(0, track.length - from));
+    const ctx = audioContext();
+    const cut = ctx.createBuffer(track.numberOfChannels,
+                                 Math.max(1, len), track.sampleRate);
+    for (let ch = 0; ch < track.numberOfChannels; ch++) {
+      cut.getChannelData(ch).set(
+        track.getChannelData(ch).subarray(from, from + len));
+    }
+    this.dubbed.set(key, cut);
+    return cut;
   }
 
   async backingBuffer(): Promise<AudioBuffer | null> {
