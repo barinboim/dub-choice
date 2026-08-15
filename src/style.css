@@ -880,14 +880,14 @@ select.lang-select {
   .screen-dub > .dub-top { order: -2; }
   #dub-lang-rows { order: -1; }
   .waveform { height: 96px; }
+  /* Шапка (лого + переключатель языка) — только на главной и на карточке
+     пака; на игровых экранах убрана целиком ради места под саму игру */
+  .app-header { display: none; }
+  body[data-screen="home"] .app-header,
+  body[data-screen="pack"] .app-header { display: flex; }
   /* Переключатель языка сайта — только на главном экране */
   .lang-switch { display: none; }
   body[data-screen="home"] .lang-switch { display: flex; }
-  /* Лого «dub choice» в шапке — только на главной и на карточке пака;
-     на игровых экранах убрано ради места под саму игру */
-  .logo { display: none; }
-  body[data-screen="home"] .logo,
-  body[data-screen="pack"] .logo { display: inline-block; }
   /* Подсказка про редактирование текста — только на десктопе */
   .caption-edit-hint { display: none; }
   .pack-card { flex-direction: column; align-items: flex-start; gap: 14px; }
