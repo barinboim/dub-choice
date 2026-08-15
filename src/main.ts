@@ -1133,6 +1133,11 @@ btnRecord.addEventListener("click", async () => {
   const buf = await session.originalBuffer();
   const totalSamples = Math.floor(buf.duration * audioContext().sampleRate);
   const clipIndex = session.clipIndex;
+  // Окно записи одно на все языки (его задаёт оригинал), а в ухо идёт
+  // выбранная дорожка. Режем её заранее, до отсчёта: первая нарезка из
+  // дубляжа копирует сэмплы, и делать это после первого кадра — значит
+  // подсадить монитор относительно видео
+  const cue = toggleMonitor.checked ? await session.clipBuffer() : buf;
 
   if (toggleCountdown.checked && !(await runCountdown())) return;
   if (!session || session.clipIndex !== clipIndex) return;
@@ -1179,7 +1184,7 @@ btnRecord.addEventListener("click", async () => {
     const ctx = audioContext();
     stopMonitor();
     const src = ctx.createBufferSource();
-    src.buffer = buf;
+    src.buffer = cue;
     const gain = ctx.createGain();
     gain.gain.value = Number(monitorVolume.value) / 100;
     src.connect(gain).connect(ctx.destination);

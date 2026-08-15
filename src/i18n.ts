@@ -96,7 +96,7 @@ const dict = {
   next: { ru: "Готово →", en: "Done →" },
   nextFinal: { ru: "Готово — смотреть! 🎬", en: "Done — watch! 🎬" },
   nextFinalShort: { ru: "Готово 🎬", en: "Done 🎬" },
-  monitorLabel: { ru: "Слышать оригинал", en: "Hear the original" },
+  monitorLabel: { ru: "Слышать дорожку", en: "Hear the track" },
   countdownLabel: { ru: "Отсчёт 3–2–1 перед записью", en: "3–2–1 countdown" },
   cancelCountdown: { ru: "✕ Отмена", en: "✕ Cancel" },
   savingTake: { ru: "Сохраняю…", en: "Saving…" },
