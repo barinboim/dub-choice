@@ -876,12 +876,18 @@ select.lang-select {
   .dub-controls .btn { padding: 12px 10px; font-size: 0.9rem; }
   /* Блок настроек переезжает в конец экрана (перенос — в main.ts) */
   .screen-dub > .monitor-block { order: 10; border-top: 1px solid var(--line); }
-  /* ЗВУК/СУБТИТРЫ — под волной и её подсказкой, но выше чекбоксов настроек */
-  #dub-lang-rows { order: 9; }
+  /* ЗВУК/СУБТИТРЫ — над видео-превью, под кнопкой «Назад» и счётчиком реплик */
+  .screen-dub > .dub-top { order: -2; }
+  #dub-lang-rows { order: -1; }
   .waveform { height: 96px; }
   /* Переключатель языка сайта — только на главном экране */
   .lang-switch { display: none; }
-  body.on-home .lang-switch { display: flex; }
+  body[data-screen="home"] .lang-switch { display: flex; }
+  /* Лого «dub choice» в шапке — только на главной и на карточке пака;
+     на игровых экранах убрано ради места под саму игру */
+  .logo { display: none; }
+  body[data-screen="home"] .logo,
+  body[data-screen="pack"] .logo { display: inline-block; }
   /* Подсказка про редактирование текста — только на десктопе */
   .caption-edit-hint { display: none; }
   .pack-card { flex-direction: column; align-items: flex-start; gap: 14px; }

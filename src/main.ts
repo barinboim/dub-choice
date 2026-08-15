@@ -37,8 +37,9 @@ const screens = {
 
 function showScreen(name: keyof typeof screens): void {
   for (const [key, el] of Object.entries(screens)) el.hidden = key !== name;
-  // Переключатель языка на мобильной версии — только на главной экране
-  document.body.classList.toggle("on-home", name === "home");
+  // Мобильная версия: по имени активного экрана в CSS решаем, показывать ли
+  // логотип и переключатель языка в шапке (см. style.css)
+  document.body.dataset.screen = name;
   if (name !== "final") hideResultsJump();
 }
 
