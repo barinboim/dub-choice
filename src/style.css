@@ -755,7 +755,15 @@ select.lang-select {
 }
 .mix-mode:hover { border-color: var(--line-strong); }
 .mix-mode:has(input:checked) { border-color: var(--wave-user); background: var(--panel-2); }
-.mix-mode input { accent-color: var(--wave-user); margin-top: 3px; flex-shrink: 0; }
+.mix-mode:has(input:focus-visible) { outline: 2px solid var(--wave-user); outline-offset: 2px; }
+/* Кружок радиокнопки скрыт: выбор и так виден по рамке/фону, а label кликабелен целиком */
+.mix-mode input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
 .mix-mode-text { line-height: 1.35; }
 .mix-mode-title { font-size: 0.95rem; font-weight: 600; }
 .mix-mode-text small { display: block; color: var(--ink-dim); font-size: 0.78rem; margin-top: 2px; }
