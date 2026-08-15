@@ -37,6 +37,8 @@ const screens = {
 
 function showScreen(name: keyof typeof screens): void {
   for (const [key, el] of Object.entries(screens)) el.hidden = key !== name;
+  // Переключатель языка на мобильной версии — только на главной экране
+  document.body.classList.toggle("on-home", name === "home");
   if (name !== "final") hideResultsJump();
 }
 
@@ -456,6 +458,16 @@ narrowScreen.addEventListener("change", applyNarrowLayout);
 const recordBadge = $("record-badge");
 const toggleMonitor = $<HTMLInputElement>("toggle-monitor");
 const toggleCountdown = $<HTMLInputElement>("toggle-countdown");
+
+/**
+ * «Слышать дорожку» включена по умолчанию — но если игрок сам её выключил,
+ * это запоминается так же, как язык сайта, и не сбрасывается между сессиями.
+ */
+const MONITOR_STORAGE_KEY = "dubchoice.hearOriginal";
+toggleMonitor.checked = localStorage.getItem(MONITOR_STORAGE_KEY) !== "0";
+toggleMonitor.addEventListener("change", () => {
+  localStorage.setItem(MONITOR_STORAGE_KEY, toggleMonitor.checked ? "1" : "0");
+});
 const dubCountdown = $("dub-countdown");
 const dubCaption = $("dub-caption");
 const captionLangsRow = $("dub-caption-langs");

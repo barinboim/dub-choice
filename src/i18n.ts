@@ -102,8 +102,8 @@ const dict = {
   savingTake: { ru: "Сохраняю…", en: "Saving…" },
   recBadge: { ru: "● ЗАПИСЬ", en: "● REC" },
   hintIdle: {
-    ru: "Нажми «Записать» и озвучь реплику — твоя волна перепишет оригинал",
-    en: "Hit “Record” and voice the line — your wave overwrites the original",
+    ru: "Нажми «Записать» и озвучь реплику",
+    en: "Hit “Record” and voice the line",
   },
   hintCountdown: {
     ru: "Приготовься — запись начнётся сразу после отсчёта",
