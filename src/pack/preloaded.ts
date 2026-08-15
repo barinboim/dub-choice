@@ -25,6 +25,17 @@ const PACKS_BASE = import.meta.env.PROD
 
 export const PRELOADED_PACKS: PreloadedPack[] = [
   {
+    id: "dayalyublyutebya",
+    title: "Да я люблю тебя",
+    paths: [
+      "packs/da_ya_lyublyu_tebya.zip.aa", "packs/da_ya_lyublyu_tebya.zip.ab",
+      "packs/da_ya_lyublyu_tebya.zip.ac", "packs/da_ya_lyublyu_tebya.zip.ad",
+      "packs/da_ya_lyublyu_tebya.zip.ae",
+    ],
+    icon: "pack-icons/da_ya_lyublyu_tebya.png",
+    sizeBytes: 16_447_025,
+  },
+  {
     id: "hpowl",
     title: "Гарри Поттер — Я вам не сова!",
     paths: ["packs/hpowl.zip"],
@@ -62,7 +73,7 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
       "packs/landa.zip.aj",
     ],
     icon: "pack-icons/landa.png",
-    sizeBytes: 36_331_773,
+    sizeBytes: 36_316_776,
   },
   {
     id: "gofman",
@@ -98,7 +109,7 @@ export const PRELOADED_PACKS: PreloadedPack[] = [
       "packs/forrestgump.zip.ag",
     ],
     icon: "pack-icons/forrestgump.png",
-    sizeBytes: 26_235_295,
+    sizeBytes: 27_359_052,
   },
   {
     id: "starwars",
