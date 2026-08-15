@@ -26,14 +26,14 @@ const PACKS_BASE = import.meta.env.PROD
 export const PRELOADED_PACKS: PreloadedPack[] = [
   {
     id: "dayalyublyutebya",
-    title: "Да я люблю тебя",
+    title: "Да я люблю тебя!",
     paths: [
       "packs/da_ya_lyublyu_tebya.zip.aa", "packs/da_ya_lyublyu_tebya.zip.ab",
       "packs/da_ya_lyublyu_tebya.zip.ac", "packs/da_ya_lyublyu_tebya.zip.ad",
       "packs/da_ya_lyublyu_tebya.zip.ae",
     ],
     icon: "pack-icons/da_ya_lyublyu_tebya.png",
-    sizeBytes: 16_447_025,
+    sizeBytes: 16_499_090,
   },
   {
     id: "hpowl",
