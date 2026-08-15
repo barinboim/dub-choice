@@ -5,3 +5,5 @@ public/ogv
 # локальные паки для смоук-тестов (копирайтный контент — не коммитить)
 public/test-*.zip
 __pycache__
+CLAUDE.md
+docs/ANALYTICS.md
