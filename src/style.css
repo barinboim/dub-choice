@@ -966,6 +966,9 @@ select.lang-select {
   .char-filter { flex: none; min-width: 0; width: 100%; }
   .pack-card { flex-direction: column; align-items: flex-start; gap: 14px; }
   .pack-icon { width: 72px; height: 72px; }
+  /* Кнопки «Дубляж»/«Закадр» при стеке — во всю ширину карточки пака
+     (карточка пака) или видео-превью (экран экспорта), а не своим max-width */
+  .mix-mode { flex-basis: 100%; max-width: none; }
   .final-controls { flex-direction: column; }
   .final-controls .btn { width: 100%; }
   .result-row {
