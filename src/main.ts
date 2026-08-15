@@ -8,7 +8,7 @@ import {
   MicRecorder,
   recordingToBuffer,
   takeWindow,
-  voiceEndSec,
+  playbackEndSec,
   windowedRecording,
   type Recording,
 } from "./audio/recorder";
@@ -971,7 +971,7 @@ async function playTake(): Promise<void> {
   // Досматриваем до конца реплики, а если игрок договаривал после неё —
   // до конца его речи. Молчаливый хвост показывать незачем: это выглядело бы
   // как лишняя секунда сцены
-  const playSec = Math.max(rec.leadSec + original.duration, voiceEndSec(rec));
+  const playSec = playbackEndSec(rec, original.duration);
   await playClipWithAudio(
     recordingToBuffer(rec),
     { lead: rec.leadSec, span: original.duration },

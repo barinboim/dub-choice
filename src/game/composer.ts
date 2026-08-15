@@ -1,5 +1,5 @@
 import { audioContext } from "../audio/context";
-import { recordingToBuffer, voiceEndSec, TAIL_SEC } from "../audio/recorder";
+import { recordingToBuffer, playbackEndSec, TAIL_SEC } from "../audio/recorder";
 import { audioBufferToWav } from "../audio/wav";
 import { DubVideoPlayer } from "../video/player";
 import { DubSession } from "./session";
@@ -132,7 +132,8 @@ export class Composer {
       const buffer = recordingToBuffer(rec);
       // Играем до конца речи, а не до конца буфера: молчаливый запас в
       // хвосте задерживал бы финал фризом последнего кадра на ровном месте
-      const until = voiceEndSec(rec);
+      const original = await session.originalBuffer(i);
+      const until = playbackEndSec(rec, original.duration);
       // Запись длиннее реплики с обеих сторон — ставим её так, чтобы начало
       // самой реплики совпало с таймстампом, а запас лёг вокруг
       for (const t of clip.timestamps) {
@@ -363,7 +364,8 @@ export class Composer {
       const rec = session.recordings.get(i);
       if (!rec || rec.samples.length === 0) continue;
       const buffer = recordingToBuffer(rec);
-      const until = voiceEndSec(rec);
+      const original = await session.originalBuffer(i);
+      const until = playbackEndSec(rec, original.duration);
       for (const t of clip.timestamps) {
         cues.push({ buffer, at: t - rec.leadSec, gain: 1, until });
       }

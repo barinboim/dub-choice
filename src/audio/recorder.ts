@@ -278,6 +278,18 @@ export function voiceEndSec(rec: Recording): number {
   return 0;
 }
 
+/**
+ * До какой секунды записи проигрывать реплику (переслушка, финальный микс,
+ * WAV-рендер — везде одна и та же граница). Никогда не короче хронометража
+ * оригинальной реплики: `voiceEndSec` определяет конец речи по громкости, а
+ * тихую, затухающую концовку (актёр роняет последнее слово) легко спутать с
+ * шумом и обрубить раньше времени. Громкость может только УДЛИНИТЬ
+ * воспроизведение — если игрок договорил позже, — но не укоротить его.
+ */
+export function playbackEndSec(rec: Recording, clipDurationSec: number): number {
+  return Math.max(rec.leadSec + clipDurationSec, voiceEndSec(rec));
+}
+
 /** Та же запись, обрезанная до окна реплики, — для оценки дубля. */
 export function windowedRecording(rec: Recording, clipDurationSec: number): Recording {
   const samples = takeWindow(rec, clipDurationSec);
