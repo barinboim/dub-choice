@@ -59,6 +59,12 @@ const dict = {
   },
   videoPreparing: { ru: "Готовлю видео…", en: "Preparing video…" },
   videoError: { ru: "Не удалось открыть dub_video.ogv из пака.", en: "Couldn't open dub_video.ogv from the pack." },
+  clipLength: { ru: "Суммарная длина реплик: {len}", en: "Collective length of selected clips: {len}" },
+  filterCharacters: { ru: "Фильтр персонажей:", en: "Filter characters:" },
+  filterEmpty: {
+    ru: "Выбери хотя бы одного персонажа",
+    en: "Select at least one character",
+  },
 
   // Экран дубляжа
   clipCounter: { ru: "Реплика {i} из {n}", en: "Line {i} of {n}" },
@@ -164,6 +170,25 @@ const dict = {
   audioError: { ru: "Не удалось отрендерить аудио.", en: "Couldn't render the audio." },
   dubFileSuffix: { ru: "мой дубляж", en: "my dub" },
   audioFileSuffix: { ru: "дубляж (аудио)", en: "dub (audio)" },
+  audioFileSuffixVoice: { ru: "мой голос", en: "my voice" },
+  audioFileSuffixVoiceChars: { ru: "мой голос и персонажи", en: "my voice and characters" },
+  modalCancel: { ru: "Отмена", en: "Cancel" },
+  wavModalTitle: { ru: "Что скачать?", en: "What to download?" },
+  wavOptVoice: { ru: "Только мой голос", en: "Only my voice" },
+  wavOptVoiceHint: {
+    ru: "реплики, которые ты озвучил — без фона",
+    en: "the lines you voiced — no background",
+  },
+  wavOptVoiceChars: { ru: "Мой голос и голоса персонажей", en: "My voice and character voices" },
+  wavOptVoiceCharsHint: {
+    ru: "плюс оригинальные реплики персонажей, которых ты не озвучивал — без фона",
+    en: "plus the original lines of characters you didn't voice — no background",
+  },
+  wavOptFull: { ru: "Вся дорожка с фоном", en: "Full track with background" },
+  wavOptFullHint: {
+    ru: "тот же микс, что и в экспортируемом видео",
+    en: "the same mix as in the exported video",
+  },
 
   // Результаты
   resultsTitle: { ru: "Результаты", en: "Results" },

@@ -23,6 +23,29 @@ export async function decodeAudio(blob: Blob): Promise<AudioBuffer> {
   }
 }
 
+/**
+ * Длительность аудио-Blob без полного decodeAudioData: читаем только
+ * метаданные через <audio>. Нужна для суммарной длины реплик на карточке
+ * пака — гонять decodeAudioData по всем клипам ради одного числа дорого и
+ * задвоило бы работу, которую и так делает decodeAudio по ходу игры.
+ */
+export function blobDuration(blob: Blob): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio();
+    audio.preload = "metadata";
+    audio.addEventListener("loadedmetadata", () => {
+      URL.revokeObjectURL(url);
+      resolve(audio.duration);
+    });
+    audio.addEventListener("error", () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Couldn't read audio metadata"));
+    });
+    audio.src = url;
+  });
+}
+
 /** Фолбэк-декодер OGG Vorbis на WebAssembly (нужен только Safari). */
 async function decodeOggVorbis(bytes: Uint8Array): Promise<AudioBuffer | null> {
   const { OggVorbisDecoder } = await import("@wasm-audio-decoders/ogg-vorbis");

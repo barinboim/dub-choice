@@ -311,6 +311,8 @@ a:hover { color: #fff; }
 .credits a { color: var(--ink-soft); }
 
 /* ---------- Экран 2: карточка пака ---------- */
+/* Карточка пака и фильтр персонажей — в один визуальный ряд */
+.pack-top-row { display: flex; align-items: stretch; gap: 20px; margin-top: 14px; }
 .pack-card {
   display: flex;
   gap: 20px;
@@ -319,7 +321,8 @@ a:hover { color: #fff; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 22px;
-  margin-top: 14px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .pack-icon {
   width: 96px; height: 96px;
@@ -342,6 +345,26 @@ a:hover { color: #fff; }
   color: #e8c473;
   font-size: 0.88rem;
 }
+
+.char-filter {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  flex: 0 1 260px;
+  min-width: 200px;
+}
+.char-filter .section-label { margin: 0 0 10px; }
+.char-filter-list { display: flex; flex-direction: column; gap: 8px; }
+.char-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+.char-filter-item input { accent-color: var(--wave-user); width: 15px; height: 15px; flex-shrink: 0; }
+.char-filter-empty { margin: 10px 0 0; }
 
 .pack-start-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 22px; }
 .mic-status { color: var(--ink-soft); margin: 0; font-size: 0.9rem; }
@@ -648,6 +671,7 @@ select.lang-select {
 /* ---------- Экран 4: финал ---------- */
 .screen-final { text-align: center; }
 .final-title { font-size: clamp(1.3rem, 4vw, 1.7rem); margin: 22px 0 18px; }
+#final-audio-langs { margin-bottom: 16px; }
 .final-screen-frame {
   position: relative;
   width: 100%;
@@ -735,6 +759,46 @@ select.lang-select {
 .mix-mode-text { line-height: 1.35; }
 .mix-mode-title { font-size: 0.95rem; font-weight: 600; }
 .mix-mode-text small { display: block; color: var(--ink-dim); font-size: 0.78rem; margin-top: 2px; }
+
+/* ---------- Попап выбора состава WAV-экспорта ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  text-align: left;
+}
+.modal-title { font-size: 1.1rem; margin: 0 0 16px; }
+.modal-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.modal-option {
+  appearance: none;
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.modal-option:hover, .modal-option:focus-visible { border-color: var(--wave-user); }
+.modal-option-title { font-size: 0.95rem; font-weight: 600; }
+.modal-option small { display: block; color: var(--ink-dim); font-size: 0.78rem; margin-top: 2px; }
 
 .final-controls {
   display: flex;
@@ -890,6 +954,8 @@ select.lang-select {
   body[data-screen="home"] .lang-switch { display: flex; }
   /* Подсказка про редактирование текста — только на десктопе */
   .caption-edit-hint { display: none; }
+  .pack-top-row { flex-direction: column; }
+  .char-filter { flex: none; min-width: 0; width: 100%; }
   .pack-card { flex-direction: column; align-items: flex-start; gap: 14px; }
   .pack-icon { width: 72px; height: 72px; }
   .final-controls { flex-direction: column; }

@@ -112,9 +112,23 @@ export class Composer {
     this.backing = await session.backingBuffer();
     this.capturedBlob = null; // записи могли измениться — старый файл невалиден
     this.cues = [];
-    session.pack.clips.forEach((clip, i) => {
+    for (let i = 0; i < session.pack.clips.length; i++) {
+      const clip = session.pack.clips[i];
+      // Персонаж выключен фильтром — игрока не просили озвучивать эту
+      // реплику. В «Дубляже» вместо тишины оставляем голос персонажа на
+      // выбранной дорожке (нет дорожки — берём оригинал); в «Закадре» вся
+      // оригинальная дорожка и так звучит под записью.
+      if (!session.isClipActive(i)) {
+        if (mode === "dub") {
+          const voice = await session.clipBuffer(i);
+          for (const t of clip.timestamps) {
+            this.cues.push({ buffer: voice, at: t, gain: 1 });
+          }
+        }
+        continue;
+      }
       const rec = session.recordings.get(i);
-      if (!rec || rec.samples.length === 0) return;
+      if (!rec || rec.samples.length === 0) continue;
       const buffer = recordingToBuffer(rec);
       // Играем до конца речи, а не до конца буфера: молчаливый запас в
       // хвосте задерживал бы финал фризом последнего кадра на ровном месте
@@ -124,7 +138,7 @@ export class Composer {
       for (const t of clip.timestamps) {
         this.cues.push({ buffer, at: t - rec.leadSec, gain: takeGain, until });
       }
-    });
+    }
     // Закадр: оригинальный звук сцены возвращается в микс, но тише дубля.
     // Целая дорожка — если пак её несёт: тогда фон играет ровно один раз.
     // Иначе собираем оригинал из кусков-реплик поверх фона, и под ними фон
@@ -327,13 +341,48 @@ export class Composer {
    * мгновенно, без реального времени. Возвращает WAV.
    */
   async renderAudioWav(): Promise<Blob> {
+    return this.renderCuesToWav(this.cues, this.backing, this.backingGain, this.voiceoverTrack);
+  }
+
+  /**
+   * WAV без фона/музыки: только голоса. `includeCharacterVoices` добавляет
+   * оригинальные реплики персонажей, выключенных фильтром, — иначе это
+   * ровно то, что игрок сам записал, и ничего больше.
+   */
+  async renderVoiceWav(session: DubSession, includeCharacterVoices: boolean): Promise<Blob> {
+    const cues: ScheduledCue[] = [];
+    for (let i = 0; i < session.pack.clips.length; i++) {
+      const clip = session.pack.clips[i];
+      if (!session.isClipActive(i)) {
+        if (includeCharacterVoices) {
+          const voice = await session.clipBuffer(i);
+          for (const t of clip.timestamps) cues.push({ buffer: voice, at: t, gain: 1 });
+        }
+        continue;
+      }
+      const rec = session.recordings.get(i);
+      if (!rec || rec.samples.length === 0) continue;
+      const buffer = recordingToBuffer(rec);
+      const until = voiceEndSec(rec);
+      for (const t of clip.timestamps) {
+        cues.push({ buffer, at: t - rec.leadSec, gain: 1, until });
+      }
+    }
+    cues.sort((a, b) => a.at - b.at);
+    return this.renderCuesToWav(cues, null, 1, null);
+  }
+
+  private async renderCuesToWav(
+    cues: ScheduledCue[],
+    backing: AudioBuffer | null,
+    backingGain: number,
+    voiceoverTrack: { buffer: AudioBuffer; gain: number } | null
+  ): Promise<Blob> {
     const sampleRate = audioContext().sampleRate;
     let durationSec = this.video.duration || 0;
-    if (this.backing) durationSec = Math.max(durationSec, this.backing.duration);
-    if (this.voiceoverTrack) {
-      durationSec = Math.max(durationSec, this.voiceoverTrack.buffer.duration);
-    }
-    for (const cue of this.cues) {
+    if (backing) durationSec = Math.max(durationSec, backing.duration);
+    if (voiceoverTrack) durationSec = Math.max(durationSec, voiceoverTrack.buffer.duration);
+    for (const cue of cues) {
       // Хвост WAV-а — по концу речи, иначе файл тянет молчаливый запас
       durationSec = Math.max(durationSec, cue.at + Math.min(cue.until ?? Infinity, cue.buffer.duration));
     }
@@ -359,12 +408,12 @@ export class Composer {
       else return;
       if (until !== undefined && until < buffer.duration) src.stop(Math.max(at, 0) + until);
     };
-    if (this.voiceoverTrack) {
-      startSource(this.voiceoverTrack.buffer, 0, this.voiceoverTrack.gain);
-    } else if (this.backing) {
-      startSource(this.backing, 0, this.backingGain);
+    if (voiceoverTrack) {
+      startSource(voiceoverTrack.buffer, 0, voiceoverTrack.gain);
+    } else if (backing) {
+      startSource(backing, 0, backingGain);
     }
-    for (const cue of this.cues) startSource(cue.buffer, cue.at, cue.gain, cue.until);
+    for (const cue of cues) startSource(cue.buffer, cue.at, cue.gain, cue.until);
 
     return audioBufferToWav(await offline.startRendering());
   }

@@ -76,13 +76,21 @@
       <!-- ЭКРАН 2: карточка пака -->
       <section id="screen-pack" class="screen" hidden>
         <button id="btn-pack-back" class="btn btn-text" data-i18n="back"></button>
-        <div class="pack-card">
-          <img id="pack-icon" class="pack-icon" alt="" />
-          <div class="pack-meta">
-            <h2 id="pack-title"></h2>
-            <p id="pack-subtitle" class="pack-subtitle"></p>
-            <p id="pack-authors" class="pack-authors"></p>
-            <p id="pack-stats" class="pack-stats"></p>
+        <div class="pack-top-row">
+          <div class="pack-card">
+            <img id="pack-icon" class="pack-icon" alt="" />
+            <div class="pack-meta">
+              <h2 id="pack-title"></h2>
+              <p id="pack-subtitle" class="pack-subtitle"></p>
+              <p id="pack-authors" class="pack-authors"></p>
+              <p id="pack-stats" class="pack-stats"></p>
+              <p id="pack-clip-length" class="pack-stats"></p>
+            </div>
+          </div>
+          <div id="char-filter" class="char-filter" hidden>
+            <div class="section-label" data-i18n="filterCharacters"></div>
+            <div id="char-filter-list" class="char-filter-list"></div>
+            <p id="char-filter-empty" class="mic-status error char-filter-empty" data-i18n="filterEmpty" hidden></p>
           </div>
         </div>
         <div id="pack-warnings" class="pack-warnings" hidden></div>
@@ -181,6 +189,12 @@
       <section id="screen-final" class="screen screen-final" hidden>
         <button id="btn-final-back" class="btn btn-text" data-i18n="backToClips"></button>
         <h2 class="final-title" data-i18n="premiere"></h2>
+        <div class="lang-rows">
+          <div id="final-audio-langs" class="lang-row" hidden>
+            <span class="lang-row-label" data-i18n="audioTrackLabel"></span>
+            <span id="final-audio-pills" class="lang-pills"></span>
+          </div>
+        </div>
         <div class="final-screen-frame">
           <div id="final-video-slot" class="final-video-slot"></div>
           <canvas id="export-canvas" hidden></canvas>
@@ -235,6 +249,28 @@
           <div id="results-list" class="results-list"></div>
         </section>
       </section>
+
+      <!-- Попап выбора состава WAV-экспорта -->
+      <div id="wav-export-modal" class="modal-backdrop" hidden>
+        <div class="modal-card">
+          <h3 class="modal-title" data-i18n="wavModalTitle"></h3>
+          <div class="modal-options">
+            <button id="wav-opt-voice" class="modal-option">
+              <span class="modal-option-title" data-i18n="wavOptVoice"></span>
+              <small data-i18n="wavOptVoiceHint"></small>
+            </button>
+            <button id="wav-opt-voice-chars" class="modal-option" hidden>
+              <span class="modal-option-title" data-i18n="wavOptVoiceChars"></span>
+              <small data-i18n="wavOptVoiceCharsHint"></small>
+            </button>
+            <button id="wav-opt-full" class="modal-option">
+              <span class="modal-option-title" data-i18n="wavOptFull"></span>
+              <small data-i18n="wavOptFullHint"></small>
+            </button>
+          </div>
+          <button id="wav-modal-cancel" class="btn btn-text" data-i18n="modalCancel"></button>
+        </div>
+      </div>
       <button id="results-jump" class="results-jump" hidden>
         <span data-i18n="resultsJump"></span>
         <span class="results-jump-arrow" aria-hidden="true">↓</span>

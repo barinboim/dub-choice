@@ -1,6 +1,6 @@
 import { audioContext, decodeAudio } from "../audio/context";
 import { Recording } from "../audio/recorder";
-import { DubPack } from "../pack/types";
+import { DubPack, clipIsActive } from "../pack/types";
 
 /** Состояние одной игровой сессии дубляжа. */
 /** Язык оригинальных субтитров в переключателе; "" — пак не указал свой lang. */
@@ -38,7 +38,9 @@ export class DubSession {
    */
   constructor(
     readonly pack: DubPack,
-    uiLang: string = ORIGINAL_LANG
+    uiLang: string = ORIGINAL_LANG,
+    /** Персонажи, выключенные фильтром на карточке пака — их реплики пропускаются. */
+    private readonly disabledCharacters: ReadonlySet<string> = new Set()
   ) {
     if (uiLang && uiLang !== pack.lang && pack.translations.includes(uiLang)) {
       this.captionLang = uiLang;
@@ -53,12 +55,64 @@ export class DubSession {
     return this.pack.clips.length;
   }
 
+  /** Фильтр персонажей выключил хоть кого-то — есть что скачать отдельно от голоса игрока. */
+  get hasDisabledCharacters(): boolean {
+    return this.disabledCharacters.size > 0;
+  }
+
+  /** Реплику нужно озвучить: хотя бы один её персонаж не выключен фильтром. */
+  isClipActive(index: number): boolean {
+    const clip = this.pack.clips[index];
+    return !!clip && clipIsActive(clip, this.disabledCharacters);
+  }
+
+  /** Индексы реплик, которые предстоит озвучить игроку, по порядку. */
+  get activeIndices(): number[] {
+    const result: number[] = [];
+    for (let i = 0; i < this.pack.clips.length; i++) {
+      if (this.isClipActive(i)) result.push(i);
+    }
+    return result;
+  }
+
+  get activeTotal(): number {
+    return this.activeIndices.length;
+  }
+
+  /** 1-based позиция текущей реплики среди активных — для счётчика «N из M». */
+  get activePosition(): number {
+    return this.activeIndices.indexOf(this.clipIndex) + 1;
+  }
+
+  get firstActiveIndex(): number {
+    return this.activeIndices[0] ?? 0;
+  }
+
+  get lastActiveIndex(): number {
+    const indices = this.activeIndices;
+    return indices[indices.length - 1] ?? 0;
+  }
+
+  /** Следующая активная реплика после `from`, либо null, если это была последняя. */
+  nextActiveIndex(from: number): number | null {
+    return this.activeIndices.find((i) => i > from) ?? null;
+  }
+
+  /** Предыдущая активная реплика перед `from`, либо null, если это была первая. */
+  prevActiveIndex(from: number): number | null {
+    const indices = this.activeIndices;
+    for (let i = indices.length - 1; i >= 0; i--) {
+      if (indices[i] < from) return indices[i];
+    }
+    return null;
+  }
+
   get isLastClip() {
-    return this.clipIndex >= this.total - 1;
+    return this.nextActiveIndex(this.clipIndex) === null;
   }
 
   get allRecorded() {
-    return this.pack.clips.every((_, i) => this.recordings.has(i));
+    return this.activeIndices.every((i) => this.recordings.has(i));
   }
 
   /** Дорожки в переключателе: оригинал первым. Пусто — выбирать нечего. */
@@ -162,8 +216,9 @@ export class DubSession {
 
   /** Подгружает следующую реплику заранее, чтобы переходы были мгновенными. */
   prefetchAround(): void {
-    for (const i of [this.clipIndex, this.clipIndex + 1]) {
-      if (i < this.total) void this.originalBuffer(i).catch(() => {});
+    const next = this.nextActiveIndex(this.clipIndex);
+    for (const i of [this.clipIndex, next].filter((i): i is number => i !== null)) {
+      void this.originalBuffer(i).catch(() => {});
     }
   }
 }

@@ -63,6 +63,24 @@ export interface DubPack {
   warnings: string[];
 }
 
+/** Уникальные персонажи пака в порядке первого появления реплики. */
+export function packCharacters(pack: DubPack): string[] {
+  const seen = new Set<string>();
+  for (const clip of pack.clips) {
+    for (const name of clip.characters) seen.add(name);
+  }
+  return [...seen];
+}
+
+/**
+ * Активна ли реплика при данном наборе выключенных персонажей: реплика без
+ * персонажей или хотя бы с одним включённым — активна. Общая логика для
+ * карточки пака (фильтр ещё до сессии) и `DubSession` (во время игры).
+ */
+export function clipIsActive(clip: DubClip, disabledCharacters: ReadonlySet<string>): boolean {
+  return clip.characters.length === 0 || clip.characters.some((c) => !disabledCharacters.has(c));
+}
+
 /** Плоская карта файлов пака: имя файла (без пути) → содержимое. */
 export type PackFileMap = Map<string, Blob>;
 

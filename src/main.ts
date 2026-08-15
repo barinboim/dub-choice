@@ -1,9 +1,9 @@
 import "./style.css";
 import { trackEvent } from "./analytics";
 import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/loader";
-import { DubPack, PackError } from "./pack/types";
+import { DubPack, PackError, packCharacters, clipIsActive } from "./pack/types";
 import { PRELOADED_PACKS, packUrls, fetchWithProgress, formatSize } from "./pack/preloaded";
-import { audioContext } from "./audio/context";
+import { audioContext, blobDuration } from "./audio/context";
 import {
   MicRecorder,
   recordingToBuffer,
@@ -108,8 +108,8 @@ function refreshDynamicTexts(): void {
   if (selectedPack && !screens.pack.hidden) fillPackCard(selectedPack);
   if (session) {
     $("dub-counter").textContent = t("clipCounter", {
-      i: session.clipIndex + 1,
-      n: session.total,
+      i: session.activePosition,
+      n: session.activeTotal,
     });
     renderCaption(); // «Ориг.» на пилле и подсказка правки тоже переводятся
     updateDubButtons();
@@ -117,6 +117,7 @@ function refreshDynamicTexts(): void {
   if (composer) {
     $("btn-export").textContent = t("downloadVideo", { fmt: composer.videoExt.toUpperCase() });
   }
+  if (session && !screens.final.hidden) renderFinalAudioPills();
   if (!$("results").hidden) void renderResults(); // «Балл»/вердикт на новом языке
 }
 
@@ -352,6 +353,78 @@ dropZone.addEventListener("drop", (e) => {
 // ================= ЭКРАН 2: карточка пака =================
 const micStatus = $("mic-status");
 
+/** Персонажи, выключенные фильтром на карточке пака. Сбрасывается при выборе нового пака. */
+let disabledCharacters = new Set<string>();
+
+/** Длительности клипов пака (сек), посчитанные лениво и один раз на пак. */
+const clipDurationCache = new WeakMap<DubPack, Promise<number[]>>();
+
+function clipDurations(pack: DubPack): Promise<number[]> {
+  let cached = clipDurationCache.get(pack);
+  if (!cached) {
+    cached = Promise.all(pack.clips.map((c) => blobDuration(c.audio).catch(() => 0)));
+    clipDurationCache.set(pack, cached);
+  }
+  return cached;
+}
+
+function formatDuration(seconds: number): string {
+  const total = Math.round(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** Суммарная длина клипов, которые реально предстоит озвучить при текущем фильтре. */
+async function updateClipLength(pack: DubPack): Promise<void> {
+  const durations = await clipDurations(pack);
+  if (selectedPack !== pack) return; // пак сменили, пока считали длительности
+  let sum = 0;
+  pack.clips.forEach((clip, i) => {
+    if (clipIsActive(clip, disabledCharacters)) sum += durations[i];
+  });
+  $("pack-clip-length").textContent = t("clipLength", { len: formatDuration(sum) });
+}
+
+/** Есть ли хоть один включённый персонаж — иначе озвучивать нечего. */
+function hasActiveCharacter(pack: DubPack): boolean {
+  const chars = packCharacters(pack);
+  return chars.length === 0 || chars.some((c) => !disabledCharacters.has(c));
+}
+
+function updateStartAvailability(pack: DubPack): void {
+  const ok = hasActiveCharacter(pack);
+  $<HTMLButtonElement>("btn-start").disabled = !ok;
+  $("char-filter-empty").hidden = ok;
+}
+
+function renderCharacterFilter(pack: DubPack): void {
+  const chars = packCharacters(pack);
+  const panel = $("char-filter");
+  panel.hidden = chars.length === 0;
+  const list = $("char-filter-list");
+  list.replaceChildren(
+    ...chars.map((name) => {
+      const label = document.createElement("label");
+      label.className = "char-filter-item";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = !disabledCharacters.has(name);
+      input.addEventListener("change", () => {
+        if (input.checked) disabledCharacters.delete(name);
+        else disabledCharacters.add(name);
+        updateStartAvailability(pack);
+        void updateClipLength(pack);
+      });
+      const span = document.createElement("span");
+      span.textContent = name;
+      label.append(input, span);
+      return label;
+    })
+  );
+  updateStartAvailability(pack);
+}
+
 function fillPackCard(pack: DubPack): void {
   const icon = $<HTMLImageElement>("pack-icon");
   icon.src = pack.icon ? URL.createObjectURL(pack.icon) : "";
@@ -373,6 +446,8 @@ function fillPackCard(pack: DubPack): void {
   const warn = $("pack-warnings");
   warn.hidden = pack.warnings.length === 0;
   warn.textContent = pack.warnings.join(" ");
+  renderCharacterFilter(pack);
+  void updateClipLength(pack);
 }
 
 /** ID пака для аналитики: слаг встроенного, либо "custom" для своего ZIP/папки. */
@@ -381,6 +456,7 @@ let currentPackSlug = "custom";
 function selectPack(pack: DubPack, sourceId = "custom"): void {
   selectedPack = pack;
   currentPackSlug = sourceId;
+  disabledCharacters = new Set();
   fillPackCard(pack);
   micStatus.textContent = "";
   micStatus.classList.remove("error");
@@ -418,14 +494,14 @@ $("btn-start").addEventListener("click", async () => {
     micStatus.classList.add("error");
     return;
   }
-  session = new DubSession(selectedPack, lang());
+  session = new DubSession(selectedPack, lang(), new Set(disabledCharacters));
   scoreLang = null;
   composer?.dispose();
   composer = new Composer(videoPlayer);
   // Экран показываем до загрузки клипа, чтобы canvas получил размеры
   showScreen("dub");
   trackEvent(`dub-start/${currentPackSlug}`);
-  await enterClip(0);
+  await enterClip(session.firstActiveIndex);
 });
 
 // ================= ЭКРАН 3: дубляж =================
@@ -536,8 +612,8 @@ async function enterClip(index: number): Promise<void> {
   session.prefetchAround();
   const clip = session.clip;
 
-  $("dub-counter").textContent = t("clipCounter", { i: index + 1, n: session.total });
-  $("dub-progress-fill").style.width = `${(index / session.total) * 100}%`;
+  $("dub-counter").textContent = t("clipCounter", { i: session.activePosition, n: session.activeTotal });
+  $("dub-progress-fill").style.width = `${((session.activePosition - 1) / session.activeTotal) * 100}%`;
   renderCaption();
   $("dub-character").textContent = clip.characters.join(", ");
 
@@ -1233,15 +1309,17 @@ btnNext.addEventListener("click", () => {
   if (session.isLastClip) {
     void enterFinal();
   } else {
-    void enterClip(session.clipIndex + 1);
+    const next = session.nextActiveIndex(session.clipIndex);
+    if (next !== null) void enterClip(next);
   }
 });
 
 // «Назад» шагает по репликам: можно вернуться и перезаписать дубль. С первой
-// реплики шаг назад выводит из сессии — там это единственный выход «вглубь».
+// (активной) реплики шаг назад выводит из сессии — там это единственный выход «вглубь».
 btnBack.addEventListener("click", () => {
   if (!session || recorder.isRecording) return;
-  if (session.clipIndex === 0) {
+  const prev = session.prevActiveIndex(session.clipIndex);
+  if (prev === null) {
     if (session.recordings.size > 0 && !confirm(t("quitConfirm"))) return;
     abandonSession();
     showScreen(selectedPack ? "pack" : "home");
@@ -1249,7 +1327,7 @@ btnBack.addEventListener("click", () => {
   }
   stopPreview();
   hideWatchVideo();
-  void enterClip(session.clipIndex - 1);
+  void enterClip(prev);
 });
 
 function abandonSession(): void {
@@ -1339,10 +1417,32 @@ takeSlider.addEventListener("change", () => {
   void applyMixMode();
 });
 
+const finalAudioLangsRow = $("final-audio-langs");
+const finalAudioPills = $("final-audio-pills");
+
+/**
+ * Переключатель звуковой дорожки на премьере — та же ось `session.audioLang`,
+ * что и «Звук» на экране записи, но здесь она напрямую решает, что попадёт
+ * в экспорт (закадр играет выбранную дорожку под дублем целиком). Смена
+ * дорожки пересобирает микс и перезапускает просмотр — как смена режима.
+ */
+function renderFinalAudioPills(): void {
+  if (!session) return;
+  const tracks = session.audioLangs;
+  finalAudioLangsRow.hidden = tracks.length === 0;
+  renderLangRow(finalAudioPills, tracks, session.audioLang, false, (picked) => {
+    if (!session || picked === session.audioLang) return;
+    session.audioLang = picked;
+    renderFinalAudioPills();
+    void applyMixMode();
+  });
+}
+
 async function enterFinal(): Promise<void> {
   if (!session || !composer || !videoPlayer) return;
   $("dub-progress-fill").style.width = "100%";
   syncMixModeUi();
+  renderFinalAudioPills();
   await composer.prepare(session, mixMode, voiceoverGain, takeGain());
   hideWatchVideo(false); // плеер сейчас переедет в финальный слот
   finalSlot.replaceChildren(videoPlayer.element);
@@ -1608,16 +1708,27 @@ btnExport.addEventListener("click", () => {
   startExportProgressTimer();
 });
 
-// Аудиодорожка дубляжа рендерится офлайн — мгновенно, без просмотра
-$<HTMLButtonElement>("btn-export-audio").addEventListener("click", async (e) => {
-  if (!composer) return;
-  const btn = e.currentTarget as HTMLButtonElement;
-  btn.disabled = true;
+// Аудиодорожка рендерится офлайн — мгновенно, без просмотра. Кнопка
+// открывает попап состава: только голос игрока, голос + голоса персонажей,
+// выключенных фильтром (если фильтр вообще что-то выключил — иначе это было
+// бы неотличимо от первого варианта), либо вся дорожка как в экспорте видео.
+const wavModal = $("wav-export-modal");
+const wavOptVoice = $<HTMLButtonElement>("wav-opt-voice");
+const wavOptVoiceChars = $<HTMLButtonElement>("wav-opt-voice-chars");
+const wavOptFull = $<HTMLButtonElement>("wav-opt-full");
+const btnExportAudio = $<HTMLButtonElement>("btn-export-audio");
+
+function closeWavModal(): void {
+  wavModal.hidden = true;
+}
+
+async function runWavExport(render: () => Promise<Blob>, suffix: string): Promise<void> {
+  btnExportAudio.disabled = true;
   try {
-    const blob = await composer.renderAudioWav();
+    const blob = await render();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${safeFileName()} — ${t("audioFileSuffix")}.wav`;
+    a.download = `${safeFileName()} — ${suffix}.wav`;
     a.click();
     exportStatus.hidden = false;
     exportStatus.textContent = t("audioDone");
@@ -1626,8 +1737,40 @@ $<HTMLButtonElement>("btn-export-audio").addEventListener("click", async (e) => 
     exportStatus.hidden = false;
     exportStatus.textContent = t("audioError");
   } finally {
-    btn.disabled = false;
+    btnExportAudio.disabled = false;
   }
+}
+
+btnExportAudio.addEventListener("click", () => {
+  if (!composer || !session) return;
+  wavOptVoiceChars.hidden = !session.hasDisabledCharacters;
+  wavModal.hidden = false;
+});
+
+wavOptVoice.addEventListener("click", () => {
+  closeWavModal();
+  if (!composer || !session) return;
+  const comp = composer, sess = session;
+  void runWavExport(() => comp.renderVoiceWav(sess, false), t("audioFileSuffixVoice"));
+});
+
+wavOptVoiceChars.addEventListener("click", () => {
+  closeWavModal();
+  if (!composer || !session) return;
+  const comp = composer, sess = session;
+  void runWavExport(() => comp.renderVoiceWav(sess, true), t("audioFileSuffixVoiceChars"));
+});
+
+wavOptFull.addEventListener("click", () => {
+  closeWavModal();
+  if (!composer) return;
+  const comp = composer;
+  void runWavExport(() => comp.renderAudioWav(), t("audioFileSuffix"));
+});
+
+$("wav-modal-cancel").addEventListener("click", closeWavModal);
+wavModal.addEventListener("click", (e) => {
+  if (e.target === wavModal) closeWavModal();
 });
 
 /**
@@ -1645,7 +1788,7 @@ function backToClips(index: number): void {
 }
 
 $("btn-final-back").addEventListener("click", () => {
-  if (session) backToClips(session.total - 1);
+  if (session) backToClips(session.lastActiveIndex);
 });
 
 $("btn-retry").addEventListener("click", () => {
@@ -1656,7 +1799,7 @@ $("btn-retry").addEventListener("click", () => {
   clearResults();
   session.recordings.clear();
   showScreen("dub");
-  void enterClip(0);
+  void enterClip(session.firstActiveIndex);
 });
 
 $("btn-home").addEventListener("click", () => {
