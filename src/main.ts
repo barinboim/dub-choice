@@ -638,6 +638,51 @@ dropZone.addEventListener("drop", (e) => {
 // ================= ЭКРАН 2: карточка пака =================
 const micStatus = $("mic-status");
 
+/**
+ * Выбор системного микрофона — дев-хелпер, виден только на localhost
+ * (переключение записи на другое устройство при отладке). В проде блок
+ * скрыт, и recorder.init() вызывается без deviceId — как раньше.
+ */
+const micDeviceRow = $("mic-device-row");
+const micDeviceSelect = $<HTMLSelectElement>("mic-device-select");
+let micDeviceId: string | undefined;
+
+if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+  micDeviceRow.hidden = false;
+  micDeviceSelect.addEventListener("change", () => {
+    micDeviceId = micDeviceSelect.value || undefined;
+  });
+  void refreshMicDevices();
+  navigator.mediaDevices?.addEventListener?.("devicechange", () => void refreshMicDevices());
+}
+
+/** Названия устройств доступны только после разрешения — запрашиваем его молча, если нужно. */
+async function refreshMicDevices(): Promise<void> {
+  try {
+    let devices = await navigator.mediaDevices.enumerateDevices();
+    let inputs = devices.filter((d) => d.kind === "audioinput");
+    if (inputs.some((d) => !d.label)) {
+      const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+      probe.getTracks().forEach((t) => t.stop());
+      devices = await navigator.mediaDevices.enumerateDevices();
+      inputs = devices.filter((d) => d.kind === "audioinput");
+    }
+    const prev = micDeviceSelect.value;
+    micDeviceSelect.replaceChildren(
+      ...inputs.map((d, i) => {
+        const opt = document.createElement("option");
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `Microphone ${i + 1}`;
+        return opt;
+      })
+    );
+    if (inputs.some((d) => d.deviceId === prev)) micDeviceSelect.value = prev;
+    micDeviceId = micDeviceSelect.value || undefined;
+  } catch {
+    micDeviceRow.hidden = true;
+  }
+}
+
 /** Персонажи, выключенные фильтром на карточке пака. Сбрасывается при выборе нового пака. */
 let disabledCharacters = new Set<string>();
 
@@ -763,7 +808,7 @@ $("btn-start").addEventListener("click", async () => {
   micStatus.textContent = t("micRequest");
   micStatus.classList.remove("error");
   try {
-    await recorder.init();
+    await recorder.init(micDeviceId);
   } catch {
     micStatus.textContent = t("micError");
     micStatus.classList.add("error");

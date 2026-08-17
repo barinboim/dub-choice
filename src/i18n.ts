@@ -84,6 +84,7 @@ const dict = {
   videoError: { ru: "Не удалось открыть dub_video.ogv из пака.", en: "Couldn't open dub_video.ogv from the pack." },
   clipLength: { ru: "Суммарная длина реплик: {len}", en: "Collective length of selected clips: {len}" },
   filterCharacters: { ru: "Фильтр персонажей:", en: "Filter characters:" },
+  micDeviceLabel: { ru: "🎙️ Микрофон", en: "🎙️ Microphone" },
   filterEmpty: {
     ru: "Выбери хотя бы одного персонажа",
     en: "Select at least one character",

@@ -84,14 +84,19 @@ export class MicRecorder {
   private tailSamples = 0;
   private leadSamples = 0;
 
-  /** Запрашивает доступ к микрофону (можно вызвать заранее, на экране пака). */
-  async init(): Promise<void> {
+  /**
+   * Запрашивает доступ к микрофону (можно вызвать заранее, на экране пака).
+   * deviceId — выбор конкретного устройства (дев-хелпер для localhost,
+   * см. mic-device-select в main.ts); в проде не передаётся.
+   */
+  async init(deviceId?: string): Promise<void> {
     if (this.stream) return;
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
         noiseSuppression: true,
         autoGainControl: true,
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
       },
     });
   }

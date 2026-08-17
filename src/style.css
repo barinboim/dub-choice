@@ -786,6 +786,17 @@ select.lang-select {
   font-weight: 600;
   cursor: pointer;
 }
+/* Выбор системного микрофона — только на localhost, дев-хелпер */
+.mic-device-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+}
+.mic-device-row select.lang-select { max-width: 260px; }
 .caption-edit-hint {
   text-align: center;
   color: var(--ink-dim);
