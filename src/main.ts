@@ -337,6 +337,10 @@ function buildPackCard(pp: PreloadedPack, kind: "shelf" | "grid" | "new"): HTMLE
   card.tabIndex = 0;
   card.setAttribute("role", "button");
   card.title = pp.title;
+  // Карточка могла пересобраться (renderPreloadedList) пока этот пак ещё
+  // качается — например, из-за отмены закачки другого пака. Класс возвращаем
+  // сразу, а прогресс/подпись подтянутся следующим тиком fetchWithProgress.
+  if (preloadedBusy.has(pp.id)) card.classList.add("loading");
 
   const body = document.createElement("div");
   body.className = "pi-body";
@@ -520,16 +524,20 @@ async function loadPreloaded(id: string): Promise<void> {
   preloadedBusy.add(id);
   homeError.hidden = true;
 
-  // Пак может быть сразу в двух местах — на полке и в сетке; ведём оба
-  const items = [
+  // Пак может быть сразу в двух местах — на полке и в сетке, а пока качается
+  // этот пак, другая закачка может обрушить renderPreloadedList() и
+  // пересобрать всю витрину. Поэтому ищем карточки заново на каждый тик,
+  // а не держим ссылки на узлы, которые могут оказаться уже отсоединены.
+  const items = () => [
     ...document.querySelectorAll<HTMLElement>(`#screen-home [data-pack-id="${id}"]`),
   ];
-  const metaEls = items.map((el) => el.querySelector<HTMLElement>(".pi-meta"));
-  const barEls = items.map((el) => el.querySelector<HTMLElement>(".pi-progress"));
   const setStatus = (text: string) => {
-    for (const el of metaEls) if (el) el.textContent = text;
+    for (const el of items()) {
+      el.classList.add("loading");
+      const meta = el.querySelector<HTMLElement>(".pi-meta");
+      if (meta) meta.textContent = text;
+    }
   };
-  for (const el of items) el.classList.add("loading");
   setStatus(t("packLoading"));
 
   try {
@@ -537,7 +545,10 @@ async function loadPreloaded(id: string): Promise<void> {
       packUrl(pp),
       pp.sizeBytes,
       (ratio) => {
-        for (const bar of barEls) if (bar) bar.style.width = `${ratio * 100}%`;
+        for (const el of items()) {
+          const bar = el.querySelector<HTMLElement>(".pi-progress");
+          if (bar) bar.style.width = `${ratio * 100}%`;
+        }
         setStatus(`${t("packLoading")} ${Math.round(ratio * 100)}%`);
       },
       download.signal
@@ -554,9 +565,7 @@ async function loadPreloaded(id: string): Promise<void> {
   } finally {
     if (activeDownload === download) activeDownload = null;
     preloadedBusy.delete(id);
-    for (const el of items) el.classList.remove("loading");
-    for (const bar of barEls) if (bar) bar.style.width = "0";
-    // Метаданные вернутся на место при следующей отрисовке витрины
+    // Метаданные, класс loading и прогресс вернутся на место при отрисовке
     renderPreloadedList();
   }
 }
