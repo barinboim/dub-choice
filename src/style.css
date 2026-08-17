@@ -264,10 +264,22 @@ a:hover { color: #fff; }
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .tag-pill:hover { color: var(--ink); border-color: var(--line-strong); }
+/* Цвет тега приходит из main.ts переменной --tag-color. Сначала обычная
+   рамка как запасной вариант, следом полупрозрачная от цвета тега:
+   если браузер не знает color-mix, останется первая. */
+.tag-pill {
+  color: var(--tag-color, var(--ink-soft));
+  border-color: var(--line);
+  border-color: color-mix(in srgb, var(--tag-color, #fff) 28%, transparent);
+}
+.tag-pill:hover {
+  border-color: var(--line-strong);
+  border-color: color-mix(in srgb, var(--tag-color, #fff) 55%, transparent);
+}
 .tag-pill[aria-pressed="true"] {
   color: #0b0b0b;
-  background: var(--wave-user);
-  border-color: var(--wave-user);
+  background: var(--tag-color, var(--wave-user));
+  border-color: var(--tag-color, var(--wave-user));
   font-weight: 600;
 }
 .tag-count { opacity: 0.55; }
@@ -339,8 +351,25 @@ a:hover { color: #fff; }
   transition: border-color 0.15s, background 0.15s;
 }
 .shelf-card:hover, .shelf-card:focus-visible { border-color: var(--line-strong); background: var(--panel-2); }
-.shelf-card .pi-body { padding: 9px 11px 11px; gap: 4px; }
+.shelf-card .pi-body { padding: 9px 11px 11px; gap: 4px; flex: 1; }
 .shelf-card .pi-title { font-size: 0.84rem; font-weight: 600; }
+/* Теги под названием — только у «Новинок»: там строка метаданных пустовата,
+   потому что запусков у свежего пака ещё нет */
+/* margin-top: auto — чтобы теги стояли по нижнему краю у всех карточек
+   ряда, даже если заголовок занял одну строку, а у соседа две */
+.pi-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.pi-chip {
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.2;
+  border-radius: 5px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  color: var(--tag-color, var(--ink-soft));
+  border: 1px solid var(--line);
+  border-color: color-mix(in srgb, var(--tag-color, #fff) 30%, transparent);
+  background: color-mix(in srgb, var(--tag-color, #fff) 8%, transparent);
+}
 
 /* ---------- Обложка ---------- */
 .pi-cover {

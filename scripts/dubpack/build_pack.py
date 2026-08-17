@@ -15,6 +15,7 @@
 import json
 import subprocess
 import sys
+from datetime import date as _date
 from pathlib import Path
 
 from make_frames import FRAME_AT, FRAME_HEIGHT, FRAME_QUALITY, grab
@@ -63,12 +64,16 @@ def main() -> int:
         ffmpeg("-i", backing_wav, "-c:a", "libmp3lame", "-b:a", BACKING_BITRATE,
                str(outdir / "_backing_track.mp3"))
 
+    # built — дата сборки пака. По ней галерея сайта строит полку «Новинки»
+    # (поле addedAt в манифесте), поэтому пак несёт её сам: иначе дату
+    # пришлось бы проставлять руками в build_manifest.py на каждый пак.
     (outdir / "_pack_info.ini").write_text(
         "[data]\n\n"
         f"title={ini_str(spec['title'])}\n"
         f"subtitle={ini_str(spec.get('subtitle', ''))}\n"
         'icon="icon.png"\n'
-        f"authors={ini_list(spec.get('authors', []))}\n",
+        f"authors={ini_list(spec.get('authors', []))}\n"
+        f'built="{spec.get("built") or _date.today().isoformat()}"\n',
         encoding="utf-8",
     )
 

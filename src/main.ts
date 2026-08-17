@@ -267,9 +267,65 @@ function buildMeta(pp: PreloadedPack, wide: boolean): HTMLElement {
   return meta;
 }
 
+/**
+ * Теги под названием — только на полке «Новинки»: у свежего пака ещё нет
+ * запусков, строка метаданных полупустая, и теги объясняют, что это вообще
+ * такое. «Короткий ролик» пропускаем (о длине говорит бейдж на обложке),
+ * «18+» — тоже, он уже стоит бейджем в углу.
+ */
+const CARD_TAGS_MAX = 2;
+const CARD_TAGS_SKIP = new Set(["короткий ролик", "18+"]);
+
+/**
+ * Свой цвет каждому тегу — так теги читаются как ярлыки, а не как серый шум.
+ * Оттенки приглушённые: на чёрном фоне насыщенные цвета спорят с белыми
+ * кнопками. «18+» единственный берёт --record, тёплый акцент палитры.
+ */
+const TAG_COLORS: Record<string, string> = {
+  "фильм": "#7fb0e0",
+  "мультфильм": "#e0a86b",
+  "мем": "#e055c4",
+  "гарри поттер": "#b08ce0",
+  "шрек": "#8ed36b",
+  "монолог": "#7fe0d2",
+  // Синий здесь насыщеннее, чем у «фильма», иначе два тега сливаются;
+  // «короткий ролик» по той же причине уведён в нейтральный серый
+  "русская озвучка": "#5b8def",
+  "короткий ролик": "#a5a5a5",
+  "18+": "#ff5c49",
+};
+
+function tagColor(tag: string): string {
+  const known = TAG_COLORS[tag];
+  if (known) return known;
+  // Манифест может принести любой тег — даём ему стабильный оттенок по имени
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360} 48% 70%)`;
+}
+
+function paintTag(el: HTMLElement, tag: string): void {
+  el.style.setProperty("--tag-color", tagColor(tag));
+}
+
+function buildCardTags(pp: PreloadedPack): HTMLElement | null {
+  const shown = (pp.tags ?? []).filter((tag) => !CARD_TAGS_SKIP.has(tag)).slice(0, CARD_TAGS_MAX);
+  if (!shown.length) return null;
+  const row = document.createElement("div");
+  row.className = "pi-tags";
+  for (const tag of shown) {
+    const chip = document.createElement("span");
+    chip.className = "pi-chip";
+    chip.textContent = tagLabel(tag);
+    paintTag(chip, tag);
+    row.append(chip);
+  }
+  return row;
+}
+
 /** Карточка пака: клик сразу начинает закачку, прогресс идёт полоской внизу. */
-function buildPackCard(pp: PreloadedPack, kind: "shelf" | "grid"): HTMLElement {
-  const wide = kind === "shelf";
+function buildPackCard(pp: PreloadedPack, kind: "shelf" | "grid" | "new"): HTMLElement {
+  const wide = kind !== "grid";
   const card = document.createElement("div");
   card.className = wide ? "shelf-card" : "preloaded-item";
   card.dataset.packId = pp.id;
@@ -283,6 +339,10 @@ function buildPackCard(pp: PreloadedPack, kind: "shelf" | "grid"): HTMLElement {
   title.className = "pi-title";
   title.textContent = pp.title;
   body.append(title, buildMeta(pp, wide));
+  if (kind === "new") {
+    const tags = buildCardTags(pp);
+    if (tags) body.append(tags);
+  }
 
   const progress = document.createElement("span");
   progress.className = "pi-progress";
@@ -304,9 +364,14 @@ function buildPackCard(pp: PreloadedPack, kind: "shelf" | "grid"): HTMLElement {
 
 /** Полки не зависят от поиска и тегов — это витрина, а не результат выборки. */
 function renderShelves(): void {
-  const fill = (section: HTMLElement, track: HTMLElement, list: PreloadedPack[]) => {
+  const fill = (
+    section: HTMLElement,
+    track: HTMLElement,
+    list: PreloadedPack[],
+    kind: "shelf" | "new"
+  ) => {
     section.hidden = list.length === 0;
-    track.replaceChildren(...list.map((pp) => buildPackCard(pp, "shelf")));
+    track.replaceChildren(...list.map((pp) => buildPackCard(pp, kind)));
   };
 
   fill(
@@ -315,7 +380,8 @@ function renderShelves(): void {
     preloadedPacks
       .slice()
       .sort((a, b) => (b.addedAt ?? "").localeCompare(a.addedAt ?? ""))
-      .slice(0, SHELF_NEW_SIZE)
+      .slice(0, SHELF_NEW_SIZE),
+    "new"
   );
 
   fill(
@@ -324,7 +390,8 @@ function renderShelves(): void {
     preloadedPacks
       .filter((pp) => (pp.plays7d ?? 0) > 0)
       .sort((a, b) => (b.plays7d ?? 0) - (a.plays7d ?? 0))
-      .slice(0, SHELF_SIZE)
+      .slice(0, SHELF_SIZE),
+    "shelf"
   );
 }
 
@@ -362,6 +429,7 @@ function renderTagBar(): void {
       btn.type = "button";
       btn.className = "tag-pill";
       btn.setAttribute("aria-pressed", String(galleryTags.has(tag)));
+      paintTag(btn, tag);
       btn.append(document.createTextNode(`${tagLabel(tag)} `));
       const count = document.createElement("span");
       count.className = "tag-count";

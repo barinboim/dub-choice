@@ -22,10 +22,13 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.request
 import zipfile
+from datetime import date as _date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CREDS = os.path.expanduser("~/.config/dub-choice-r2/credentials.env")
+PUBLIC_BASE = "https://pub-6cdcaa2a325441e59991d44af1e68177.r2.dev/"
 
 # Ручные теги — то, что из файлов пака не вывести: жанр, франшиза, возрастной
 # ценз. Теги «короткий ролик» и «монолог» добавляются автоматически, см.
@@ -59,13 +62,32 @@ PACKS = [
 SHORT_MAX_SEC = 60  # граница тега «короткий ролик»
 
 
-def read_zip(pattern):
-    """Читает zip: цельный файл или склейку .zip.aa/.ab/... по порядку."""
-    parts = sorted(glob.glob(os.path.join(ROOT, pattern)))
+def local_zip(pattern):
+    """Локальный zip пака: цельный файл или склейка .zip.aa/.ab/... по порядку."""
+    parts = sorted(glob.glob(os.path.join(ROOT, pattern))) if pattern else []
     if not parts:
-        raise SystemExit(f"не найдено: {pattern}")
-    data = b"".join(open(p, "rb").read() for p in parts)
-    return data, zipfile.ZipFile(io.BytesIO(data))
+        return None
+    return b"".join(open(p, "rb").read() for p in parts)
+
+
+def published_manifest():
+    """Текущий манифест из R2 — данные по уже залитым пакам.
+
+    Всё, что скрипт достаёт из архива (реплики, персонажи, длительность),
+    для опубликованного пака уже посчитано и лежит здесь. Качать ради этого
+    сотни мегабайт незачем: заново читаем только те паки, чей zip есть
+    локально, то есть новые и пересобранные.
+    """
+    url = f"{PUBLIC_BASE}manifest.json"
+    # Свой User-Agent обязателен: на дефолтный "Python-urllib" Cloudflare
+    # отвечает 403, хотя curl и браузер тот же файл получают спокойно
+    req = urllib.request.Request(url, headers={"User-Agent": "dub-choice-build/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return {e["id"]: e for e in json.load(r)}
+    except Exception as e:
+        print(f"манифест из R2 недоступен ({e}) — пересчитываю только локальные паки")
+        return {}
 
 
 def parse_ini(text):
@@ -112,6 +134,7 @@ def probe(z):
     duration = 0.0
     pack_lang = ""
     icon_name = ""
+    built = ""
 
     for n in names:
         base = os.path.basename(n)
@@ -119,6 +142,7 @@ def probe(z):
             d = parse_ini(z.read(n).decode("utf-8", "ignore"))
             pack_lang = unquote(d.get("lang", ""))
             icon_name = unquote(d.get("icon", ""))
+            built = unquote(d.get("built", ""))
             continue
         if base.startswith("_") or not (n.lower().endswith(".ini") or n.lower().endswith(".txt")):
             continue
@@ -147,6 +171,7 @@ def probe(z):
         "translations": sorted(langs),
         "lang": pack_lang,
         "iconName": icon_name,
+        "built": built,
         # Русский голос: пак либо изначально русский, либо несёт дорожку дубляжа
         "hasRuVoice": pack_lang == "ru" or any("_voices_ru" in n for n in names),
     }
@@ -216,44 +241,66 @@ def main():
 
     plays = json.load(open(args.plays, encoding="utf-8")) if args.plays else {}
 
+    published = published_manifest()
     manifest = []
     uploads = []  # (локальный путь, ключ в бакете, content-type)
 
     for pack_id, title, pattern, manual_tags, added, icon_stem in PACKS:
-        data, z = read_zip(pattern)
-        info = probe(z)
-        icon_file, curated = extract_icon(z, info, pack_id, icons_dir, icon_stem)
-        tags = derive_tags(manual_tags, info)
+        data = local_zip(pattern)
 
-        entry = {
-            "id": pack_id,
-            "title": title,
-            "path": f"packs/{pack_id}.zip",
-            "icon": f"icons/{icon_file}",
-            "sizeBytes": len(data),
-            "clips": info["clips"],
-            "characters": info["characters"],
-            "durationSec": info["durationSec"],
-            "translations": info["translations"],
-            "tags": tags,
-            "addedAt": added,
-            # Полка «Популярные озвучки» живёт на недельном окне, сортировка
-            # «Популярные» — на месячном: за сутки у редких паков одни нули
-            "plays7d": int(plays.get("7d", {}).get(pack_id, 0)),
-            "plays30d": int(plays.get("30d", {}).get(pack_id, 0)),
-        }
+        if data is None:
+            # Пак уже опубликован, архива под рукой нет — берём посчитанное
+            # раньше. Заливать тоже нечего: в бакете лежит ровно этот файл.
+            prev = published.get(pack_id)
+            if prev is None:
+                raise SystemExit(
+                    f"{pack_id}: нет ни локального zip ({pattern}), ни записи в манифесте R2")
+            entry = dict(prev)
+            entry["title"] = title
+            # Теги пересобираем: ручные могли поменяться в конфиге, а
+            # выводимые считаются из полей, которые манифест уже несёт
+            entry["tags"] = derive_tags(manual_tags, {
+                "hasRuVoice": "русская озвучка" in (prev.get("tags") or []),
+                "durationSec": prev.get("durationSec", 0),
+                "characters": prev.get("characters", []),
+            })
+            mark = "="
+        else:
+            z = zipfile.ZipFile(io.BytesIO(data))
+            info = probe(z)
+            icon_file, curated = extract_icon(z, info, pack_id, icons_dir, icon_stem)
+            entry = {
+                "id": pack_id,
+                "title": title,
+                "path": f"packs/{pack_id}.zip",
+                "icon": f"icons/{icon_file}",
+                "sizeBytes": len(data),
+                "clips": info["clips"],
+                "characters": info["characters"],
+                "durationSec": info["durationSec"],
+                "translations": info["translations"],
+                "tags": derive_tags(manual_tags, info),
+                # Дату пак несёт сам (built= в _pack_info.ini, пишет
+                # build_pack.py). В конфиге она указана только у паков,
+                # собранных до появления поля: их даты — из git-истории.
+                "addedAt": added or info["built"] or _date.today().isoformat(),
+            }
+            zip_path = os.path.join(out_dir, f"{pack_id}.zip")
+            open(zip_path, "wb").write(data)
+            uploads.append((zip_path, f"packs/{pack_id}.zip", "application/zip"))
+            ctype = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}.get(
+                icon_file.rsplit(".", 1)[-1], "image/png")
+            uploads.append((os.path.join(icons_dir, icon_file), f"icons/{icon_file}", ctype))
+            mark = "✓" if curated else "~"
+
+        # Полка «Популярные озвучки» живёт на недельном окне, сортировка
+        # «Популярные» — на месячном: за сутки у редких паков одни нули
+        entry["plays7d"] = int(plays.get("7d", {}).get(pack_id, 0))
+        entry["plays30d"] = int(plays.get("30d", {}).get(pack_id, 0))
         manifest.append(entry)
 
-        # zip кладём цельным: лимита GitHub в 100 МБ у R2 нет, склейки не нужны
-        zip_path = os.path.join(out_dir, f"{pack_id}.zip")
-        open(zip_path, "wb").write(data)
-        uploads.append((zip_path, f"packs/{pack_id}.zip", "application/zip"))
-        ctype = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}.get(
-            icon_file.rsplit(".", 1)[-1], "image/png")
-        uploads.append((os.path.join(icons_dir, icon_file), f"icons/{icon_file}", ctype))
-
-        print(f"{pack_id:18} {info['clips']:3} реплик  {info['durationSec']:6.1f}с  "
-              f"{len(info['characters'])} перс.  икон.{'✓' if curated else '~'}  {', '.join(tags)}")
+        print(f"{pack_id:18} {entry['clips']:3} реплик  {entry['durationSec']:6.1f}с  "
+              f"{len(entry['characters'])} перс.  {mark}  {', '.join(entry['tags'])}")
 
     manifest_path = os.path.join(out_dir, "manifest.json")
     with open(manifest_path, "w", encoding="utf-8") as f:
