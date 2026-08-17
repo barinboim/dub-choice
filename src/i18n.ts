@@ -49,6 +49,7 @@ const dict = {
     en: "Inspired by The Choicer Voicer by YeahMaybe",
   },
   creditsCreated: { ru: "Создал", en: "Created by" },
+  creditsSupport: { ru: "Поддержать проект:", en: "Support the project:" },
   genericLoadError: {
     ru: "Не получилось прочитать пак. Проверь, что это папка или ZIP dub-пака.",
     en: "Couldn't read the pack. Make sure it's a dub pack folder or ZIP.",
