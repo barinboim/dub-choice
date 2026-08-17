@@ -274,10 +274,9 @@ function buildMeta(pp: PreloadedPack, kind: "shelf" | "grid" | "new"): HTMLEleme
 }
 
 /**
- * Теги под названием — только на полке «Новинки»: у свежего пака ещё нет
- * запусков, строка метаданных полупустая, и теги объясняют, что это вообще
- * такое. «Короткий ролик» пропускаем (о длине говорит бейдж на обложке),
- * «18+» — тоже, он уже стоит бейджем в углу.
+ * Теги под названием — только на полке «Популярные». «Короткий ролик»
+ * пропускаем (о длине говорит бейдж на обложке), «18+» — тоже, он уже
+ * стоит бейджем в углу.
  */
 const CARD_TAGS_MAX = 2;
 const CARD_TAGS_SKIP = new Set(["короткий ролик", "18+"]);
@@ -345,7 +344,7 @@ function buildPackCard(pp: PreloadedPack, kind: "shelf" | "grid" | "new"): HTMLE
   title.className = "pi-title";
   title.textContent = pp.title;
   body.append(title, buildMeta(pp, kind));
-  if (kind === "new") {
+  if (kind === "shelf") {
     const tags = buildCardTags(pp);
     if (tags) body.append(tags);
   }
