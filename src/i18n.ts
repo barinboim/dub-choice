@@ -23,6 +23,24 @@ const dict = {
   pickFolder: { ru: "Выбрать папку", en: "Choose folder" },
   galleryTitle: { ru: "Встроенные паки", en: "Built-in packs" },
   loadedTitle: { ru: "Загруженные", en: "Loaded" },
+  shelfNew: { ru: "Новинки", en: "New arrivals" },
+  shelfNewSub: { ru: "добавлены недавно", en: "recently added" },
+  shelfPopular: { ru: "Популярные озвучки", en: "Popular dubs" },
+  shelfPopularSub: { ru: "на этой неделе", en: "this week" },
+  suggestBox: { ru: "Предложка:", en: "Suggest a scene:" },
+  searchPacks: {
+    ru: "Найти пак — название, персонаж, тег…",
+    en: "Find a pack — title, character, tag…",
+  },
+  searchClear: { ru: "Очистить поиск", en: "Clear search" },
+  sortLabel: { ru: "Сортировка", en: "Sort" },
+  sortNew: { ru: "Новые", en: "Newest" },
+  sortPopular: { ru: "Популярные", en: "Popular" },
+  tagsLabel: { ru: "Теги", en: "Tags" },
+  galleryShown: { ru: "Показано {i} из {n}", en: "Showing {i} of {n}" },
+  galleryReset: { ru: "сбросить", en: "reset" },
+  galleryEmpty: { ru: "Ничего не нашлось.", en: "Nothing matched." },
+  galleryEmptyReset: { ru: "Сбросить поиск и теги", en: "Clear search and tags" },
   packLoading: { ru: "Загружаю…", en: "Loading…" },
   packUnpacking: { ru: "Распаковываю…", en: "Unpacking…" },
   packDownload: { ru: "Скачать", en: "Download" },
@@ -38,6 +56,10 @@ const dict = {
   fetchError: {
     ru: "Не удалось скачать пак. Проверь соединение и попробуй ещё раз.",
     en: "Couldn't download the pack. Check your connection and try again.",
+  },
+  manifestLoadError: {
+    ru: "Не удалось загрузить список встроенных паков. Проверь соединение и обнови страницу.",
+    en: "Couldn't load the built-in pack list. Check your connection and reload the page.",
   },
   clipsCount: { ru: "реплик", en: "lines" },
   tagAdultTooltip: { ru: "Ненормативная лексика, тема 18+", en: "Explicit language, 18+ content" },
@@ -240,6 +262,26 @@ export function setLang(l: Lang): void {
 export function langName(code: string): string {
   const key = `langName_${code.toLowerCase()}` as MsgKey;
   return key in dict ? t(key) : code.toUpperCase();
+}
+
+/**
+ * Подпись тега галереи. В манифесте теги лежат по-русски (их проставляет
+ * автор пака), поэтому для английского интерфейса держим словарь известных;
+ * незнакомый тег показываем как есть — манифест может принести любой.
+ */
+const TAG_EN: Record<string, string> = {
+  "фильм": "movie",
+  "мультфильм": "animation",
+  "мем": "meme",
+  "гарри поттер": "Harry Potter",
+  "шрек": "Shrek",
+  "монолог": "monologue",
+  "русская озвучка": "Russian dub",
+  "короткий ролик": "short",
+};
+
+export function tagLabel(tag: string): string {
+  return current === "en" ? TAG_EN[tag] ?? tag : tag;
 }
 
 export function t(key: MsgKey, vars?: Record<string, string | number>): string {

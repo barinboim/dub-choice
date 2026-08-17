@@ -7,3 +7,5 @@ public/test-*.zip
 __pycache__
 CLAUDE.md
 docs/ANALYTICS.md
+# сборка манифеста и выгрузка статистики
+build

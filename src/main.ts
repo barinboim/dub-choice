@@ -2,7 +2,14 @@ import "./style.css";
 import { trackEvent } from "./analytics";
 import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/loader";
 import { DubPack, PackError, packCharacters, clipIsActive } from "./pack/types";
-import { PRELOADED_PACKS, packUrls, fetchWithProgress, formatSize } from "./pack/preloaded";
+import {
+  loadPreloadedManifest,
+  packUrl,
+  packIconUrl,
+  fetchWithProgress,
+  formatSize,
+  type PreloadedPack,
+} from "./pack/preloaded";
 import { audioContext, blobDuration } from "./audio/context";
 import {
   MicRecorder,
@@ -23,7 +30,7 @@ import {
 } from "./game/composer";
 import { scoreTake, totalPercent, verdictKey } from "./game/score";
 import { createVideoPlayer, DubVideoPlayer } from "./video/player";
-import { t, lang, langName, setLang, Lang } from "./i18n";
+import { t, tagLabel, lang, langName, setLang, Lang } from "./i18n";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -150,6 +157,8 @@ async function addPack(load: Promise<DubPack>, sourceId: string | null = null): 
 }
 
 // --- Встроенные паки ---
+/** Список качается из R2-манифеста при старте, не зашит в бандл. */
+let preloadedPacks: PreloadedPack[] = [];
 const preloadedBusy = new Set<string>();
 /**
  * Качается всегда только один пак: игрок кликнул «Скачать» у другого —
@@ -163,77 +172,274 @@ function cancelDownload(): void {
   activeDownload?.abort();
   activeDownload = null;
 }
-/** Выбранный (подсвеченный) пак в галерее — у него видна кнопка «Скачать». */
-let selectedPreloadedId: string | null = null;
+// --- Витрина: полка, поиск, сортировка, теги ---
+const shelfNewSection = $("shelf-new");
+const shelfNewTrack = $("shelf-new-track");
+const shelfSection = $("shelf-popular");
+const shelfTrack = $("shelf-track");
+const searchInput = $<HTMLInputElement>("pack-search");
+const searchClearBtn = $("search-clear");
+const sortBar = $("sort-bar");
+const tagBar = $("tag-bar");
+const galleryCount = $("gallery-count");
 
-function renderPreloadedList(): void {
-  preloadedList.replaceChildren(
-    ...PRELOADED_PACKS.map((pp) => {
-      const card = document.createElement("div");
-      card.className = "preloaded-item";
-      card.dataset.packId = pp.id;
-      card.tabIndex = 0;
-      card.setAttribute("role", "button");
-      card.classList.toggle("selected", selectedPreloadedId === pp.id);
+/** 18+ намеренно не фильтр, а пометка: это предупреждение о содержимом. */
+const HIDDEN_TAGS = new Set(["18+"]);
+const SHELF_SIZE = 8;
+const SHELF_NEW_SIZE = 6;
 
-      const icon = document.createElement("img");
-      icon.className = "pi-icon";
-      icon.src = pp.icon;
-      icon.alt = "";
-      icon.loading = "lazy";
+type GallerySort = "new" | "plays";
+let gallerySort: GallerySort = "new";
+let galleryQuery = "";
+const galleryTags = new Set<string>();
 
-      const meta = document.createElement("div");
-      meta.className = "pi-meta";
-      const titleRow = document.createElement("div");
-      titleRow.className = "pi-title-row";
-      const title = document.createElement("div");
-      title.className = "pi-title";
-      title.textContent = pp.title;
-      titleRow.append(title);
-      for (const tag of pp.tags ?? []) {
-        const badge = document.createElement("span");
-        badge.className = "pi-tag";
-        badge.textContent = tag;
-        if (tag === "18+") badge.title = t("tagAdultTooltip");
-        titleRow.append(badge);
-      }
-      const size = document.createElement("div");
-      size.className = "pi-size";
-      size.textContent = formatSize(pp.sizeBytes);
-      meta.append(titleRow, size);
+function fmtDuration(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
-      const download = document.createElement("button");
-      download.className = "btn btn-primary pi-download";
-      download.textContent = `⬇ ${t("packDownload")}`;
-      download.hidden = selectedPreloadedId !== pp.id;
-      download.addEventListener("click", (e) => {
-        e.stopPropagation();
-        void loadPreloaded(pp.id);
-      });
+function packMatches(pp: PreloadedPack): boolean {
+  if (galleryTags.size && !(pp.tags ?? []).some((tag) => galleryTags.has(tag))) return false;
+  if (!galleryQuery) return true;
+  const q = galleryQuery.toLowerCase();
+  return (
+    pp.title.toLowerCase().includes(q) ||
+    (pp.tags ?? []).some((tag) => tag.toLowerCase().includes(q)) ||
+    (pp.characters ?? []).some((c) => c.toLowerCase().includes(q))
+  );
+}
 
-      const progress = document.createElement("span");
-      progress.className = "pi-progress";
+function sortPacks(list: PreloadedPack[]): PreloadedPack[] {
+  const byNew = (a: PreloadedPack, b: PreloadedPack) =>
+    (b.addedAt ?? "").localeCompare(a.addedAt ?? "") || (b.plays30d ?? 0) - (a.plays30d ?? 0);
+  const byPlays = (a: PreloadedPack, b: PreloadedPack) => (b.plays30d ?? 0) - (a.plays30d ?? 0);
+  return list.slice().sort(gallerySort === "new" ? byNew : byPlays);
+}
 
-      card.append(icon, meta, download, progress);
-      const select = () => {
-        if (preloadedBusy.has(pp.id)) return;
-        selectedPreloadedId = pp.id;
+function buildCover(pp: PreloadedPack, wide: boolean): HTMLElement {
+  const cover = document.createElement("div");
+  cover.className = wide ? "pi-cover wide" : "pi-cover";
+  const img = document.createElement("img");
+  img.src = packIconUrl(pp);
+  img.alt = "";
+  img.loading = "lazy";
+  cover.append(img);
+  if (wide) {
+    if ((pp.tags ?? []).includes("18+")) {
+      const adult = document.createElement("span");
+      adult.className = "pi-adult";
+      adult.textContent = "18+";
+      adult.title = t("tagAdultTooltip");
+      cover.append(adult);
+    }
+    const dur = document.createElement("span");
+    dur.className = "pi-badge";
+    dur.textContent = fmtDuration(pp.durationSec ?? 0);
+    cover.append(dur);
+  }
+  return cover;
+}
+
+/**
+ * Строка под названием. Держим её короткой: три значения не помещались в
+ * карточку и переносились, оставляя висящий разделитель. На полке длина уже
+ * написана на обложке, поэтому там — реплики и запуски; в сетке обложка
+ * маленькая и без бейджа, поэтому там — длина и вес.
+ */
+function buildMeta(pp: PreloadedPack, wide: boolean): HTMLElement {
+  const meta = document.createElement("div");
+  meta.className = "pi-meta";
+  const parts: { text: string; cls?: string }[] = wide
+    ? [{ text: `${pp.clips ?? 0} ${t("clipsCount")}` }]
+    : [{ text: fmtDuration(pp.durationSec ?? 0) }, { text: formatSize(pp.sizeBytes) }];
+  if (wide && pp.plays7d) parts.push({ text: `▶ ${pp.plays7d}`, cls: "pi-plays" });
+  if (!wide && (pp.tags ?? []).includes("18+")) parts.push({ text: "18+", cls: "pi-adult-inline" });
+
+  parts.forEach(({ text, cls }, i) => {
+    const span = document.createElement("span");
+    if (cls) span.className = cls;
+    // Разделитель внутри того же span — иначе при переносе точка повисает
+    span.textContent = i > 0 ? `· ${text}` : text;
+    if (cls === "pi-adult-inline") span.title = t("tagAdultTooltip");
+    meta.append(span);
+  });
+  return meta;
+}
+
+/** Карточка пака: клик сразу начинает закачку, прогресс идёт полоской внизу. */
+function buildPackCard(pp: PreloadedPack, kind: "shelf" | "grid"): HTMLElement {
+  const wide = kind === "shelf";
+  const card = document.createElement("div");
+  card.className = wide ? "shelf-card" : "preloaded-item";
+  card.dataset.packId = pp.id;
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.title = pp.title;
+
+  const body = document.createElement("div");
+  body.className = "pi-body";
+  const title = document.createElement("div");
+  title.className = "pi-title";
+  title.textContent = pp.title;
+  body.append(title, buildMeta(pp, wide));
+
+  const progress = document.createElement("span");
+  progress.className = "pi-progress";
+  card.append(buildCover(pp, wide), body, progress);
+
+  const start = () => {
+    if (preloadedBusy.has(pp.id)) return;
+    void loadPreloaded(pp.id);
+  };
+  card.addEventListener("click", start);
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      start();
+    }
+  });
+  return card;
+}
+
+/** Полки не зависят от поиска и тегов — это витрина, а не результат выборки. */
+function renderShelves(): void {
+  const fill = (section: HTMLElement, track: HTMLElement, list: PreloadedPack[]) => {
+    section.hidden = list.length === 0;
+    track.replaceChildren(...list.map((pp) => buildPackCard(pp, "shelf")));
+  };
+
+  fill(
+    shelfNewSection,
+    shelfNewTrack,
+    preloadedPacks
+      .slice()
+      .sort((a, b) => (b.addedAt ?? "").localeCompare(a.addedAt ?? ""))
+      .slice(0, SHELF_NEW_SIZE)
+  );
+
+  fill(
+    shelfSection,
+    shelfTrack,
+    preloadedPacks
+      .filter((pp) => (pp.plays7d ?? 0) > 0)
+      .sort((a, b) => (b.plays7d ?? 0) - (a.plays7d ?? 0))
+      .slice(0, SHELF_SIZE)
+  );
+}
+
+function renderSortBar(): void {
+  const options: { id: GallerySort; label: string }[] = [
+    { id: "new", label: t("sortNew") },
+    { id: "plays", label: t("sortPopular") },
+  ];
+  sortBar.replaceChildren(
+    ...options.map(({ id, label }) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = label;
+      btn.setAttribute("aria-pressed", String(gallerySort === id));
+      btn.addEventListener("click", () => {
+        gallerySort = id;
         renderPreloadedList();
-      };
-      card.addEventListener("click", select);
-      card.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          select();
-        }
       });
-      return card;
+      return btn;
     })
   );
 }
 
+function renderTagBar(): void {
+  const counts = new Map<string, number>();
+  for (const pp of preloadedPacks) {
+    for (const tag of pp.tags ?? []) {
+      if (!HIDDEN_TAGS.has(tag)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+  const tags = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  tagBar.replaceChildren(
+    ...tags.map(([tag, n]) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tag-pill";
+      btn.setAttribute("aria-pressed", String(galleryTags.has(tag)));
+      btn.append(document.createTextNode(`${tagLabel(tag)} `));
+      const count = document.createElement("span");
+      count.className = "tag-count";
+      count.textContent = String(n);
+      btn.append(count);
+      btn.addEventListener("click", () => {
+        if (galleryTags.has(tag)) galleryTags.delete(tag);
+        else galleryTags.add(tag);
+        renderPreloadedList();
+      });
+      return btn;
+    })
+  );
+}
+
+function resetGalleryFilters(): void {
+  galleryQuery = "";
+  galleryTags.clear();
+  searchInput.value = "";
+  searchClearBtn.classList.remove("on");
+  renderPreloadedList();
+}
+
+function renderPreloadedList(): void {
+  renderShelves();
+  renderSortBar();
+  renderTagBar();
+  searchInput.placeholder = t("searchPacks");
+  searchClearBtn.title = t("searchClear");
+
+  const list = sortPacks(preloadedPacks.filter(packMatches));
+  const filtered = !!galleryQuery || galleryTags.size > 0;
+
+  if (!list.length) {
+    galleryCount.replaceChildren();
+    const empty = document.createElement("div");
+    empty.className = "gallery-empty";
+    const text = document.createElement("p");
+    text.textContent = t("galleryEmpty");
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "link-btn";
+    reset.textContent = t("galleryEmptyReset");
+    reset.addEventListener("click", resetGalleryFilters);
+    empty.append(text, reset);
+    preloadedList.replaceChildren(empty);
+    return;
+  }
+
+  galleryCount.replaceChildren(
+    document.createTextNode(t("galleryShown", { i: list.length, n: preloadedPacks.length }))
+  );
+  if (filtered) {
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "link-btn";
+    reset.textContent = t("galleryReset");
+    reset.addEventListener("click", resetGalleryFilters);
+    galleryCount.append(reset);
+  }
+  preloadedList.replaceChildren(...list.map((pp) => buildPackCard(pp, "grid")));
+}
+
+searchInput.addEventListener("input", () => {
+  galleryQuery = searchInput.value.trim();
+  searchClearBtn.classList.toggle("on", galleryQuery.length > 0);
+  renderPreloadedList();
+});
+searchClearBtn.addEventListener("click", () => {
+  galleryQuery = "";
+  searchInput.value = "";
+  searchClearBtn.classList.remove("on");
+  searchInput.focus();
+  renderPreloadedList();
+});
+
 async function loadPreloaded(id: string): Promise<void> {
-  const pp = PRELOADED_PACKS.find((p) => p.id === id);
+  const pp = preloadedPacks.find((p) => p.id === id);
   if (!pp || preloadedBusy.has(id)) return;
   cancelDownload();
   const download = new AbortController();
@@ -241,28 +447,29 @@ async function loadPreloaded(id: string): Promise<void> {
   preloadedBusy.add(id);
   homeError.hidden = true;
 
-  const item = preloadedList.querySelector<HTMLElement>(`[data-pack-id="${id}"]`);
-  const sizeEl = item?.querySelector<HTMLElement>(".pi-size");
-  const barEl = item?.querySelector<HTMLElement>(".pi-progress");
-  const btnEl = item?.querySelector<HTMLButtonElement>(".pi-download");
-  if (btnEl) {
-    btnEl.disabled = true;
-    btnEl.classList.add("downloading");
-    btnEl.textContent = t("packLoading");
-  }
-  item?.classList.add("loading");
+  // Пак может быть сразу в двух местах — на полке и в сетке; ведём оба
+  const items = [
+    ...document.querySelectorAll<HTMLElement>(`#screen-home [data-pack-id="${id}"]`),
+  ];
+  const metaEls = items.map((el) => el.querySelector<HTMLElement>(".pi-meta"));
+  const barEls = items.map((el) => el.querySelector<HTMLElement>(".pi-progress"));
+  const setStatus = (text: string) => {
+    for (const el of metaEls) if (el) el.textContent = text;
+  };
+  for (const el of items) el.classList.add("loading");
+  setStatus(t("packLoading"));
 
   try {
     const blob = await fetchWithProgress(
-      packUrls(pp),
+      packUrl(pp),
       pp.sizeBytes,
       (ratio) => {
-        if (barEl) barEl.style.width = `${ratio * 100}%`;
-        if (sizeEl) sizeEl.textContent = `${t("packLoading")} ${Math.round(ratio * 100)}%`;
+        for (const bar of barEls) if (bar) bar.style.width = `${ratio * 100}%`;
+        setStatus(`${t("packLoading")} ${Math.round(ratio * 100)}%`);
       },
       download.signal
     );
-    if (sizeEl) sizeEl.textContent = t("packUnpacking");
+    setStatus(t("packUnpacking"));
     const pack = await loadPackFromZip(new File([blob], `${pp.id}.zip`));
     // Пока распаковывались, игрок мог запустить другую закачку — она главнее
     if (download.signal.aborted) return;
@@ -274,14 +481,10 @@ async function loadPreloaded(id: string): Promise<void> {
   } finally {
     if (activeDownload === download) activeDownload = null;
     preloadedBusy.delete(id);
-    if (btnEl) {
-      btnEl.disabled = false;
-      btnEl.classList.remove("downloading");
-      btnEl.textContent = `⬇ ${t("packDownload")}`;
-    }
-    item?.classList.remove("loading");
-    if (sizeEl) sizeEl.textContent = formatSize(pp.sizeBytes);
-    if (barEl) barEl.style.width = "0";
+    for (const el of items) el.classList.remove("loading");
+    for (const bar of barEls) if (bar) bar.style.width = "0";
+    // Метаданные вернутся на место при следующей отрисовке витрины
+    renderPreloadedList();
   }
 }
 
@@ -1811,8 +2014,20 @@ $("btn-home").addEventListener("click", () => {
 applyNarrowLayout();
 setLang(lang()); // применяет переводы к статике и <html lang>
 syncLangButtons();
-renderPreloadedList();
+renderPreloadedList(); // сразу пустая галерея, манифест ещё в пути
 showScreen("home");
+
+/** Список встроенных паков не зашит в бандл — качается из R2 при каждом заходе. */
+async function initPreloadedPacks(): Promise<void> {
+  try {
+    preloadedPacks = await loadPreloadedManifest();
+  } catch (err) {
+    console.error(err);
+    showHomeError(t("manifestLoadError"));
+  }
+  renderPreloadedList();
+}
+void initPreloadedPacks();
 
 // Дев-хук для автотестов: загрузка пака по URL (только в dev-сборке)
 if (import.meta.env.DEV) {

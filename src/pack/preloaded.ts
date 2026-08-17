@@ -1,193 +1,88 @@
 /** Встроенные dub-паки, доступные сразу с главного экрана. */
 
+/**
+ * Запись из manifest.json. Всё, кроме первых полей, галерея использует для
+ * витрины (полка, поиск, сортировка, фильтры) — эти данные лежат внутри
+ * zip-архива, но качать ради них 19 паков нельзя, поэтому манифест несёт их
+ * готовыми. Собирает его scripts/dubpack/build_manifest.py.
+ */
 export interface PreloadedPack {
   id: string;
   /** Названия паков — имена собственные, не переводятся. */
   title: string;
-  /** Пути внутри public/. Файлы качаются по порядку и склеиваются:
-   *  GitHub не принимает файлы >100 МБ. */
-  paths: string[];
-  /** Превью пака (маленькая иконка, лежит в public/pack-icons). */
+  /** Ключ zip-файла в R2-бакете, относительно PACKS_BASE. */
+  path: string;
+  /** Ключ иконки пака в R2-бакете, относительно PACKS_BASE. */
   icon: string;
   sizeBytes: number;
-  /** Значки на карточке в галерее, например "18+". */
+  /** Теги галереи; "18+" среди них — пометка, а не фильтр. */
   tags?: string[];
+  /** Сколько реплик предстоит озвучить. */
+  clips?: number;
+  /** Суммарная длина реплик, секунды. */
+  durationSec?: number;
+  /** Персонажи в порядке появления — по ним тоже ищет строка поиска. */
+  characters?: string[];
+  /** Языки переводов субтитров, кроме языка оригинала. */
+  translations?: string[];
+  /** Дата появления в галерее, YYYY-MM-DD — для сортировки «Новые». */
+  addedAt?: string;
+  /** Запусков озвучки за неделю (полка) и за месяц (сортировка). */
+  plays7d?: number;
+  plays30d?: number;
 }
 
 /**
- * В продакшене паки качаются с raw.githubusercontent.com: CDN GitHub Pages
- * отдаёт крупные файлы мучительно медленно (десятки КБ/с), а raw — быстро
- * и с CORS. В dev-режиме файлы берутся с локального dev-сервера.
+ * Паки и их манифест хостятся на Cloudflare R2 (публичный бакет, egress
+ * бесплатный) — раньше качались с raw.githubusercontent.com, но тот
+ * мучительно медленный из РФ, а GitHub ограничивает файл 100 МБ (из-за
+ * этого паки резались на части по 4 МБ, теперь это не нужно).
+ *
+ * Список паков не зашит в бандл: при старте страница качает manifest.json
+ * из того же бакета. Чтобы добавить пак на сайт, ничего пересобирать и
+ * пушить не нужно — залил zip + иконку + обновил manifest.json в R2,
+ * и он тут же появляется в галерее у всех.
  */
-const PACKS_BASE = import.meta.env.PROD
-  ? "https://raw.githubusercontent.com/barinboim/dub-choice/main/public/"
-  : "";
+const PACKS_BASE = "https://pub-6cdcaa2a325441e59991d44af1e68177.r2.dev/";
 
-export const PRELOADED_PACKS: PreloadedPack[] = [
-  {
-    id: "dayalyublyutebya",
-    title: "Да я люблю тебя!",
-    paths: [
-      "packs/da_ya_lyublyu_tebya.zip.aa", "packs/da_ya_lyublyu_tebya.zip.ab",
-      "packs/da_ya_lyublyu_tebya.zip.ac", "packs/da_ya_lyublyu_tebya.zip.ad",
-      "packs/da_ya_lyublyu_tebya.zip.ae",
-    ],
-    icon: "pack-icons/da_ya_lyublyu_tebya.png",
-    sizeBytes: 16_499_090,
-  },
-  {
-    id: "hpowl",
-    title: "Гарри Поттер — Я вам не сова!",
-    paths: ["packs/hpowl.zip"],
-    icon: "pack-icons/hpowl.png",
-    sizeBytes: 12_666_304,
-  },
-  {
-    id: "shrekride",
-    title: "Шрек — Мы уже приехали?",
-    paths: [
-      "packs/shrekride.zip.aa", "packs/shrekride.zip.ab",
-      "packs/shrekride.zip.ac", "packs/shrekride.zip.ad",
-      "packs/shrekride.zip.ae",
-    ],
-    icon: "pack-icons/shrekride.png",
-    sizeBytes: 16_326_903,
-  },
-  {
-    id: "dontlookup",
-    title: "Don't Look Up — The President is Lying (EN+RU)",
-    paths: [
-      "packs/dontlookup.zip.aa", "packs/dontlookup.zip.ab",
-      "packs/dontlookup.zip.ac",
-    ],
-    icon: "pack-icons/dontlookup.png",
-    sizeBytes: 9_284_800,
-  },
-  {
-    id: "landa",
-    title: "Inglorious Basterds — Hans Landa (En+Ru)",
-    paths: [
-      "packs/landa.zip.aa", "packs/landa.zip.ab", "packs/landa.zip.ac",
-      "packs/landa.zip.ad", "packs/landa.zip.ae", "packs/landa.zip.af",
-      "packs/landa.zip.ag", "packs/landa.zip.ah", "packs/landa.zip.ai",
-      "packs/landa.zip.aj",
-    ],
-    icon: "pack-icons/landa.png",
-    sizeBytes: 36_316_776,
-  },
-  {
-    id: "gofman",
-    title: "Игорь Гофман — Репортаж из квартиры на Пейсах",
-    paths: ["packs/gofman.zip"],
-    icon: "pack-icons/gofman.png",
-    sizeBytes: 18_878_881,
-    tags: ["18+"],
-  },
-  {
-    id: "slonik",
-    title: "Зелёный слоник — Сколько истребителей?",
-    paths: ["packs/slonik.zip"],
-    icon: "pack-icons/slonik.png",
-    sizeBytes: 32_784_254,
-    tags: ["18+"],
-  },
-  {
-    id: "theroom",
-    title: "The Room — Oh Hi Mark",
-    paths: ["packs/theroom.zip"],
-    icon: "pack-icons/theroom.png",
-    sizeBytes: 5_342_073,
-  },
-  {
-    id: "forrestgump",
-    title: "Forrest Gump — Run Forrest Run (+Лесной Болван subs)",
-    // По частям: пуш целым файлом рвался, а склейка тут штатная
-    paths: [
-      "packs/forrestgump.zip.aa", "packs/forrestgump.zip.ab",
-      "packs/forrestgump.zip.ac", "packs/forrestgump.zip.ad",
-      "packs/forrestgump.zip.ae", "packs/forrestgump.zip.af",
-      "packs/forrestgump.zip.ag",
-    ],
-    icon: "pack-icons/forrestgump.png",
-    sizeBytes: 27_359_052,
-  },
-  {
-    id: "starwars",
-    title: "Star Wars — You Turned Her Against Me",
-    paths: ["packs/starwars.zip"],
-    icon: "pack-icons/starwars.png",
-    sizeBytes: 10_056_062,
-  },
-  {
-    id: "chosenone",
-    title: "Star Wars — You Were the Chosen One",
-    paths: [
-      "packs/chosenone.zip.aa", "packs/chosenone.zip.ab",
-      "packs/chosenone.zip.ac", "packs/chosenone.zip.ad",
-    ],
-    icon: "pack-icons/chosenone.png",
-    sizeBytes: 13_463_318,
-  },
-  {
-    id: "lotr",
-    title: "LOTR — Bridge of Khazad-dûm",
-    paths: ["packs/lotr.zip"],
-    icon: "pack-icons/lotr.png",
-    sizeBytes: 11_180_551,
-  },
-  {
-    id: "breakingbad",
-    title: "Breaking Bad — I Am the Danger",
-    paths: ["packs/breakingbad.zip"],
-    icon: "pack-icons/breakingbad.png",
-    sizeBytes: 13_420_362,
-  },
-  {
-    id: "shrek",
-    title: "Shrek the Third — Pinocchio Tries to Lie",
-    paths: ["packs/shrek.zip"],
-    icon: "pack-icons/shrek.png",
-    sizeBytes: 17_865_775,
-  },
-  {
-    id: "harrypotter",
-    title: "Harry Potter — The Duel",
-    paths: ["packs/harrypotter.zip"],
-    icon: "pack-icons/harrypotter.png",
-    sizeBytes: 14_795_204,
-  },
-];
-
-export function packUrls(pack: PreloadedPack): string[] {
-  return pack.paths.map((p) => PACKS_BASE + p);
+/** Качает актуальный список паков. ?t= — чтобы не словить закэшированный manifest.json. */
+export async function loadPreloadedManifest(): Promise<PreloadedPack[]> {
+  const res = await fetch(`${PACKS_BASE}manifest.json?t=${Date.now()}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as PreloadedPack[];
 }
 
-/** Скачивает файлы по порядку, склеивает и отдаёт общий прогресс 0..1. */
+export function packUrl(pack: PreloadedPack): string {
+  return PACKS_BASE + pack.path;
+}
+
+export function packIconUrl(pack: PreloadedPack): string {
+  return PACKS_BASE + pack.icon;
+}
+
+/** Качает файл, отдаёт прогресс 0..1. */
 export async function fetchWithProgress(
-  urls: string[],
+  url: string,
   expectedSize: number,
   onProgress: (ratio: number) => void,
   signal?: AbortSignal
 ): Promise<Blob> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.body) {
+    const blob = await res.blob();
+    onProgress(1);
+    return blob;
+  }
   const chunks: BlobPart[] = [];
   let received = 0;
-  for (const url of urls) {
-    const res = await fetch(url, { signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    if (!res.body) {
-      const blob = await res.blob();
-      chunks.push(blob);
-      received += blob.size;
-      continue;
-    }
-    const reader = res.body.getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value as BlobPart);
-      received += (value as Uint8Array).length;
-      if (expectedSize > 0) onProgress(Math.min(received / expectedSize, 1));
-    }
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value as BlobPart);
+    received += (value as Uint8Array).length;
+    if (expectedSize > 0) onProgress(Math.min(received / expectedSize, 1));
   }
   onProgress(1);
   return new Blob(chunks);

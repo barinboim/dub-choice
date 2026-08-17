@@ -38,8 +38,15 @@
       <section id="screen-home" class="screen">
         <p class="tagline" data-i18n="tagline"></p>
 
-        <div class="section-label" data-i18n="galleryTitle"></div>
-        <div id="preloaded-list" class="preloaded-list"></div>
+        <!-- Новинки — прежде всего остального: в сортировке по популярности
+             свежий пак не пробьётся наверх ещё долго -->
+        <section id="shelf-new" class="shelf shelf-first" hidden>
+          <div class="shelf-head">
+            <h2 class="shelf-title" data-i18n="shelfNew"></h2>
+            <span class="shelf-sub" data-i18n="shelfNewSub"></span>
+          </div>
+          <div id="shelf-new-track" class="shelf-track"></div>
+        </section>
 
         <div id="drop-zone" class="drop-zone" tabindex="0">
           <p class="drop-title" data-i18n="dropTitle"></p>
@@ -61,6 +68,41 @@
         <div id="loaded-label" class="section-label" data-i18n="loadedTitle" hidden></div>
         <div id="pack-list" class="pack-list"></div>
 
+        <!-- Полка: что чаще всего озвучивают на этой неделе -->
+        <section id="shelf-popular" class="shelf" hidden>
+          <div class="shelf-head">
+            <h2 class="shelf-title" data-i18n="shelfPopular"></h2>
+            <span class="shelf-sub" data-i18n="shelfPopularSub"></span>
+          </div>
+          <div id="shelf-track" class="shelf-track"></div>
+        </section>
+
+        <div class="section-label" data-i18n="galleryTitle"></div>
+
+        <div class="search-box">
+          <span class="search-icon" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+            </svg>
+          </span>
+          <input id="pack-search" type="search" autocomplete="off" />
+          <button id="search-clear" class="search-clear" type="button">✕</button>
+        </div>
+
+        <div class="gallery-controls">
+          <div class="ctl-row">
+            <span class="ctl-label" data-i18n="sortLabel"></span>
+            <div id="sort-bar" class="seg"></div>
+          </div>
+          <div class="ctl-row">
+            <span class="ctl-label" data-i18n="tagsLabel"></span>
+            <div id="tag-bar" class="tagbar"></div>
+          </div>
+        </div>
+
+        <p id="gallery-count" class="result-line"></p>
+        <div id="preloaded-list" class="preloaded-list"></div>
+
         <footer class="credits">
           <p>
             <span data-i18n="creditsInspired"></span>
@@ -69,6 +111,10 @@
           <p>
             <span data-i18n="creditsCreated"></span>
             <a href="https://t.me/barinboimgpt" target="_blank" rel="noopener">@barinboim</a>
+          </p>
+          <p>
+            <span data-i18n="suggestBox"></span>
+            <a href="https://ask.barinbo.im/dubchoice" target="_blank" rel="noopener">ask.barinbo.im/dubchoice</a>
           </p>
         </footer>
       </section>
