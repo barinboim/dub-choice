@@ -210,9 +210,12 @@ function packMatches(pp: PreloadedPack): boolean {
   );
 }
 
+/** Свежие сначала; внутри одной даты — популярнее сначала, а не порядок публикации. */
+function byNew(a: PreloadedPack, b: PreloadedPack): number {
+  return (b.addedAt ?? "").localeCompare(a.addedAt ?? "") || (b.plays30d ?? 0) - (a.plays30d ?? 0);
+}
+
 function sortPacks(list: PreloadedPack[]): PreloadedPack[] {
-  const byNew = (a: PreloadedPack, b: PreloadedPack) =>
-    (b.addedAt ?? "").localeCompare(a.addedAt ?? "") || (b.plays30d ?? 0) - (a.plays30d ?? 0);
   const byPlays = (a: PreloadedPack, b: PreloadedPack) => (b.plays30d ?? 0) - (a.plays30d ?? 0);
   return list.slice().sort(gallerySort === "new" ? byNew : byPlays);
 }
@@ -247,13 +250,16 @@ function buildCover(pp: PreloadedPack, wide: boolean): HTMLElement {
  * написана на обложке, поэтому там — реплики и запуски; в сетке обложка
  * маленькая и без бейджа, поэтому там — длина и вес.
  */
-function buildMeta(pp: PreloadedPack, wide: boolean): HTMLElement {
+function buildMeta(pp: PreloadedPack, kind: "shelf" | "grid" | "new"): HTMLElement {
+  const wide = kind !== "grid";
   const meta = document.createElement("div");
   meta.className = "pi-meta";
   const parts: { text: string; cls?: string }[] = wide
     ? [{ text: `${pp.clips ?? 0} ${t("clipsCount")}` }]
     : [{ text: fmtDuration(pp.durationSec ?? 0) }, { text: formatSize(pp.sizeBytes) }];
-  if (wide && pp.plays7d) parts.push({ text: `▶ ${pp.plays7d}`, cls: "pi-plays" });
+  // Просмотры — только на «Популярных»: на «Новинках» у свежего пака их
+  // почти нет, а число вида «▶ 0» выглядит как неудача, а не как метрика.
+  if (kind === "shelf" && pp.plays7d) parts.push({ text: `▶ ${pp.plays7d}`, cls: "pi-plays" });
   if (!wide && (pp.tags ?? []).includes("18+")) parts.push({ text: "18+", cls: "pi-adult-inline" });
 
   parts.forEach(({ text, cls }, i) => {
@@ -338,7 +344,7 @@ function buildPackCard(pp: PreloadedPack, kind: "shelf" | "grid" | "new"): HTMLE
   const title = document.createElement("div");
   title.className = "pi-title";
   title.textContent = pp.title;
-  body.append(title, buildMeta(pp, wide));
+  body.append(title, buildMeta(pp, kind));
   if (kind === "new") {
     const tags = buildCardTags(pp);
     if (tags) body.append(tags);
@@ -379,7 +385,7 @@ function renderShelves(): void {
     shelfNewTrack,
     preloadedPacks
       .slice()
-      .sort((a, b) => (b.addedAt ?? "").localeCompare(a.addedAt ?? ""))
+      .sort(byNew)
       .slice(0, SHELF_NEW_SIZE),
     "new"
   );
