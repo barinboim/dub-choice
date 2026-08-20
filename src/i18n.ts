@@ -233,6 +233,83 @@ const dict = {
   verdictMeh: { ru: "Не бросай основную работу!", en: "Don't quit your day job!" },
   verdictPoor: { ru: "Зато с душой", en: "But full of soul" },
   verdictAvant: { ru: "Это был авангард", en: "That was avant-garde" },
+
+  // Кооп
+  coopTitle: { ru: "🎭 Кооп: общая озвучка", en: "🎭 Co-op: shared dubbing" },
+  coopSub: {
+    ru: "Создай комнату — каждый озвучит свою часть ролика",
+    en: "Create a room — everyone voices their own part",
+  },
+  coopYourName: { ru: "Твоё имя", en: "Your name" },
+  coopCodePh: { ru: "Код", en: "Code" },
+  coopJoin: { ru: "Войти", en: "Join" },
+  coopCreate: { ru: "Создать комнату", en: "Create room" },
+  coopCreateNeedPack: {
+    ru: "Сначала загрузи dub-пак — комната создастся с ним.",
+    en: "Load a dub pack first — the room is created with it.",
+  },
+  coopJoinNeedCode: { ru: "Введи код комнаты", en: "Enter the room code" },
+  coopNameNeeded: { ru: "Как тебя зовут?", en: "What's your name?" },
+  coopRoomGone: { ru: "Комната не найдена.", en: "Room not found." },
+  coopLobbyTitle: { ru: "Комната", en: "Room" },
+  coopInvite: { ru: "Ссылка-приглашение", en: "Invite link" },
+  coopCopy: { ru: "Копировать", en: "Copy" },
+  coopCopied: { ru: "Скопировано!", en: "Copied!" },
+  coopRoster: { ru: "Участники", en: "Players" },
+  coopMode: { ru: "Режим озвучки", en: "Dubbing mode" },
+  coopModeRelay: { ru: "Эстафета", en: "Relay" },
+  coopModeRelayHint: {
+    ru: "по очереди: озвучил строку — передал ход",
+    en: "take turns: voice a line, pass the mic",
+  },
+  coopModeFree: { ru: "Свободные строки", en: "Pick a line" },
+  coopModeFreeHint: {
+    ru: "каждый берёт любую незанятую строку",
+    en: "anyone grabs any free line",
+  },
+  coopModeChars: { ru: "По персонажам", en: "By character" },
+  coopModeCharsHint: {
+    ru: "каждый выбирает персонажа и озвучивает его реплики",
+    en: "pick a character and voice all their lines",
+  },
+  coopCharsTitle: { ru: "Выбери персонажей", en: "Pick your characters" },
+  coopNoChars: {
+    ru: "В паке нет персонажей — бери любые строки.",
+    en: "No characters in this pack — grab any line.",
+  },
+  coopStart: { ru: "🎙 Озвучивать", en: "🎙 Voice it" },
+  coopLeave: { ru: "Покинуть комнату", en: "Leave room" },
+  coopWaitPack: {
+    ru: "Хост ещё не загрузил пак — жди…",
+    en: "Host hasn't uploaded the pack yet — wait…",
+  },
+  coopUploadingPack: { ru: "Загружаю пак на сервер…", en: "Uploading the pack…" },
+  coopDownloadingPack: { ru: "Скачиваю пак…", en: "Downloading the pack…" },
+  coopHost: { ru: "хост", en: "host" },
+  coopOffline: { ru: "офлайн", en: "offline" },
+  coopTurnOf: { ru: "🎤 Сейчас говорит: {name}", en: "🎤 Now speaking: {name}" },
+  coopYourTurn: { ru: "🎤 Твой ход! Озвучь строку {n}", en: "🎤 Your turn! Voice line {n}" },
+  coopPassTurn: { ru: "Передать ход →", en: "Pass the mic →" },
+  coopWaitTurn: { ru: "Ожидание хода…", en: "Waiting for your turn…" },
+  coopLocked: { ru: "🔒 Реплика у: {name}", en: "🔒 Line taken by: {name}" },
+  coopRecordedBy: { ru: "✅ Озвучено: {name}", en: "✅ Voiced by: {name}" },
+  coopFreeLine: { ru: "Свободно — твоя реплика!", en: "Free — all yours!" },
+  coopMyLine: { ru: "Твоя реплика", en: "Your line" },
+  coopUploadingTake: { ru: "Отправляю на сервер…", en: "Uploading take…" },
+  coopUploaded: { ru: "Отправлено ✓", en: "Sent ✓" },
+  coopUploadFail: {
+    ru: "Не удалось отправить запись — она осталась локально",
+    en: "Couldn't send the take — it stays local",
+  },
+  coopPremiere: { ru: "🎬 Премьера ({n}/{m})", en: "🎬 Premiere ({n}/{m})" },
+  coopFinalNote: {
+    ru: "Совместный ролик: {n} участников, комната {code}",
+    en: "Co-op video: {n} players, room {code}",
+  },
+  coopTakeRejected: {
+    ru: "Эту реплику уже озвучил другой участник.",
+    en: "Someone else already voiced this line.",
+  },
 } as const;
 
 export type MsgKey = keyof typeof dict;

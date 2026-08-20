@@ -1242,3 +1242,115 @@ select.lang-select {
 @media (max-width: 380px) {
   .dub-controls { grid-template-columns: 1fr; }
 }
+
+/* ---------- Кооп ---------- */
+.coop-panel {
+  margin-top: 26px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.coop-panel .section-label { margin-top: 0; }
+.coop-sub { color: var(--ink-dim); margin: -6px 0 14px; font-size: 0.9rem; }
+.coop-row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.coop-input {
+  flex: 1;
+  min-width: 120px;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 16px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.coop-input::placeholder { color: var(--ink-dim); }
+.coop-input:hover { border-color: var(--line-strong); }
+.coop-input:focus { border-color: var(--ink-soft); background: var(--panel-2); }
+.coop-code-input { flex: 0 0 90px; text-align: center; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 600; }
+
+/* ---------- Лобби ---------- */
+.lobby-head { display: flex; flex-direction: column; gap: 12px; margin: 10px 0 18px; }
+.lobby-title { font-size: 1.5rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 12px; }
+.lobby-code {
+  font-size: 1.9rem;
+  letter-spacing: 0.22em;
+  color: var(--wave-user);
+  background: rgba(127, 224, 210, 0.08);
+  border: 1px solid rgba(127, 224, 210, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 4px 14px;
+}
+.lobby-invite { display: flex; gap: 10px; align-items: center; }
+.lobby-link-input { font-size: 0.85rem; color: var(--ink-dim); }
+.lobby-pack { color: var(--ink-soft); font-size: 0.95rem; margin: 0 0 8px; min-height: 1.3em; }
+.lobby-cols { display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; margin-top: 8px; }
+@media (max-width: 700px) { .lobby-cols { grid-template-columns: 1fr; } }
+.lobby-roster { display: flex; flex-direction: column; gap: 8px; }
+.roster-chip {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 14px;
+  font-size: 0.95rem;
+}
+.roster-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.roster-off { color: var(--ink-dim); font-size: 0.8rem; margin-left: auto; }
+.lobby-modes { display: flex; flex-direction: column; gap: 8px; }
+.lobby-mode {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.lobby-mode:hover { border-color: var(--line-strong); background: var(--panel-2); }
+.lobby-mode-active { border-color: var(--wave-user) !important; background: rgba(127, 224, 210, 0.06); }
+.lobby-mode input { margin-top: 4px; accent-color: var(--wave-user); }
+.lobby-mode input:disabled { opacity: 0.35; }
+.lobby-mode-body { display: flex; flex-direction: column; gap: 3px; }
+.lobby-mode-title { font-weight: 600; }
+.lobby-mode small { color: var(--ink-dim); font-size: 0.82rem; }
+.lobby-chars { display: flex; flex-wrap: wrap; gap: 8px; }
+.char-chip {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.char-chip:hover { border-color: var(--line-strong); }
+.char-chip-mine { border-width: 2px; box-shadow: 0 0 0 1px var(--wave-user); }
+.lobby-note { color: var(--ink-dim); font-size: 0.9rem; }
+.lobby-actions { display: flex; gap: 12px; margin-top: 26px; flex-wrap: wrap; }
+
+/* ---------- Статус-бар дубляжа ---------- */
+.coop-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 0.88rem;
+}
+.coop-bar-text { color: var(--ink-soft); flex: 1; min-width: 160px; }
+.coop-roster { display: flex; gap: 6px; flex-wrap: wrap; }
+.coop-roster-chip {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.coop-roster-me { color: var(--ink); font-weight: 600; }
+
+.coop-final-note { color: var(--ink-dim); font-size: 0.88rem; margin: -6px 0 14px; }
