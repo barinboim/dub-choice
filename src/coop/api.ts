@@ -95,7 +95,10 @@ export function uploadPack(
   });
 }
 
-export async function downloadPack(code: string): Promise<Blob> {
+export async function downloadPack(
+  code: string,
+  onProgress?: (fraction: number) => void
+): Promise<Blob> {
   const res = await fetch(`/api/rooms/${encodeURIComponent(code)}/pack`);
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
@@ -106,7 +109,21 @@ export async function downloadPack(code: string): Promise<Blob> {
     }
     throw new CoopError(msg);
   }
-  return res.blob();
+  const total = Number(res.headers.get("Content-Length") || 0);
+  if (!onProgress || !res.body || !total) return res.blob();
+  const reader = res.body.getReader();
+  const chunks: BlobPart[] = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      chunks.push(new Uint8Array(value));
+      received += value.length;
+      onProgress(received / total);
+    }
+  }
+  return new Blob(chunks, { type: "application/zip" });
 }
 
 export function uploadTake(

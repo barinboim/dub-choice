@@ -259,7 +259,11 @@ async function downloadCoopPack(): Promise<void> {
   coopPackError = "";
   $("lobby-pack").textContent = t("coopDownloadingPack");
   try {
-    const blob = await coopApi.downloadPack(room.code);
+    const blob = await coopApi.downloadPack(room.code, (fraction) => {
+      $("lobby-pack").textContent = `${t("coopDownloadingPack")} ${Math.round(fraction * 100)}%`;
+    });
+    // распаковка идёт в воркере — главный поток не морозится, текст успевает обновиться
+    $("lobby-pack").textContent = t("packUnpacking");
     coopPack = await loadPackFromZip(new File([blob], "pack.zip"));
   } catch (err) {
     console.error("coop pack download:", err);
@@ -336,9 +340,16 @@ function renderLobby(): void {
   $<HTMLInputElement>("lobby-link").value = `${location.origin}${location.pathname}?join=${room.code}`;
 
   const packEl = $("lobby-pack");
+  const roomProgress = (): string => {
+    const done = Object.keys(room.takes).length;
+    return ` · ${t("coopRoomProgress", { n: done, m: room.clipCount })}`;
+  };
   if (coopPackError) packEl.textContent = coopPackError;
-  else if (room.packReady) packEl.textContent = `📦 ${coopPack?.title ?? room.packTitle ?? ""}`;
-  else packEl.textContent = t("coopWaitPack");
+  else if (room.packReady) {
+    packEl.textContent = `📦 ${coopPack?.title ?? room.packTitle ?? ""}${roomProgress()}`;
+  } else packEl.textContent = t("coopWaitPack");
+  // Ретрай скачивания/заливки пака при ошибке
+  $("lobby-pack-retry").hidden = !coopPackError;
 
   const roster = $("lobby-roster");
   roster.replaceChildren(
@@ -392,10 +403,22 @@ function renderLobby(): void {
   const inChars = room.mode === "chars";
   $("lobby-chars-label").hidden = !inChars;
   const charsEmpty = $("lobby-chars-empty");
-  charsEmpty.hidden = !inChars || !coopPack || packCharacters(coopPack).length > 0;
   const charsWrap = $("lobby-chars");
-  charsWrap.hidden = !inChars || !coopPack;
-  if (inChars && coopPack) {
+  if (!inChars) {
+    charsEmpty.hidden = true;
+    charsWrap.hidden = true;
+  } else if (!coopPack) {
+    // Пак ещё качается/распаковывается — не оставляем пустоту, показываем статус
+    charsWrap.hidden = true;
+    charsEmpty.hidden = false;
+    charsEmpty.textContent = coopPackError ? coopPackError : t("coopPackLoading");
+  } else if (packCharacters(coopPack).length === 0) {
+    charsWrap.hidden = true;
+    charsEmpty.hidden = false;
+    charsEmpty.textContent = t("coopNoChars");
+  } else {
+    charsEmpty.hidden = true;
+    charsWrap.hidden = false;
     const mine = room.chars[coop!.myPid] ?? [];
     charsWrap.replaceChildren(
       ...packCharacters(coopPack).map((ch) => {
@@ -422,6 +445,7 @@ function updateCoopBar(): void {
   const bar = $("coop-bar");
   if (!room || !session) {
     bar.hidden = true;
+    renderCoopLines();
     return;
   }
   bar.hidden = false;
@@ -437,6 +461,7 @@ function updateCoopBar(): void {
   const text = $("coop-bar-text");
   if (coopTakeMsg) {
     text.textContent = coopTakeMsg;
+    renderCoopLines();
     return;
   }
   if (room.mode === "relay") {
@@ -447,6 +472,7 @@ function updateCoopBar(): void {
     } else {
       text.textContent = t("coopTurnOf", { name: turn.name });
     }
+    renderCoopLines();
     return;
   }
   const idx = session.clipIndex;
@@ -462,6 +488,46 @@ function updateCoopBar(): void {
       });
     }
   }
+  renderCoopLines();
+}
+
+/**
+ * Навигатор строк на экране дубляжа: чип на каждую реплику. Видно, какие
+ * твои (незаписанные подсвечены), какие записал кто-то другой, в эстафете —
+ * где сейчас ход. Клик — прыжок на строку.
+ */
+function renderCoopLines(): void {
+  const room = coop?.room;
+  const strip = $("coop-lines");
+  const sess = session;
+  if (!room || !sess) {
+    strip.hidden = true;
+    return;
+  }
+  strip.hidden = false;
+  const isRelay = room.mode === "relay";
+  strip.replaceChildren(
+    ...Array.from({ length: sess.total }, (_, i) => {
+      const btn = document.createElement("button");
+      btn.className = "line-chip";
+      const take = room.takes[i];
+      if (take) {
+        btn.classList.add("line-chip-done");
+        btn.title = take.name;
+      } else if (coopCanRecord(i)) {
+        btn.classList.add("line-chip-mine");
+      } else {
+        btn.classList.add("line-chip-locked");
+      }
+      if (i === sess.clipIndex) btn.classList.add("line-chip-current");
+      if (isRelay && room.relay.line === i) btn.classList.add("line-chip-turn");
+      btn.textContent = String(i + 1);
+      // в эстафете листать можно только строку текущего хода
+      if (isRelay && room.relay.line !== i) btn.disabled = true;
+      else btn.addEventListener("click", () => void enterClip(i));
+      return btn;
+    })
+  );
 }
 
 function handleCoopEvent(e: CoopEvent): void {
@@ -544,6 +610,12 @@ $("lobby-copy").addEventListener("click", async () => {
   window.setTimeout(() => {
     $("lobby-copy").textContent = t("coopCopy");
   }, 1500);
+});
+
+$("lobby-pack-retry").addEventListener("click", () => {
+  if (!coop) return;
+  if (coop.room?.hostPid === coop.myPid) void uploadCoopPack();
+  else void downloadCoopPack();
 });
 
 $("lobby-start").addEventListener("click", () => {

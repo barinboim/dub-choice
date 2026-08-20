@@ -310,6 +310,12 @@ const dict = {
     ru: "Эту реплику уже озвучил другой участник.",
     en: "Someone else already voiced this line.",
   },
+  coopPackLoading: {
+    ru: "Загружаю пак — персонажи появятся, когда он скачается…",
+    en: "Loading the pack — characters appear once it's downloaded…",
+  },
+  coopPackRetry: { ru: "Повторить", en: "Retry" },
+  coopRoomProgress: { ru: "{n} из {m} озвучено", en: "{n} of {m} voiced" },
 } as const;
 
 export type MsgKey = keyof typeof dict;

@@ -1354,3 +1354,38 @@ select.lang-select {
 .coop-roster-me { color: var(--ink); font-weight: 600; }
 
 .coop-final-note { color: var(--ink-dim); font-size: 0.88rem; margin: -6px 0 14px; }
+
+/* ---------- Лобби: прогресс пака + навигатор строк ---------- */
+.lobby-pack-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lobby-pack-row .lobby-pack { margin: 0; }
+.coop-lines {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 2px 2px 6px;
+}
+.line-chip {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.line-chip:hover { border-color: var(--line-strong); color: var(--ink); }
+.line-chip:disabled { opacity: 0.45; cursor: default; }
+.line-chip-mine { border-color: var(--wave-user); color: var(--ink); }
+.line-chip-mine:not(.line-chip-current):hover { background: rgba(127, 224, 210, 0.08); }
+.line-chip-done { background: rgba(127, 224, 210, 0.16); border-color: var(--wave-user); color: var(--ink); }
+.line-chip-locked { opacity: 0.55; }
+.line-chip-current { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55); }
+.line-chip-turn { border-color: #fff; color: #fff; animation: chip-pulse 1.6s ease-in-out infinite; }
+@keyframes chip-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.35); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.12); }
+}
