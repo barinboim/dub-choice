@@ -156,6 +156,19 @@ function coopNextNavigable(from: number): number | null {
   return pick(from + 1, true) ?? pick(from + 1, false);
 }
 
+/** Первая строка для входа в дубляж: своя незаписанная, иначе любая своя. */
+function coopFirstNavigable(): number | null {
+  const room = coop?.room;
+  if (!room || !session) return null;
+  for (let i = 0; i < session.total; i++) {
+    if (coopCanRecord(i) && !room.takes[i]) return i;
+  }
+  for (let i = 0; i < session.total; i++) {
+    if (coopCanRecord(i)) return i;
+  }
+  return null;
+}
+
 /** Освобождает клейм реплики, если заявил её, но не записал. */
 function leaveCoopClip(): void {
   const room = coop?.room;
@@ -1315,9 +1328,13 @@ async function beginDubSession(
   // Экран показываем до загрузки клипа, чтобы canvas получил размеры
   showScreen("dub");
   trackEvent(`dub-start/${currentPackSlug}`);
-  // В эстафете сразу встаём на строку текущего хода (свою или чужую)
-  const relayLine = coop?.room?.mode === "relay" ? coop.room.relay.line : null;
-  await enterClip(relayLine ?? session.firstActiveIndex);
+  // В эстафете встаём на строку текущего хода, в свободных/по персонажам —
+  // на первую свою (незаписанную); иначе солим вход на чужую строку с замком
+  const room = coop?.room;
+  let startIndex: number | null = null;
+  if (room?.mode === "relay") startIndex = room.relay.line;
+  else if (room) startIndex = coopFirstNavigable();
+  await enterClip(startIndex ?? session.firstActiveIndex);
 }
 
 $("btn-start").addEventListener("click", () => {
@@ -1527,6 +1544,10 @@ function updateDubButtons(): void {
     if (room.mode === "relay") {
       btnNext.textContent = canRec ? t("coopPassTurn") : t("coopWaitTurn");
       btnNext.disabled = !canRec || !hasTake || busy;
+    } else {
+      // Чужие строки можно пропускать без записи — иначе на занятой реплике
+      // (не записать, не пройти) игрок застревает навсегда
+      btnNext.disabled = busy;
     }
     btnToFinal.hidden = busy || (session.recordings.size === 0 && !roomComplete);
     btnToFinal.textContent = t("coopPremiere", {
