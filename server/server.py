@@ -66,6 +66,7 @@ class Room:
         self.pack_meta: dict | None = None     # {title, clips: [{characters}]}
         self.updated = time.time()
         self.channels: set = set()             # живые WebSocket-соединения
+        self.ws_pid: dict = {}                 # id(ws) → pid (для точечных сообщений)
         self.lock = asyncio.Lock()
         self.add_participant(host_pid, host_name)
 
@@ -564,6 +565,47 @@ async def set_chars(request: web.Request):
     return json_response({"ok": True})
 
 
+@routes.post("/api/rooms/{code}/kick")
+async def kick_player(request: web.Request):
+    room = await get_room(request)
+    if not room:
+        return json_response({"error": "Комната не найдена."}, 404)
+    body = await request.json()
+    host = body.get("pid")
+    target = body.get("target")
+    if host != room.host_pid:
+        return json_response({"error": "Кикать может только хост."}, 403)
+    if target == host:
+        return json_response({"error": "Нельзя кикнуть себя."}, 400)
+    async with room.lock:
+        part = room.by_pid(target)
+        if not part:
+            return json_response({"error": "Игрок уже не в комнате."}, 404)
+        kicked_name = part["name"]
+        room.remove_participant(target)
+        room.updated = time.time()
+        clip_count = len(room.pack_meta.get("clips", [])) if room.pack_meta else 0
+        state = room.public(clip_count)
+    # кикнутому: персональное событие и закрытие соединения (клиент не переподключается)
+    for ws in list(room.channels):
+        if room.ws_pid.get(id(ws)) == target:
+            try:
+                await ws.send_str(json.dumps({"type": "kicked", "by": host}))
+            except Exception:
+                pass
+            try:
+                await ws.close()
+            except Exception:
+                pass
+    await broadcast(room, {"type": "roster", "participants": state["participants"]})
+    if room.mode == "relay" and room.relay.get("turn"):
+        await broadcast(room, {"type": "turn", "pid": room.relay["turn"], "line": room.relay["line"]})
+    if not room.participants:
+        ROOMS.pop(room.code, None)
+    await dump_rooms()
+    return json_response({"ok": True, "kicked": kicked_name})
+
+
 @routes.post("/api/rooms/{code}/pass")
 async def pass_turn(request: web.Request):
     room = await get_room(request)
@@ -598,6 +640,7 @@ async def ws_handler(request: web.Request):
         return ws
 
     room.channels.add(ws)
+    room.ws_pid[id(ws)] = pid
     clip_count = len(room.pack_meta.get("clips", [])) if room.pack_meta else 0
     await ws.send_str(json.dumps({"type": "state", "room": room.public(clip_count)}))
 
@@ -621,6 +664,7 @@ async def ws_handler(request: web.Request):
                 break
     finally:
         room.channels.discard(ws)
+        room.ws_pid.pop(id(ws), None)
         async with room.lock:
             part = room.by_pid(pid)
             if part:

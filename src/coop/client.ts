@@ -21,6 +21,7 @@ export class CoopClient {
 
   private ws: WebSocket | null = null;
   private closed = false;
+  private kicked = false;
   private retryDelay = 1000;
 
   constructor(readonly code: string, pid: string) {
@@ -57,7 +58,7 @@ export class CoopClient {
     };
     ws.onclose = () => {
       this.onStatus?.(false);
-      if (this.closed) return;
+      if (this.closed || this.kicked) return;
       setTimeout(() => this.open(), this.retryDelay);
       this.retryDelay = Math.min(this.retryDelay * 2, 10000);
     };
@@ -65,6 +66,7 @@ export class CoopClient {
   }
 
   private handle(msg: CoopEvent): void {
+    if (msg.type === "kicked") this.kicked = true;
     if (msg.type === "state") {
       this.room = normalizeRoom(msg.room);
     } else if (this.room) {

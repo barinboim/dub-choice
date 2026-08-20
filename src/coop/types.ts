@@ -44,7 +44,8 @@ export type CoopEvent =
   | { type: "claim"; index: number; pid: string | null }
   | { type: "take"; index: number; pid: string; name: string }
   | { type: "turn"; pid: string | null; line: number | null }
-  | { type: "pack"; title: string | null };
+  | { type: "pack"; title: string | null }
+  | { type: "kicked"; by: string };
 
 export class CoopError extends Error {}
 

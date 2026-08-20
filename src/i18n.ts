@@ -316,6 +316,12 @@ const dict = {
   },
   coopPackRetry: { ru: "Повторить", en: "Retry" },
   coopRoomProgress: { ru: "{n} из {m} озвучено", en: "{n} of {m} voiced" },
+  coopKick: { ru: "Выгнать из комнаты", en: "Kick from room" },
+  coopKickConfirm: { ru: "Выгнать {name} из комнаты?", en: "Kick {name} from the room?" },
+  coopKickedMsg: {
+    ru: "Тебя выгнали из комнаты.",
+    en: "You were kicked from the room.",
+  },
 } as const;
 
 export type MsgKey = keyof typeof dict;

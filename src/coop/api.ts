@@ -77,6 +77,10 @@ export function passTurn(code: string, pid: string): Promise<{ ok: boolean }> {
   return request(`/api/rooms/${encodeURIComponent(code)}/pass`, json("POST", { pid }));
 }
 
+export function kickPlayer(code: string, pid: string, target: string): Promise<{ ok: boolean }> {
+  return request(`/api/rooms/${encodeURIComponent(code)}/kick`, json("POST", { pid, target }));
+}
+
 export function uploadPack(
   code: string,
   pid: string,

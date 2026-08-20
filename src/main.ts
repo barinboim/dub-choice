@@ -327,6 +327,18 @@ function leaveCoopRoom(): void {
   $("btn-retry").hidden = false;
 }
 
+/** Хост кикнул: сервер уже убрал нас из комнаты и закрыл WS — просто чистимся. */
+function coopKicked(): void {
+  if (!coop) return;
+  coop.close(); // без реконнекта: нас больше нет в комнате
+  coop = null;
+  coopPack = null;
+  coopTakeMsg = "";
+  abandonSession();
+  showCoopError(t("coopKickedMsg"));
+  showScreen("home");
+}
+
 const MODE_DEFS = [
   { id: "relay" as CoopMode, titleKey: "coopModeRelay", hintKey: "coopModeRelayHint" },
   { id: "free" as CoopMode, titleKey: "coopModeFree", hintKey: "coopModeFreeHint" },
@@ -352,6 +364,7 @@ function renderLobby(): void {
   $("lobby-pack-retry").hidden = !coopPackError;
 
   const roster = $("lobby-roster");
+  const isHost = room.hostPid === coop!.myPid;
   roster.replaceChildren(
     ...room.participants.map((p) => {
       const chip = document.createElement("div");
@@ -369,11 +382,22 @@ function renderLobby(): void {
         off.textContent = t("coopOffline");
         chip.append(off);
       }
+      if (isHost && p.pid !== room.hostPid) {
+        const kick = document.createElement("button");
+        kick.className = "roster-kick";
+        kick.textContent = "✕";
+        kick.title = t("coopKick");
+        kick.setAttribute("aria-label", t("coopKick"));
+        kick.addEventListener("click", () => {
+          if (!confirm(t("coopKickConfirm", { name: p.name }))) return;
+          void coopApi.kickPlayer(room.code, coop!.myPid, p.pid).catch(showCoopError);
+        });
+        chip.append(kick);
+      }
       return chip;
     })
   );
 
-  const isHost = room.hostPid === coop!.myPid;
   const modes = $("lobby-modes");
   modes.replaceChildren(
     ...MODE_DEFS.map((m) => {
@@ -568,6 +592,9 @@ function handleCoopEvent(e: CoopEvent): void {
     case "pack":
       if (e.title !== null && !coopPack && !screens.lobby.hidden) void downloadCoopPack();
       else renderLobby();
+      break;
+    case "kicked":
+      coopKicked();
       break;
   }
 }
