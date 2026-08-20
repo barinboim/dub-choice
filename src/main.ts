@@ -1,6 +1,6 @@
 import "./style.css";
 import { trackEvent } from "./analytics";
-import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/loader";
+import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles, packToZip } from "./pack/loader";
 import { DubPack, PackError, packCharacters, clipIsActive } from "./pack/types";
 import {
   loadPreloadedManifest,
@@ -10,7 +10,8 @@ import {
   formatSize,
   type PreloadedPack,
 } from "./pack/preloaded";
-import { audioContext, blobDuration } from "./audio/context";
+import { audioContext, blobDuration, decodeAudio } from "./audio/context";
+import { audioBufferToWav } from "./audio/wav";
 import {
   MicRecorder,
   recordingToBuffer,
@@ -31,12 +32,16 @@ import {
 import { scoreTake, totalPercent, verdictKey } from "./game/score";
 import { createVideoPlayer, DubVideoPlayer } from "./video/player";
 import { t, tagLabel, lang, langName, setLang, Lang } from "./i18n";
+import { CoopClient } from "./coop/client";
+import * as coopApi from "./coop/api";
+import { CoopError, CoopEvent, CoopMode } from "./coop/types";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 // ---------- Элементы ----------
 const screens = {
   home: $("screen-home"),
+  lobby: $("screen-lobby"),
   pack: $("screen-pack"),
   dub: $("screen-dub"),
   final: $("screen-final"),
@@ -57,6 +62,592 @@ let session: DubSession | null = null;
 let videoPlayer: DubVideoPlayer | null = null;
 let composer: Composer | null = null;
 const recorder = new MicRecorder();
+
+// ================= Кооп: комната с друзьями =================
+const COOP_NAME_KEY = "dubchoice.coop.name";
+let coop: CoopClient | null = null;
+/** Пак комнаты: у хоста — выбранный, у гостя — скачанный с сервера. */
+let coopPack: DubPack | null = null;
+/** Временное сообщение в кооп-баре («Отправлено», «Не удалось…»). */
+let coopTakeMsg = "";
+let coopTakeMsgTimer = 0;
+/** Ошибка загрузки/скачивания пака — показывается в лобби, пока не сменилась. */
+let coopPackError = "";
+
+const coopNameInput = $<HTMLInputElement>("coop-name");
+const coopCodeInput = $<HTMLInputElement>("coop-code");
+coopNameInput.placeholder = t("coopYourName");
+coopNameInput.value = localStorage.getItem(COOP_NAME_KEY) ?? "";
+coopNameInput.addEventListener("change", () =>
+  localStorage.setItem(COOP_NAME_KEY, coopNameInput.value.trim())
+);
+
+function showCoopError(message: string): void {
+  const el = $("coop-error");
+  el.textContent = message;
+  el.hidden = false;
+}
+
+function hideCoopError(): void {
+  $("coop-error").hidden = true;
+}
+
+/** Имя из поля ввода (или сохранённое), с запросом, если пусто. Пустое имя — отказ. */
+function coopCurrentName(): string {
+  let name = coopNameInput.value.trim() || localStorage.getItem(COOP_NAME_KEY) || "";
+  if (!name) {
+    const asked = prompt(t("coopNameNeeded"));
+    if (!asked) return "";
+    name = asked.trim();
+    coopNameInput.value = name;
+  }
+  localStorage.setItem(COOP_NAME_KEY, name);
+  return name;
+}
+
+/** Кому принадлежит реплика в режиме по персонажам (первый выбравший персонажа). */
+function coopCharOwner(index: number): string | null {
+  const room = coop?.room;
+  if (!room || !coopPack) return null;
+  const clip = coopPack.clips[index];
+  if (!clip || clip.characters.length === 0) return null;
+  for (const p of room.participants) {
+    const picked = room.chars[p.pid] ?? [];
+    if (clip.characters.some((c) => picked.includes(c))) return p.pid;
+  }
+  return null;
+}
+
+/** Можно ли записывать реплику index в текущем режиме комнаты. */
+function coopCanRecord(index: number): boolean {
+  const room = coop?.room;
+  if (!room) return true;
+  const me = coop!.myPid;
+  switch (room.mode) {
+    case "relay":
+      return room.relay.turn === me && room.relay.line === index;
+    case "free": {
+      const owner = room.claims[index] ?? room.takes[index]?.pid;
+      return !owner || owner === me;
+    }
+    case "chars": {
+      const owner = coopCharOwner(index);
+      if (owner !== null && owner !== me) return false;
+      const claim = room.claims[index] ?? room.takes[index]?.pid;
+      return !claim || claim === me;
+    }
+  }
+}
+
+/** Следующая доступная реплика: сначала незаписанные, потом любые свои. */
+function coopNextNavigable(from: number): number | null {
+  const room = coop?.room;
+  if (!room || !session) return null;
+  const total = session.total;
+  const pick = (start: number, skip: boolean): number | null => {
+    for (let i = start; i < total; i++) {
+      if (coopCanRecord(i) && (!skip || !room.takes[i])) return i;
+    }
+    for (let i = 0; i < start; i++) {
+      if (coopCanRecord(i) && (!skip || !room.takes[i])) return i;
+    }
+    return null;
+  };
+  return pick(from + 1, true) ?? pick(from + 1, false);
+}
+
+/** Первая строка для входа в дубляж: своя незаписанная, иначе любая своя. */
+function coopFirstNavigable(): number | null {
+  const room = coop?.room;
+  if (!room || !session) return null;
+  for (let i = 0; i < session.total; i++) {
+    if (coopCanRecord(i) && !room.takes[i]) return i;
+  }
+  for (let i = 0; i < session.total; i++) {
+    if (coopCanRecord(i)) return i;
+  }
+  return null;
+}
+
+/** Освобождает клейм реплики, если заявил её, но не записал. */
+function leaveCoopClip(): void {
+  const room = coop?.room;
+  if (!room || !session) return;
+  const idx = session.clipIndex;
+  if (room.claims[idx] === coop!.myPid && !room.takes[idx]) {
+    void coopApi.releaseClip(room.code, coop!.myPid, idx).catch(() => {});
+  }
+}
+
+function flashCoopTakeMsg(msg: string): void {
+  coopTakeMsg = msg;
+  window.clearTimeout(coopTakeMsgTimer);
+  coopTakeMsgTimer = window.setTimeout(() => {
+    coopTakeMsg = "";
+    updateCoopBar();
+  }, 2500);
+  updateCoopBar();
+}
+
+/** Отправляет запись реплики в комнату. */
+async function uploadCoopTake(index: number, rec: Recording): Promise<void> {
+  const room = coop?.room;
+  if (!room) return;
+  try {
+    const wav = audioBufferToWav(recordingToBuffer(rec));
+    await coopApi.uploadTake(room.code, coop!.myPid, index, wav, rec.leadSec);
+    flashCoopTakeMsg(t("coopUploaded"));
+  } catch (err) {
+    if (err instanceof CoopError && /уже озвучил/.test(err.message)) {
+      showCoopError(t("coopTakeRejected"));
+    } else {
+      flashCoopTakeMsg(t("coopUploadFail"));
+    }
+  }
+}
+
+/** Стягивает все записи комнаты и подмешивает их в сессию (для премьеры). */
+async function coopSyncRemoteTakes(): Promise<void> {
+  const room = coop?.room;
+  if (!room || !session) return;
+  try {
+    const meta = await coopApi.takesMeta(room.code);
+    await Promise.all(
+      Object.entries(meta).map(async ([idxStr, m]) => {
+        const idx = Number(idxStr);
+        const local = session!.recordings.get(idx);
+        if (local && local.samples.length > 0) return; // свой дубль свежее
+        const res = await fetch(coopApi.takeWavUrl(room.code, idx));
+        if (!res.ok) return;
+        const buf = await decodeAudio(await res.blob());
+        const ch = buf.getChannelData(0);
+        session!.recordings.set(idx, {
+          samples: new Float32Array(ch),
+          sampleRate: buf.sampleRate,
+          durationSec: buf.duration,
+          leadSec: m.leadSec,
+        });
+      })
+    );
+  } catch {
+    /* премьера покажет то, что уже есть */
+  }
+}
+
+async function uploadCoopPack(): Promise<void> {
+  const room = coop?.room;
+  if (!room || !coopPack) return;
+  coopPackError = "";
+  $("lobby-pack").textContent = t("coopUploadingPack");
+  try {
+    const zip = await packToZip(coopPack);
+    const meta = {
+      title: coopPack.title,
+      clips: coopPack.clips.map((c) => ({ characters: c.characters })),
+    };
+    await coopApi.uploadPack(room.code, coop!.myPid, zip, meta);
+  } catch (err) {
+    console.error("coop pack upload:", err);
+    coopPackError = `${t("coopUploadFail")}: ${(err as Error).message}`;
+  }
+  renderLobby();
+}
+
+async function downloadCoopPack(): Promise<void> {
+  const room = coop?.room;
+  if (!room) return;
+  coopPackError = "";
+  $("lobby-pack").textContent = t("coopDownloadingPack");
+  try {
+    const blob = await coopApi.downloadPack(room.code, (fraction) => {
+      $("lobby-pack").textContent = `${t("coopDownloadingPack")} ${Math.round(fraction * 100)}%`;
+    });
+    // распаковка идёт в воркере — главный поток не морозится, текст успевает обновиться
+    $("lobby-pack").textContent = t("packUnpacking");
+    coopPack = await loadPackFromZip(new File([blob], "pack.zip"));
+  } catch (err) {
+    console.error("coop pack download:", err);
+    coopPackError = `${t("coopUploadFail")}: ${(err as Error).message}`;
+  }
+  renderLobby();
+}
+
+async function createCoop(pack: DubPack): Promise<void> {
+  const name = coopCurrentName();
+  if (!name) return;
+  hideCoopError();
+  try {
+    const { code, pid, room } = await coopApi.createRoom(name);
+    coop = new CoopClient(code, pid);
+    coop.room = room; // состояние известно сразу — не ждём первый WS-state
+    coop.onEvent = handleCoopEvent;
+    coop.onStatus = () => updateCoopBar();
+    coop.connect();
+    coopPack = pack;
+    coopTakeMsg = "";
+    renderLobby();
+    showScreen("lobby");
+    void uploadCoopPack();
+  } catch (err) {
+    showCoopError((err as Error).message);
+    coop = null;
+  }
+}
+
+async function joinCoop(code: string): Promise<void> {
+  const name = coopCurrentName();
+  if (!name) return;
+  hideCoopError();
+  try {
+    const { pid, room } = await coopApi.joinRoom(code, name);
+    coop = new CoopClient(code, pid);
+    coop.room = room;
+    coop.onEvent = handleCoopEvent;
+    coop.onStatus = () => updateCoopBar();
+    coop.connect();
+    coopPack = null;
+    coopTakeMsg = "";
+    renderLobby();
+    showScreen("lobby");
+    if (room.packReady) void downloadCoopPack();
+  } catch (err) {
+    showCoopError((err as Error).message);
+    coop = null;
+  }
+}
+
+/** Полный выход из комнаты (лобби, логотип, «другой пак»). */
+function leaveCoopRoom(): void {
+  if (!coop) return;
+  void coopApi.leaveRoom(coop.code, coop.myPid).catch(() => {});
+  coop.close();
+  coop = null;
+  coopPack = null;
+  coopTakeMsg = "";
+  $("btn-retry").hidden = false;
+}
+
+/** Хост кикнул: сервер уже убрал нас из комнаты и закрыл WS — просто чистимся. */
+function coopKicked(): void {
+  if (!coop) return;
+  coop.close(); // без реконнекта: нас больше нет в комнате
+  coop = null;
+  coopPack = null;
+  coopTakeMsg = "";
+  abandonSession();
+  showCoopError(t("coopKickedMsg"));
+  showScreen("home");
+}
+
+const MODE_DEFS = [
+  { id: "relay" as CoopMode, titleKey: "coopModeRelay", hintKey: "coopModeRelayHint" },
+  { id: "free" as CoopMode, titleKey: "coopModeFree", hintKey: "coopModeFreeHint" },
+  { id: "chars" as CoopMode, titleKey: "coopModeChars", hintKey: "coopModeCharsHint" },
+] as const;
+
+function renderLobby(): void {
+  const room = coop?.room;
+  if (!room) return;
+  $("lobby-code").textContent = room.code;
+  $<HTMLInputElement>("lobby-link").value = `${location.origin}${location.pathname}?join=${room.code}`;
+
+  const packEl = $("lobby-pack");
+  const roomProgress = (): string => {
+    const done = Object.keys(room.takes).length;
+    return ` · ${t("coopRoomProgress", { n: done, m: room.clipCount })}`;
+  };
+  if (coopPackError) packEl.textContent = coopPackError;
+  else if (room.packReady) {
+    packEl.textContent = `📦 ${coopPack?.title ?? room.packTitle ?? ""}${roomProgress()}`;
+  } else packEl.textContent = t("coopWaitPack");
+  // Ретрай скачивания/заливки пака при ошибке
+  $("lobby-pack-retry").hidden = !coopPackError;
+
+  const roster = $("lobby-roster");
+  const isHost = room.hostPid === coop!.myPid;
+  roster.replaceChildren(
+    ...room.participants.map((p) => {
+      const chip = document.createElement("div");
+      chip.className = "roster-chip";
+      const dot = document.createElement("span");
+      dot.className = "roster-dot";
+      dot.style.background = p.color;
+      const name = document.createElement("span");
+      name.className = "roster-name";
+      name.textContent = p.name + (p.pid === room.hostPid ? ` (${t("coopHost")})` : "");
+      chip.append(dot, name);
+      if (!p.connected) {
+        const off = document.createElement("span");
+        off.className = "roster-off";
+        off.textContent = t("coopOffline");
+        chip.append(off);
+      }
+      if (isHost && p.pid !== room.hostPid) {
+        const kick = document.createElement("button");
+        kick.className = "roster-kick";
+        kick.textContent = "✕";
+        kick.title = t("coopKick");
+        kick.setAttribute("aria-label", t("coopKick"));
+        kick.addEventListener("click", () => {
+          if (!confirm(t("coopKickConfirm", { name: p.name }))) return;
+          void coopApi.kickPlayer(room.code, coop!.myPid, p.pid).catch(showCoopError);
+        });
+        chip.append(kick);
+      }
+      return chip;
+    })
+  );
+
+  const modes = $("lobby-modes");
+  modes.replaceChildren(
+    ...MODE_DEFS.map((m) => {
+      const label = document.createElement("label");
+      label.className = "lobby-mode" + (room.mode === m.id ? " lobby-mode-active" : "");
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "coop-mode";
+      input.checked = room.mode === m.id;
+      input.disabled = !isHost;
+      input.addEventListener("change", () => {
+        if (input.checked) void coopApi.setMode(room.code, coop!.myPid, m.id).catch(showCoopError);
+      });
+      const body = document.createElement("span");
+      body.className = "lobby-mode-body";
+      const title = document.createElement("span");
+      title.className = "lobby-mode-title";
+      title.textContent = t(m.titleKey);
+      const hint = document.createElement("small");
+      hint.textContent = t(m.hintKey);
+      body.append(title, hint);
+      label.append(input, body);
+      return label;
+    })
+  );
+
+  const inChars = room.mode === "chars";
+  $("lobby-chars-label").hidden = !inChars;
+  const charsEmpty = $("lobby-chars-empty");
+  const charsWrap = $("lobby-chars");
+  if (!inChars) {
+    charsEmpty.hidden = true;
+    charsWrap.hidden = true;
+  } else if (!coopPack) {
+    // Пак ещё качается/распаковывается — не оставляем пустоту, показываем статус
+    charsWrap.hidden = true;
+    charsEmpty.hidden = false;
+    charsEmpty.textContent = coopPackError ? coopPackError : t("coopPackLoading");
+  } else if (packCharacters(coopPack).length === 0) {
+    charsWrap.hidden = true;
+    charsEmpty.hidden = false;
+    charsEmpty.textContent = t("coopNoChars");
+  } else {
+    charsEmpty.hidden = true;
+    charsWrap.hidden = false;
+    const mine = room.chars[coop!.myPid] ?? [];
+    charsWrap.replaceChildren(
+      ...packCharacters(coopPack).map((ch) => {
+        const btn = document.createElement("button");
+        btn.className = "char-chip" + (mine.includes(ch) ? " char-chip-mine" : "");
+        const owner = room.participants.find((p) => (room.chars[p.pid] ?? []).includes(ch));
+        if (owner) btn.style.borderColor = owner.color;
+        btn.textContent = ch;
+        btn.addEventListener("click", () => {
+          const next = mine.includes(ch) ? mine.filter((x) => x !== ch) : [...mine, ch];
+          void coopApi.setChars(room.code, coop!.myPid, next).catch(showCoopError);
+        });
+        return btn;
+      })
+    );
+  }
+
+  $<HTMLButtonElement>("lobby-start").disabled = !room.packReady || !coopPack;
+}
+
+/** Полоса статуса на экране дубляжа: чей ход, кто озвучил текущую реплику. */
+function updateCoopBar(): void {
+  const room = coop?.room;
+  const bar = $("coop-bar");
+  if (!room || !session) {
+    bar.hidden = true;
+    renderCoopLines();
+    return;
+  }
+  bar.hidden = false;
+  $("coop-roster").replaceChildren(
+    ...room.participants.map((p) => {
+      const chip = document.createElement("span");
+      chip.className = "coop-roster-chip" + (p.pid === coop!.myPid ? " coop-roster-me" : "");
+      chip.style.borderColor = p.color;
+      chip.textContent = p.name;
+      return chip;
+    })
+  );
+  const text = $("coop-bar-text");
+  if (coopTakeMsg) {
+    text.textContent = coopTakeMsg;
+    renderCoopLines();
+    return;
+  }
+  if (room.mode === "relay") {
+    const turn = room.participants.find((p) => p.pid === room.relay.turn);
+    if (!turn) text.textContent = "";
+    else if (turn.pid === coop!.myPid) {
+      text.textContent = t("coopYourTurn", { n: (room.relay.line ?? 0) + 1 });
+    } else {
+      text.textContent = t("coopTurnOf", { name: turn.name });
+    }
+    renderCoopLines();
+    return;
+  }
+  const idx = session.clipIndex;
+  const take = room.takes[idx];
+  if (take) text.textContent = t("coopRecordedBy", { name: take.name });
+  else {
+    const owner = coopCharOwner(idx) ?? room.claims[idx];
+    if (!owner) text.textContent = t("coopFreeLine");
+    else if (owner === coop!.myPid) text.textContent = t("coopMyLine");
+    else {
+      text.textContent = t("coopLocked", {
+        name: room.participants.find((p) => p.pid === owner)?.name ?? "?",
+      });
+    }
+  }
+  renderCoopLines();
+}
+
+/**
+ * Навигатор строк на экране дубляжа: чип на каждую реплику. Видно, какие
+ * твои (незаписанные подсвечены), какие записал кто-то другой, в эстафете —
+ * где сейчас ход. Клик — прыжок на строку.
+ */
+function renderCoopLines(): void {
+  const room = coop?.room;
+  const strip = $("coop-lines");
+  const sess = session;
+  if (!room || !sess) {
+    strip.hidden = true;
+    return;
+  }
+  strip.hidden = false;
+  const isRelay = room.mode === "relay";
+  strip.replaceChildren(
+    ...Array.from({ length: sess.total }, (_, i) => {
+      const btn = document.createElement("button");
+      btn.className = "line-chip";
+      const take = room.takes[i];
+      if (take) {
+        btn.classList.add("line-chip-done");
+        btn.title = take.name;
+      } else if (coopCanRecord(i)) {
+        btn.classList.add("line-chip-mine");
+      } else {
+        btn.classList.add("line-chip-locked");
+      }
+      if (i === sess.clipIndex) btn.classList.add("line-chip-current");
+      if (isRelay && room.relay.line === i) btn.classList.add("line-chip-turn");
+      btn.textContent = String(i + 1);
+      // в эстафете листать можно только строку текущего хода
+      if (isRelay && room.relay.line !== i) btn.disabled = true;
+      else btn.addEventListener("click", () => void enterClip(i));
+      return btn;
+    })
+  );
+}
+
+function handleCoopEvent(e: CoopEvent): void {
+  if (!coop) return;
+  switch (e.type) {
+    case "roster":
+    case "state":
+      renderLobby();
+      updateCoopBar();
+      break;
+    case "mode":
+      renderLobby();
+      if (!screens.dub.hidden) updateDubButtons();
+      break;
+    case "chars":
+      renderLobby();
+      if (!screens.dub.hidden) updateDubButtons();
+      break;
+    case "claim":
+      updateCoopBar();
+      if (!screens.dub.hidden) updateDubButtons();
+      break;
+    case "take":
+      updateCoopBar();
+      if (!screens.dub.hidden) updateDubButtons();
+      break;
+    case "turn":
+      renderLobby();
+      updateCoopBar();
+      if (!screens.dub.hidden && session) {
+        if (e.pid === coop.myPid && e.line !== null && e.line !== session.clipIndex) {
+          void enterClip(e.line); // пришёл твой ход — сразу к строке
+        } else {
+          updateDubButtons();
+        }
+      }
+      break;
+    case "pack":
+      if (e.title !== null && !coopPack && !screens.lobby.hidden) void downloadCoopPack();
+      else renderLobby();
+      break;
+    case "kicked":
+      coopKicked();
+      break;
+  }
+}
+
+$("coop-join").addEventListener("click", () => {
+  const code = coopCodeInput.value.trim().toUpperCase();
+  if (!code) {
+    showCoopError(t("coopJoinNeedCode"));
+    return;
+  }
+  void joinCoop(code);
+});
+
+$("coop-create").addEventListener("click", () => {
+  if (packs.length === 0) {
+    showCoopError(t("coopCreateNeedPack"));
+    return;
+  }
+  void createCoop(selectedPack ?? packs[packs.length - 1]);
+});
+
+$("lobby-back").addEventListener("click", () => {
+  leaveCoopRoom();
+  showScreen("home");
+});
+
+$("lobby-leave").addEventListener("click", () => {
+  leaveCoopRoom();
+  showScreen("home");
+});
+
+$("lobby-copy").addEventListener("click", async () => {
+  const link = $<HTMLInputElement>("lobby-link").value;
+  try {
+    await navigator.clipboard.writeText(link);
+  } catch {
+    /* не HTTPS — скопируй вручную */
+  }
+  $("lobby-copy").textContent = t("coopCopied");
+  window.setTimeout(() => {
+    $("lobby-copy").textContent = t("coopCopy");
+  }, 1500);
+});
+
+$("lobby-pack-retry").addEventListener("click", () => {
+  if (!coop) return;
+  if (coop.room?.hostPid === coop.myPid) void uploadCoopPack();
+  else void downloadCoopPack();
+});
+
+$("lobby-start").addEventListener("click", () => {
+  if (coopPack) void beginDubSession(coopPack, $("lobby-pack"));
+});
 
 const waveColors: WaveformColors = {
   // Оболочка по пикам приглушённая, сердцевина по RMS — светлая.
@@ -105,6 +696,7 @@ $("logo").addEventListener("click", () => {
   if (!screens.home.hidden) return; // уже на главной
   if (session && !confirm(t("quitConfirm"))) return;
   abandonSession();
+  leaveCoopRoom();
   showScreen("home");
 });
 
@@ -796,42 +1388,60 @@ function selectPack(pack: DubPack, sourceId = "custom"): void {
 
 $("btn-pack-back").addEventListener("click", () => showScreen("home"));
 
-$("btn-start").addEventListener("click", async () => {
-  if (!selectedPack) return;
+/** Запускает сессию дубляжа: микрофон, плеер, экран. status — куда писать прогресс. */
+async function beginDubSession(
+  pack: DubPack,
+  status: HTMLElement = micStatus,
+  filter: ReadonlySet<string> = disabledCharacters
+): Promise<void> {
   // По HTTP браузеры вообще не показывают промпт микрофона — объясняем сразу
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-    micStatus.textContent = t("micInsecure");
-    micStatus.classList.add("error");
+    status.textContent = t("micInsecure");
+    status.classList.add("error");
     return;
   }
   audioContext(); // создаём по жесту пользователя
-  micStatus.textContent = t("micRequest");
-  micStatus.classList.remove("error");
+  status.textContent = t("micRequest");
+  status.classList.remove("error");
   try {
     await recorder.init(micDeviceId);
   } catch {
-    micStatus.textContent = t("micError");
-    micStatus.classList.add("error");
+    status.textContent = t("micError");
+    status.classList.add("error");
     return;
   }
-  micStatus.textContent = t("videoPreparing");
+  status.textContent = t("videoPreparing");
   try {
     videoPlayer?.dispose();
-    videoPlayer = await createVideoPlayer(selectedPack.video, selectedPack.videoKind);
+    videoPlayer = await createVideoPlayer(pack.video, pack.videoKind);
   } catch (err) {
     console.error(err);
-    micStatus.textContent = t("videoError");
-    micStatus.classList.add("error");
+    status.textContent = t("videoError");
+    status.classList.add("error");
     return;
   }
-  session = new DubSession(selectedPack, lang(), new Set(disabledCharacters));
+  session = new DubSession(pack, lang(), new Set(filter));
   scoreLang = null;
   composer?.dispose();
   composer = new Composer(videoPlayer);
   // Экран показываем до загрузки клипа, чтобы canvas получил размеры
   showScreen("dub");
   trackEvent(`dub-start/${currentPackSlug}`);
-  await enterClip(session.firstActiveIndex);
+  // В эстафете встаём на строку текущего хода, в свободных/по персонажам —
+  // на первую свою (незаписанную); иначе солим вход на чужую строку с замком
+  const room = coop?.room;
+  let startIndex: number | null = null;
+  if (room?.mode === "relay") startIndex = room.relay.line;
+  else if (room) startIndex = coopFirstNavigable();
+  await enterClip(startIndex ?? session.firstActiveIndex);
+}
+
+$("btn-start").addEventListener("click", () => {
+  if (selectedPack) void beginDubSession(selectedPack);
+});
+
+$("btn-coop").addEventListener("click", () => {
+  if (selectedPack) void createCoop(selectedPack);
 });
 
 // ================= ЭКРАН 3: дубляж =================
@@ -961,8 +1571,15 @@ async function enterClip(index: number): Promise<void> {
   waveform.clearUserRecording();
   waveform.setPlayhead(null);
 
+  // Кооп: занять свободную реплику, пока озвучиваешь её
+  const room = coop?.room;
+  if (room && room.mode !== "relay" && coopCanRecord(index) && !room.takes[index]) {
+    void coopApi.claimClip(room.code, coop!.myPid, index).catch(() => {});
+  }
+
   await refreshOriginalWave();
   updateDubButtons();
+  updateCoopBar();
 
   // Реплику сразу показываем целиком: видео + звук + бегущий по волне курсор
   void playOriginalVideo();
@@ -1012,10 +1629,45 @@ function updateDubButtons(): void {
     : savingTail
       ? t("hintSaving")
       : recorder.isRecording
-      ? t("hintRecording")
-      : hasTake
-        ? t("hintHasTake")
-        : t("hintIdle");
+        ? t("hintRecording")
+        : hasTake
+          ? t("hintHasTake")
+          : t("hintIdle");
+
+  // Кооп: режим комнаты управляет записью и кнопками
+  const room = coop?.room;
+  if (room && session) {
+    const canRec = coopCanRecord(session.clipIndex);
+    const roomComplete = session.activeIndices.every((i) => room.takes[i] !== undefined);
+    btnRecord.disabled = btnRecord.disabled || !canRec;
+    if (room.mode === "relay") {
+      btnNext.textContent = canRec ? t("coopPassTurn") : t("coopWaitTurn");
+      btnNext.disabled = !canRec || !hasTake || busy;
+    } else {
+      // Чужие строки можно пропускать без записи — иначе на занятой реплике
+      // (не записать, не пройти) игрок застревает навсегда
+      btnNext.disabled = busy;
+    }
+    btnToFinal.hidden = busy || (session.recordings.size === 0 && !roomComplete);
+    btnToFinal.textContent = t("coopPremiere", {
+      n: session.recordings.size,
+      m: session.activeTotal,
+    });
+    if (!canRec) {
+      const owner =
+        room.mode === "relay"
+          ? room.relay.turn
+          : (coopCharOwner(session.clipIndex) ?? room.claims[session.clipIndex]);
+      const who = room.participants.find((p) => p.pid === owner)?.name;
+      if (room.mode === "relay" && who) {
+        $("waveform-hint").textContent = t("coopTurnOf", { name: who });
+      } else if (who) {
+        $("waveform-hint").textContent = t("coopLocked", { name: who });
+      } else {
+        $("waveform-hint").textContent = t("coopWaitTurn");
+      }
+    }
+  }
 }
 
 function stopPreview(): void {
@@ -1539,6 +2191,11 @@ function stopMonitor(): void {
 
 btnRecord.addEventListener("click", async () => {
   if (!session || !waveform) return;
+  // Кооп: чужие реплики не записываются
+  if (coop?.room && !coopCanRecord(session.clipIndex)) {
+    updateDubButtons();
+    return;
+  }
   if (countdownActive) {
     cancelCountdown();
     return;
@@ -1627,6 +2284,8 @@ async function finishRecording(auto = false): Promise<void> {
     matchLoudness(rec, original, window);
     session.recordings.set(session.clipIndex, rec);
     waveform?.setUserRecording(window, takeTimelineSamples(original, window.length));
+    // Кооп: запись уходит в комнату, чтобы другие собрали общий ролик
+    if (coop?.room) void uploadCoopTake(session.clipIndex, rec);
   }
   waveform?.setPlayhead(null);
   updateDubButtons();
@@ -1636,6 +2295,18 @@ btnNext.addEventListener("click", () => {
   if (!session) return;
   stopPreview();
   hideWatchVideo();
+  const room = coop?.room;
+  if (room?.mode === "relay") {
+    void coopApi.passTurn(room.code, coop!.myPid).catch(showCoopError);
+    return;
+  }
+  if (room) {
+    leaveCoopClip();
+    const next = coopNextNavigable(session.clipIndex);
+    if (next !== null) void enterClip(next);
+    else void enterFinal();
+    return;
+  }
   if (session.isLastClip) {
     void enterFinal();
   } else {
@@ -1648,6 +2319,14 @@ btnNext.addEventListener("click", () => {
 // (активной) реплики шаг назад выводит из сессии — там это единственный выход «вглубь».
 btnBack.addEventListener("click", () => {
   if (!session || recorder.isRecording) return;
+  if (coop?.room) {
+    // В коопе «назад» ведёт в лобби: записи уже на сервере, терять нечего
+    leaveCoopClip();
+    abandonSession();
+    showScreen("lobby");
+    renderLobby();
+    return;
+  }
   const prev = session.prevActiveIndex(session.clipIndex);
   if (prev === null) {
     if (session.recordings.size > 0 && !confirm(t("quitConfirm"))) return;
@@ -1770,6 +2449,8 @@ function renderFinalAudioPills(): void {
 
 async function enterFinal(): Promise<void> {
   if (!session || !composer || !videoPlayer) return;
+  // Кооп: подмешиваем записи остальных участников
+  if (coop?.room) await coopSyncRemoteTakes();
   $("dub-progress-fill").style.width = "100%";
   syncMixModeUi();
   renderFinalAudioPills();
@@ -1791,6 +2472,17 @@ async function enterFinal(): Promise<void> {
     }
   };
   showScreen("final");
+  const room = coop?.room;
+  $("coop-final-note").hidden = !room;
+  if (room) {
+    $("coop-final-note").textContent = t("coopFinalNote", {
+      n: room.participants.length,
+      code: room.code,
+    });
+    $("btn-retry").hidden = true; // «переозвучить всё» несовместимо с общим роликом
+  } else {
+    $("btn-retry").hidden = false;
+  }
   startFinalPlayback();
   trackEvent(`dub-complete/${currentPackSlug}`);
   // Только после showScreen: волнам нужна реальная ширина канвасов
@@ -2134,6 +2826,7 @@ $("btn-retry").addEventListener("click", () => {
 
 $("btn-home").addEventListener("click", () => {
   abandonSession();
+  leaveCoopRoom();
   showScreen("home");
 });
 
@@ -2143,6 +2836,13 @@ setLang(lang()); // применяет переводы к статике и <ht
 syncLangButtons();
 renderPreloadedList(); // сразу пустая галерея, манифест ещё в пути
 showScreen("home");
+
+// Приглашение по ссылке ?join=КОД
+const joinParam = new URLSearchParams(location.search).get("join");
+if (joinParam) {
+  coopCodeInput.value = joinParam.toUpperCase();
+  void joinCoop(joinParam.toUpperCase());
+}
 
 /** Список встроенных паков не зашит в бандл — качается из R2 при каждом заходе. */
 async function initPreloadedPacks(): Promise<void> {

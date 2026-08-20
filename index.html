@@ -65,6 +65,29 @@
 
         <p id="home-error" class="home-error" hidden></p>
 
+        <!-- Кооп: комната с друзьями -->
+        <section class="coop-panel">
+          <div class="coop-head">
+            <h2 class="section-label" data-i18n="coopTitle"></h2>
+            <p class="coop-sub" data-i18n="coopSub"></p>
+          </div>
+          <div class="coop-row">
+            <input id="coop-name" class="coop-input" maxlength="24" autocomplete="off" />
+            <input
+              id="coop-code"
+              class="coop-input coop-code-input"
+              maxlength="5"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button id="coop-join" class="btn btn-pill" data-i18n="coopJoin"></button>
+          </div>
+          <div class="coop-row">
+            <button id="coop-create" class="btn btn-primary" data-i18n="coopCreate"></button>
+          </div>
+          <p id="coop-error" class="home-error" hidden></p>
+        </section>
+
         <div id="loaded-label" class="section-label" data-i18n="loadedTitle" hidden></div>
         <div id="pack-list" class="pack-list"></div>
 
@@ -123,6 +146,42 @@
         </footer>
       </section>
 
+      <!-- ЭКРАН 1.5: лобби кооп-комнаты -->
+      <section id="screen-lobby" class="screen" hidden>
+        <button id="lobby-back" class="btn btn-text" data-i18n="back"></button>
+        <div class="lobby-head">
+          <h2 class="lobby-title">
+            <span data-i18n="coopLobbyTitle"></span>
+            <span id="lobby-code" class="lobby-code"></span>
+          </h2>
+          <div class="lobby-invite">
+            <input id="lobby-link" class="coop-input lobby-link-input" readonly />
+            <button id="lobby-copy" class="btn btn-pill" data-i18n="coopCopy"></button>
+          </div>
+        </div>
+        <div class="lobby-pack-row">
+          <p id="lobby-pack" class="lobby-pack"></p>
+          <button id="lobby-pack-retry" class="btn btn-pill" data-i18n="coopPackRetry" hidden></button>
+        </div>
+        <div class="lobby-cols">
+          <section class="lobby-col">
+            <h3 class="section-label" data-i18n="coopRoster"></h3>
+            <div id="lobby-roster" class="lobby-roster"></div>
+          </section>
+          <section class="lobby-col">
+            <h3 class="section-label" data-i18n="coopMode"></h3>
+            <div id="lobby-modes" class="lobby-modes"></div>
+            <h3 class="section-label lobby-chars-label" id="lobby-chars-label" data-i18n="coopCharsTitle" hidden></h3>
+            <div id="lobby-chars" class="lobby-chars" hidden></div>
+            <p id="lobby-chars-empty" class="lobby-note" data-i18n="coopNoChars" hidden></p>
+          </section>
+        </div>
+        <div class="lobby-actions">
+          <button id="lobby-start" class="btn btn-primary btn-big" data-i18n="coopStart" disabled></button>
+          <button id="lobby-leave" class="btn btn-pill" data-i18n="coopLeave"></button>
+        </div>
+      </section>
+
       <!-- ЭКРАН 2: карточка пака -->
       <section id="screen-pack" class="screen" hidden>
         <button id="btn-pack-back" class="btn btn-text" data-i18n="back"></button>
@@ -167,12 +226,18 @@
         <p class="mix-modes-note" data-i18n="mixChangeLater"></p>
         <div class="pack-start-row">
           <button id="btn-start" class="btn btn-primary btn-big" data-i18n="start"></button>
+          <button id="btn-coop" class="btn btn-pill" data-i18n="coopCreate"></button>
           <p id="mic-status" class="mic-status"></p>
         </div>
       </section>
 
       <!-- ЭКРАН 3: дубляж -->
       <section id="screen-dub" class="screen screen-dub" hidden>
+        <div id="coop-bar" class="coop-bar" hidden>
+          <span id="coop-bar-text" class="coop-bar-text"></span>
+          <span id="coop-roster" class="coop-roster"></span>
+        </div>
+        <div id="coop-lines" class="coop-lines" hidden></div>
         <div class="dub-top">
           <button id="btn-dub-back" class="btn btn-pill dub-back" data-i18n="back"></button>
           <div class="dub-progress">
@@ -243,6 +308,7 @@
       <section id="screen-final" class="screen screen-final" hidden>
         <button id="btn-final-back" class="btn btn-text" data-i18n="backToClips"></button>
         <h2 class="final-title" data-i18n="premiere"></h2>
+        <p id="coop-final-note" class="coop-final-note" hidden></p>
         <div class="lang-rows">
           <div id="final-audio-langs" class="lang-row" hidden>
             <span class="lang-row-label" data-i18n="audioTrackLabel"></span>
