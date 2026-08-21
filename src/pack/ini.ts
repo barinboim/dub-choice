@@ -155,3 +155,31 @@ export function iniNumberArray(section: IniSection | undefined, key: string): nu
   if (Array.isArray(v)) return v.filter((x): x is number => typeof x === "number");
   return [];
 }
+
+/**
+ * Обратная операция к parseIni: секции → текст в том же синтаксисе Godot
+ * ConfigFile. Нужна веб-студии, чтобы писать _pack_info.ini и NN_name.ini
+ * для собранного пака — игра сама ничего не сериализует, только читает.
+ */
+export function serializeIni(file: IniFile): string {
+  const lines: string[] = [];
+  // "" — секция без заголовка (студия её не использует, но парсер её
+  // допускает) — пишем последней, чтобы поименованные секции шли первыми.
+  const names = Object.keys(file).filter((n) => n !== "").sort();
+  if (file[""] && Object.keys(file[""]).length > 0) names.push("");
+  for (const name of names) {
+    if (name !== "") lines.push(`[${name}]`);
+    for (const [key, value] of Object.entries(file[name])) {
+      lines.push(`${key}=${serializeValue(value)}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+function serializeValue(value: IniValue): string {
+  if (typeof value === "string") return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  return `[${value.map(serializeValue).join(", ")}]`;
+}

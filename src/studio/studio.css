@@ -1,0 +1,517 @@
+/**
+ * Стили студии — только studio.html, в бандл игры не попадают
+ * (docs/STUDIO_WEB_PLAN.md, «Принятые решения», п. 6). Переменные (--bg,
+ * --accent, --record, --wave-user…) приходят из ../style.css.
+ */
+
+#studio-app {
+  max-width: 720px;
+  margin: 0 auto;
+  /* Верхний отступ — как у #app в игре: шапка одна и та же, и заголовок
+     под ней должен стоять на той же высоте. */
+  padding: 16px 18px 60px;
+}
+
+.studio-screen { display: flex; flex-direction: column; gap: 16px; }
+
+/* Тот же кегль и начертание, что у .tagline на главной. */
+.studio-h1 {
+  font-size: clamp(2rem, 6.5vw, 3.4rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  /* Тот же отступ от шапки, что у .tagline на главной. */
+  margin: 34px 0 0;
+}
+.studio-h2 { font-size: 1.25rem; margin: 0; }
+
+.studio-warn-badge {
+  display: inline-block;
+  align-self: flex-start;
+  background: var(--record);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.studio-warn-body { color: var(--ink-soft); line-height: 1.5; }
+
+.studio-youtube {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.studio-youtube-label { font-size: 0.85rem; color: var(--ink-soft); }
+.studio-youtube-input {
+  font-family: var(--font);
+  font-size: 0.95rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  padding: 10px 12px;
+}
+.studio-youtube-info { display: flex; gap: 10px; align-items: center; }
+.studio-youtube-thumb { width: 96px; height: 54px; object-fit: cover; border-radius: 8px; }
+.studio-youtube-title { font-weight: 600; margin: 0; }
+.studio-youtube-author { color: var(--ink-dim); font-size: 0.85rem; margin: 2px 0 0; }
+.studio-youtube-explain, .studio-youtube-ads { color: var(--ink-dim); font-size: 0.85rem; line-height: 1.4; }
+.studio-drop-back-hint { color: var(--wave-user); font-size: 0.88rem; font-weight: 600; }
+
+.studio-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 560px) { .studio-modes { grid-template-columns: 1fr; } }
+.studio-mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.12s;
+}
+.studio-mode-card:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.studio-mode-title { font-weight: 700; font-size: 1.05rem; }
+.studio-mode-hint { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.4; }
+
+.studio-stage-label { color: var(--ink-soft); font-size: 0.95rem; }
+.studio-progress-bar {
+  height: 4px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.studio-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--wave-user);
+  transition: width 0.25s ease;
+}
+
+.studio-video {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  background: #000;
+  border: 1px solid var(--line);
+}
+
+.studio-pack-meta { display: flex; gap: 12px; flex-wrap: wrap; }
+.studio-pack-meta label { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 160px; font-size: 0.82rem; color: var(--ink-soft); }
+.studio-pack-meta input, 
+.studio-characters { display: flex; flex-direction: column; gap: 8px; }
+.studio-characters-label { font-size: 0.82rem; color: var(--ink-soft); }
+.studio-character-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.studio-character-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 6px 5px 12px;
+  font-size: 0.85rem;
+}
+.studio-character-chip input[type="text"] {
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  width: 100px;
+}
+.studio-character-swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.studio-character-remove {
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.9rem;
+}
+.btn-sm { padding: 7px 14px; font-size: 0.85rem; }
+
+@media (max-width: 640px) {
+  }
+
+.studio-done-actions { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+
+/* ---------- Таймлайн с дорожками персонажей ---------- */
+/* Видео в редакторе не должно съедать высоту: смысл широкого экрана в том,
+   чтобы кадр и таймлайн были видны одновременно, без прокрутки. */
+#studio-app.studio-wide .studio-video {
+  max-height: min(52vh, 560px);
+  object-fit: contain;
+}
+
+/* Редактор занимает всю ширину окна: реплики правятся мышью, и чем длиннее
+   видно таймлайн, тем меньше возни с прокруткой. Остальные экраны студии
+   остаются в прежней узкой колонке. */
+#studio-app.studio-wide {
+  max-width: none;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+/* В редакторе своя шапка не нужна — она съедает высоту у видео и таймлайна. */
+#studio-app.studio-wide .app-header { display: none; }
+
+.studio-tl { display: flex; flex-direction: column; gap: 8px; }
+.studio-tl-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.studio-tl-play {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.studio-tl-play:hover { border-color: var(--line-strong); }
+.studio-tl-time { font-variant-numeric: tabular-nums; color: var(--ink-soft); font-size: 0.85rem; min-width: 96px; }
+.studio-tl-zoomwrap { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 0.8rem; color: var(--ink-dim); }
+.studio-tl-zoom { width: 120px; accent-color: var(--wave-user); }
+.studio-tl-hint { color: var(--ink-dim); font-size: 0.8rem; line-height: 1.4; margin: 0; }
+
+.studio-tl-body {
+  /* Ширина колонки заголовков — одной переменной: по ней же позиционируется
+     канвас волны, прибитый к видимой области (см. .studio-tl-wave). */
+  --head-w: 132px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--head-w) 1fr;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  overflow: hidden;
+}
+
+.studio-tl-headcol { border-right: 1px solid var(--line); background: var(--panel); }
+.studio-tl-heads { display: flex; flex-direction: column; }
+.studio-tl-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: none;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.studio-tl-head:hover { color: var(--ink); }
+/* Активная дорожка — в неё лягут новые реплики. */
+.studio-tl-head.active { color: var(--ink); background: var(--panel-2); box-shadow: inset 2px 0 0 var(--wave-user); }
+.studio-tl-head-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-tl-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+/* Пилюли обязаны лежать НАД волной: канвас идёт в разметке после этого
+   контейнера и абсолютно позиционирован, поэтому по умолчанию рисовался
+   поверх пилюль и просвечивал сквозь их текст. */
+.studio-tl-scroll { overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; }
+.studio-tl-inner { position: relative; min-width: 100%; }
+
+.studio-tl-ruler { position: relative; box-sizing: border-box; cursor: pointer; }
+.studio-tl-tick {
+  position: absolute;
+  top: 4px;
+  font-size: 0.66rem;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+  padding-left: 4px;
+  border-left: 1px solid var(--line);
+  height: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Полоса под волну: сама волна — канвас поверх, прибитый к видимой области. */
+.studio-tl-wave {
+  position: absolute;
+  left: var(--head-w);
+  right: 0;
+  top: 22px;
+  width: calc(100% - var(--head-w));
+  pointer-events: none;
+  opacity: 0.7;
+  z-index: 0;
+}
+
+.studio-tl-tracks { position: relative; }
+.studio-tl-lane {
+  position: relative;
+  border-top: 1px solid var(--line);
+  box-sizing: border-box;
+}
+.studio-tl-lane.active { background: color-mix(in srgb, var(--wave-user) 6%, transparent); }
+
+.studio-tl-pill {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  border-radius: 7px;
+  /* Фон полупрозрачный, чтобы под пилюлей была видна волна — по ней и
+     правят границы. Прозрачность именно у фона, а не у всей пилюли:
+     opacity на элементе гасила бы и текст. */
+  background: color-mix(in srgb, var(--pill-color) 26%, transparent);
+  border: 1px solid var(--pill-color);
+  color: #fff;
+  font-size: 0.74rem;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  cursor: grab;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+.studio-tl-pill:hover { background: color-mix(in srgb, var(--pill-color) 40%, transparent); }
+.studio-tl-pill.selected { box-shadow: 0 0 0 2px var(--pill-color); }
+.studio-tl-pill.dragging { cursor: grabbing; }
+/* Белый без прозрачности: текст реплики читается поверх любой волны. */
+.studio-tl-pill-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  color: #fff;
+  opacity: 1;
+  mix-blend-mode: normal;
+  /* Тень отделяет белый текст от волны под ним, не делая его серым. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+/* Края пилюли — ручки: курсор подсказывает, что тут тянут границу. */
+.studio-tl-pill::before,
+.studio-tl-pill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+}
+.studio-tl-pill::before { left: 0; }
+.studio-tl-pill::after { right: 0; }
+
+.studio-tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--record);
+  pointer-events: none;
+  z-index: 3;
+}
+
+
+/* Расшифровка — отдельный необязательный шаг в редакторе, не часть пайплайна. */
+
+/* ---------- Редактор в две колонки ---------- */
+/* Слева видео и таймлайн, справа пак, персонажи и выбранная реплика.
+   Списка всех реплик нет намеренно: правится всегда одна, выбранная. */
+.studio-editor-head { display: flex; align-items: center; gap: 14px; }
+.studio-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+/* Десктоп — приоритет, но на узком экране редактор не должен разваливаться:
+   колонки складываются в одну, панель перестаёт липнуть, видео не растёт. */
+@media (max-width: 900px) {
+  #studio-app.studio-wide { padding-left: 14px; padding-right: 14px; }
+  #studio-app.studio-wide .studio-video { max-height: 34vh; }
+  .studio-editor { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .studio-editor-side { position: static; }
+  .studio-tl-body { --head-w: 96px; }
+  .studio-tl-toolbar { gap: 8px; }
+  .studio-tl-zoomwrap { margin-left: 0; }
+}
+.studio-editor-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.studio-editor-side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; }
+
+.studio-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+.studio-panel-title {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.studio-panel-hint { margin: 0; font-size: 0.82rem; color: var(--ink-dim); }
+
+.studio-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.76rem; color: var(--ink-soft); }
+.studio-field input, .studio-field textarea, .studio-field select {
+  font-family: var(--font);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+.studio-field textarea { resize: vertical; min-height: 60px; }
+
+.studio-clip-editor { display: flex; flex-direction: column; gap: 10px; }
+.studio-clip-times { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.studio-clip-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* Направляющая прилипания: показывает, к чему именно прилип край реплики. */
+.studio-tl-snap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--wave-user);
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Логотип в игре — кнопка без подчёркивания; в студии это ссылка, и браузер
+   подчёркивал её сам. Разнобой между экранами убираем. */
+#studio-home-link { text-decoration: none; }
+
+/* Дорожка, на которую ляжет реплика при отпускании. */
+.studio-tl-lane.drop-target { box-shadow: inset 0 0 0 1px var(--wave-user); }
+
+.studio-tl-head-input {
+  font-family: var(--font);
+  font-size: 0.82rem;
+  background: var(--panel-2);
+  border: 1px solid var(--wave-user);
+  border-radius: 6px;
+  color: var(--ink);
+  padding: 3px 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Правка текста прямо на пилюле: поле шире узкой пилюли, иначе в него не
+   влезает и пары слов. */
+.studio-tl-pill-input {
+  font-family: var(--font);
+  font-size: 0.74rem;
+  background: var(--panel);
+  border: 1px solid var(--wave-user);
+  border-radius: 5px;
+  color: #fff;
+  padding: 2px 6px;
+  min-width: 180px;
+  width: 100%;
+  position: relative;
+  z-index: 5;
+}
+
+/* Правка текста на пилюле: поле и кнопка прослушивания рядом. */
+.studio-tl-pill-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  z-index: 5;
+}
+.studio-tl-pill-play {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--wave-user);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.studio-tl-pill-play:hover { background: var(--panel-2); }
+
+/* Превью на экране выбора режима: не во всю высоту, кнопки должны остаться
+   в кадре вместе с ним. */
+.studio-mode-preview { max-height: 40vh; object-fit: contain; }
+
+/* Приём готового пака — отдельная зона внизу экрана: её ZIP не должен
+   попадать в общий обработчик видео. */
+.studio-edit-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+}
+.studio-edit-zone.dragover { border-color: var(--wave-user); }
+
+/* Пилюля «Для слабых/мощных устройств» — отдельной строкой, чтобы условие
+   не терялось в общем абзаце описания режима. */
+.studio-mode-pill {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wave-user) 22%, transparent);
+  color: var(--wave-user);
+}
+.studio-mode-pill-strong {
+  background: color-mix(in srgb, var(--record) 22%, transparent);
+  color: var(--record);
+}
+
+.studio-stage-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.studio-stage-percent { font-variant-numeric: tabular-nums; color: var(--ink-soft); font-size: 0.9rem; }
+
+/* Основной загрузчик кнопкой, запасные — ссылками рядом. */
+.studio-downloaders { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Бейдж «Эксперимент» и ссылка обратной связи — в одной строке: на бете
+   канал должен быть виден сразу, а не в подвале другой страницы. */
+.studio-warn-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* Это кнопка (открывает ту же форму, что «Сообщить о проблеме» в подвале),
+   но в строке с бейджем должна читаться ссылкой. */
+.studio-feedback-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  color: var(--wave-user);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.studio-feedback-link:hover { text-decoration: underline; }
+
+/* Строка под текстом ошибки: скопировать текст и написать о проблеме. */
+.studio-feedback { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.studio-feedback .btn { padding: 4px 8px; }
+
+.studio-report-hint { display: block; margin-top: 4px; color: var(--ink-dim); font-size: 0.74rem; line-height: 1.4; }
+
+/* Подвал студии — только ради кнопки обратной связи: на бете она нужна
+   на каждом экране, а не на одной главной. */
+.studio-footer { margin-top: 28px; display: flex; justify-content: center; }

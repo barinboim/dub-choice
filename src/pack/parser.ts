@@ -54,6 +54,8 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
   let iconName: string | null = null;
   let lang = "";
   let audioLangs: string[] = [];
+  let scoringOff = false;
+  let forcedMix: "voiceover" | null = null;
   const langNames: Record<string, { ru: string; en: string }> = {};
   const packInfoBlob = find("_pack_info.ini");
   if (packInfoBlob) {
@@ -75,6 +77,8 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     }
     const icon = iniString(data, "icon");
     if (icon) iconName = icon;
+    scoringOff = iniString(data, "scoring").toLowerCase() === "off";
+    forcedMix = iniString(data, "mix").toLowerCase() === "voiceover" ? "voiceover" : null;
   } else {
     warnings.push("Не найден _pack_info.ini — у пака не будет названия и авторов.");
   }
@@ -165,6 +169,8 @@ export async function parsePack(files: PackFileMap): Promise<DubPack> {
     // Язык оригинала переводом не считается, даже если пак его продублировал
     translations: [...translations].filter((code) => code !== lang).sort(),
     warnings,
+    scoringOff,
+    forcedMix,
   };
 }
 

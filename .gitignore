@@ -9,3 +9,8 @@ CLAUDE.md
 docs/ANALYTICS.md
 # сборка манифеста и выгрузка статистики
 build
+.DS_Store
+# спайк студии: 1,6 ГБ моделей и черновиков, в репозиторий не едет
+spike/
+# веса моделей студии — в R2, не в git (см. vite.config.ts)
+studio-models/

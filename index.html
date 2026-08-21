@@ -38,8 +38,8 @@
       <section id="screen-home" class="screen">
         <p class="tagline" data-i18n="tagline"></p>
 
-        <!-- Новинки — прежде всего остального: в сортировке по популярности
-             свежий пак не пробьётся наверх ещё долго -->
+        <!-- Новинки временно убраны с главной (решение владельца): полка
+             скрыта флагом SHOW_NEW_SHELF в main.ts, разметка оставлена. -->
         <section id="shelf-new" class="shelf shelf-first" hidden>
           <div class="shelf-head">
             <h2 class="shelf-title" data-i18n="shelfNew"></h2>
@@ -50,17 +50,19 @@
 
         <div id="drop-zone" class="drop-zone" tabindex="0">
           <p class="drop-title" data-i18n="dropTitle"></p>
-          <p class="drop-hint" data-i18n="dropHint"></p>
-          <p class="drop-hint drop-source">
-            <span data-i18n="dropMorePacks"></span>
+          <p class="drop-hint">
+            <span data-i18n="dropHintZip"></span>
             <a href="https://gamebanana.com/mods/cats/44064" target="_blank" rel="noopener">GameBanana</a>
+            <span data-i18n="dropHintOrVideo"></span>
           </p>
           <div class="drop-buttons">
             <button id="btn-pick-zip" class="btn btn-pill" data-i18n="pickZip"></button>
-            <button id="btn-pick-folder" class="btn btn-pill" data-i18n="pickFolder"></button>
+            <span class="btn-studio-wrap">
+              <a id="btn-studio" class="btn btn-pill btn-studio" href="studio.html" data-i18n="ownVideo"></a>
+              <sup class="beta-badge">BETA</sup>
+            </span>
           </div>
           <input id="input-zip" type="file" accept=".zip" hidden />
-          <input id="input-folder" type="file" webkitdirectory hidden />
         </div>
 
         <p id="home-error" class="home-error" hidden></p>
@@ -120,6 +122,9 @@
             <span data-i18n="creditsSupport"></span>
             <a href="https://www.donationalerts.com/r/barinboim" target="_blank" rel="noopener">DonationAlerts</a>
           </p>
+          <p>
+            <button id="feedback-open" class="btn btn-text btn-sm" type="button" data-feedback data-i18n="feedbackOpen"></button>
+          </p>
         </footer>
       </section>
 
@@ -167,6 +172,9 @@
         <p class="mix-modes-note" data-i18n="mixChangeLater"></p>
         <div class="pack-start-row">
           <button id="btn-start" class="btn btn-primary btn-big" data-i18n="start"></button>
+          <!-- Только для пака из редактора: встроенные скачивать неоткуда -->
+          <button id="btn-pack-download" class="btn btn-pill" data-i18n="downloadPack" hidden></button>
+          <button id="btn-pack-edit" class="btn btn-pill btn-studio" data-i18n="editPack" hidden></button>
           <p id="mic-status" class="mic-status"></p>
         </div>
       </section>
@@ -253,7 +261,7 @@
           <div id="final-video-slot" class="final-video-slot"></div>
           <canvas id="export-canvas" hidden></canvas>
         </div>
-        <div class="mix-modes">
+        <div class="mix-modes" id="final-mix-modes">
           <label class="mix-mode">
             <input type="radio" name="mix-mode" value="dub" checked />
             <span class="mix-mode-text">
@@ -283,6 +291,8 @@
           <button id="btn-final-play" class="btn btn-primary btn-big" data-i18n="watch"></button>
           <button id="btn-export" class="btn btn-pill"></button>
           <button id="btn-export-audio" class="btn btn-pill" data-i18n="downloadAudio"></button>
+          <button id="btn-final-download-pack" class="btn btn-pill" data-i18n="downloadPack" hidden></button>
+          <button id="btn-final-edit-pack" class="btn btn-pill btn-studio" data-i18n="editPack" hidden></button>
           <button id="btn-retry" class="btn btn-pill" data-i18n="redub"></button>
           <button id="btn-home" class="btn btn-pill" data-i18n="otherPack"></button>
         </div>

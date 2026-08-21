@@ -130,6 +130,35 @@ a:hover { color: #fff; }
 
 .btn-big { font-size: 1.1rem; padding: 15px 32px; }
 
+/* Кнопка «Своё видео» — красная, ведёт в веб-студию (studio.html) */
+.btn-studio {
+  background: var(--record);
+  color: #fff;
+  border-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  /* Ссылка-кнопка рядом с настоящей <button>: у них разная базовая высота
+     строки, и «Своё видео» выходила заметно крупнее «Выбрать ZIP». */
+  line-height: normal;
+  font-size: inherit;
+  box-sizing: border-box;
+}
+.drop-buttons .btn-studio, .drop-buttons .btn-pill { min-height: 42px; }
+.btn-studio:hover { background: #ff7261; }
+/* BETA стоит рядом с кнопкой, а не внутри неё: внутри она читалась как часть
+   подписи, а это пометка о состоянии раздела, а не название. */
+.btn-studio-wrap { display: inline-flex; align-items: flex-start; gap: 3px; }
+.beta-badge {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--wave-user);
+  text-transform: uppercase;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
 .btn-text {
   background: transparent;
   color: var(--ink-soft);
@@ -535,6 +564,19 @@ a:hover { color: #fff; }
 }
 .credits p { margin: 0; }
 .credits a { color: var(--ink-soft); }
+/* Кнопка в подвале живёт среди ссылок — и выглядеть должна ссылкой:
+   у .btn свои поля, из-за них строка уезжала вправо. */
+.credits .btn {
+  padding: 0;
+  min-height: 0;
+  border: none;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 /* ---------- Экран 2: карточка пака ---------- */
 /* Карточка пака и фильтр персонажей — в один визуальный ряд */
@@ -592,7 +634,30 @@ a:hover { color: #fff; }
 .char-filter-item input { accent-color: var(--wave-user); width: 15px; height: 15px; flex-shrink: 0; }
 .char-filter-empty { margin: 10px 0 0; }
 
-.pack-start-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 22px; }
+/* Три кнопки одного размера, по центру: «Озвучить», «Скачать пак» и
+   «Редактировать пак» — равнозначные действия над этим паком. */
+.pack-start-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.pack-start-row .btn {
+  font-size: 1.1rem;
+  padding: 15px 32px;
+  min-height: 56px;
+  /* Одинаковая ширина, а не «по длине подписи»: три равнозначных действия
+     не должны выглядеть по-разному только потому, что слова разной длины. */
+  min-width: 210px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: normal;
+}
+.pack-start-row .mic-status { flex-basis: 100%; text-align: center; }
 .mic-status { color: var(--ink-soft); margin: 0; font-size: 0.9rem; }
 .mic-status.error { color: #ff9c8f; }
 
@@ -1242,3 +1307,39 @@ select.lang-select {
 @media (max-width: 380px) {
   .dub-controls { grid-template-columns: 1fr; }
 }
+
+/* ---------- Форма обратной связи (подвал обеих страниц) ---------- */
+.feedback-card { max-width: 520px; text-align: left; }
+.feedback-hint { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.45; margin: 0 0 12px; }
+.feedback-text, .feedback-contact {
+  font-family: var(--font);
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+.feedback-text { resize: vertical; min-height: 110px; margin-bottom: 10px; }
+.feedback-contact { margin-bottom: 12px; }
+/* Отчёт открыт для просмотра: скрытый сбор данных в бете — плохая идея */
+.feedback-details { margin-bottom: 14px; }
+.feedback-details summary { cursor: pointer; color: var(--ink-dim); font-size: 0.8rem; }
+.feedback-report {
+  margin: 8px 0 0;
+  padding: 10px;
+  background: var(--panel-2);
+  border-radius: 8px;
+  color: var(--ink-dim);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow: auto;
+}
+.feedback-actions { display: flex; gap: 10px; align-items: center; }
+.feedback-status { margin: 12px 0 0; font-size: 0.85rem; color: var(--ink-soft); }
+.feedback-status.error { color: #ff9c8f; }

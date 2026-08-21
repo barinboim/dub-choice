@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Своя студия дубляжа — Dub Choice</title>
+    <meta name="description" content="Собери свой dub-пак из любого видео прямо в браузере." />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#0b0b0b" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>" />
+    <script>
+      // Тот же счётчик, что и у игры: без него бета молчит о себе.
+      // Только на проде — не засоряем статистику локальной разработкой.
+      if (location.hostname === "dubchoice.barinbo.im") {
+        var gc = document.createElement("script");
+        gc.async = true;
+        gc.src = "https://stats.barinbo.im:8443/count.js";
+        gc.dataset.goatcounter = "https://stats.barinbo.im:8443/count";
+        document.head.appendChild(gc);
+      }
+    </script>
+  </head>
+  <body>
+    <div id="studio-app">
+      <header class="app-header">
+        <a id="studio-home-link" class="logo" href="index.html" data-i18n="studioBackHome"></a>
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button id="lang-ru" class="lang-btn">RU</button>
+          <button id="lang-en" class="lang-btn">EN</button>
+        </div>
+      </header>
+
+      <!-- ЭКРАН 1: предупреждение + приём видео -->
+      <section id="studio-screen-warn" class="screen studio-screen">
+        <h1 class="studio-h1" data-i18n="studioTitle"></h1>
+        <p class="studio-warn-row">
+          <span class="studio-warn-badge" data-i18n="studioWarnBadge"></span>
+          <button
+            id="studio-feedback-link"
+            class="studio-feedback-link"
+            type="button"
+            data-feedback
+            data-i18n="studioBetaFeedback"
+          ></button>
+        </p>
+        <p class="studio-warn-body">
+          <span data-i18n="studioWarnBody"></span>
+          <a href="https://gamebanana.com/tools/23525" target="_blank" rel="noopener">Dub Pack Editor</a>
+          <span data-i18n="studioWarnAltTail"></span>
+        </p>
+
+        <div id="studio-drop-zone" class="drop-zone" tabindex="0">
+          <p class="drop-title" data-i18n="studioDropTitle"></p>
+          <p class="drop-hint" data-i18n="studioDropHint"></p>
+          <button id="studio-pick-file" class="btn btn-pill" data-i18n="studioPickFile"></button>
+          <input id="studio-input-file" type="file" accept="video/*,video/quicktime,.mp4,.mov,.m4v,.webm,.zip" hidden />
+        </div>
+
+        <div class="studio-youtube">
+          <label class="studio-youtube-label" for="studio-youtube-url" data-i18n="studioYoutubeLabel"></label>
+          <input id="studio-youtube-url" class="studio-youtube-input" type="url" autocomplete="off" />
+
+          <div id="studio-youtube-info" class="studio-youtube-info" hidden>
+            <img id="studio-youtube-thumb" class="studio-youtube-thumb" alt="" />
+            <div>
+              <p id="studio-youtube-title" class="studio-youtube-title"></p>
+              <p id="studio-youtube-author" class="studio-youtube-author"></p>
+            </div>
+          </div>
+
+          <p class="studio-youtube-explain" data-i18n="studioYoutubeExplain"></p>
+          <!-- Список: надёжного одного загрузчика нет, см. source.ts -->
+          <div id="studio-downloaders" class="studio-downloaders" hidden></div>
+          <p id="studio-drop-back-hint" class="studio-drop-back-hint" hidden data-i18n="studioOrDropBack"></p>
+        </div>
+
+        <p id="studio-error" class="home-error" hidden></p>
+      </section>
+
+      <!-- ЭКРАН 2: выбор режима -->
+      <section id="studio-screen-mode" class="screen studio-screen" hidden>
+        <button id="studio-mode-back" class="btn btn-text" data-i18n="back"></button>
+        <h2 class="studio-h2" data-i18n="studioModeTitle"></h2>
+        <!-- Превью: игрок должен видеть, что видео и правда загрузилось -->
+        <video id="studio-mode-preview" class="studio-video studio-mode-preview" controls playsinline></video>
+        <div class="studio-modes">
+          <button id="studio-mode-voiceover" class="studio-mode-card">
+            <span class="studio-mode-title" data-i18n="studioModeVoiceover"></span>
+            <span class="studio-mode-pill" data-i18n="studioModeWeak"></span>
+            <span class="studio-mode-hint" data-i18n="studioModeVoiceoverHint"></span>
+          </button>
+          <button id="studio-mode-dub" class="studio-mode-card">
+            <span class="studio-mode-title" data-i18n="studioModeDub"></span>
+            <span class="studio-mode-pill studio-mode-pill-strong" data-i18n="studioModeStrong"></span>
+            <span class="studio-mode-hint" data-i18n="studioModeDubHint"></span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ЭКРАН 3: обработка -->
+      <section id="studio-screen-processing" class="screen studio-screen" hidden>
+        <!-- Кадр «бежит» вместе с прогрессом: видно, какое место сейчас
+             разбирается, и ожидание перестаёт быть пустым -->
+        <h2 class="studio-h2" data-i18n="studioProcessingTitle"></h2>
+        <video id="studio-processing-preview" class="studio-video studio-mode-preview" muted playsinline></video>
+        <div class="studio-stage-row">
+          <p id="studio-stage-label" class="studio-stage-label"></p>
+          <span id="studio-stage-percent" class="studio-stage-percent"></span>
+        </div>
+        <div class="studio-progress-bar"><div id="studio-progress-fill" class="studio-progress-fill"></div></div>
+        <p id="studio-stage-note" class="studio-panel-hint"></p>
+      </section>
+
+      <!-- ЭКРАН 4: редактор -->
+      <section id="studio-screen-timeline" class="screen studio-screen" hidden>
+        <div class="studio-editor-head">
+          <button id="studio-timeline-back" class="btn btn-text" data-i18n="back"></button>
+          <h2 class="studio-h2" data-i18n="studioTimelineTitle"></h2>
+        </div>
+
+        <div class="studio-editor">
+          <!-- Левая колонка: видео и таймлайн -->
+          <div class="studio-editor-main">
+            <video id="studio-video" class="studio-video" controls playsinline></video>
+            <!-- Звук паков, чьё видео идёт без аудиодорожки (см. media.ts) -->
+            <audio id="studio-sync-audio" preload="auto"></audio>
+
+            <div class="studio-tl">
+              <div class="studio-tl-toolbar">
+                <button id="studio-tl-play" class="studio-tl-play" type="button" aria-label="Play">▶</button>
+                <span id="studio-tl-time" class="studio-tl-time">0:00 / 0:00</span>
+                <button id="studio-tl-add" class="btn btn-pill btn-sm" type="button" data-i18n="studioAddLineAtPlayhead"></button>
+                <button id="studio-add-character" class="btn btn-pill btn-sm" type="button" data-i18n="studioAddCharacter"></button>
+                <label class="studio-tl-zoomwrap">
+                  <span data-i18n="studioZoom"></span>
+                  <input id="studio-tl-zoom" class="studio-tl-zoom" type="range" min="10" max="200" step="1" value="40" />
+                </label>
+              </div>
+              <div class="studio-tl-body">
+                <div class="studio-tl-headcol">
+                  <div id="studio-tl-headspacer" class="studio-tl-headspacer"></div>
+                  <div id="studio-tl-heads" class="studio-tl-heads"></div>
+                </div>
+                <div id="studio-tl-scroll" class="studio-tl-scroll">
+                  <div id="studio-tl-inner" class="studio-tl-inner">
+                    <div id="studio-tl-ruler" class="studio-tl-ruler"></div>
+                    <div id="studio-tl-tracks" class="studio-tl-tracks"></div>
+                    <div id="studio-tl-snap" class="studio-tl-snap" hidden></div>
+                <div id="studio-tl-playhead" class="studio-tl-playhead"></div>
+                  </div>
+                </div>
+                <canvas id="studio-tl-wave" class="studio-tl-wave"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Правая колонка: пак, персонажи, выбранная реплика -->
+          <aside class="studio-editor-side">
+            <div class="studio-panel">
+              <h3 class="studio-panel-title" data-i18n="studioPackSection"></h3>
+              <label class="studio-field">
+                <span data-i18n="studioPackTitle"></span>
+                <input id="studio-pack-title" type="text" />
+              </label>
+              <label class="studio-field">
+                <span data-i18n="studioPackAuthor"></span>
+                <input id="studio-pack-author" type="text" />
+              </label>
+            </div>
+
+            <div class="studio-panel">
+              <h3 class="studio-panel-title" data-i18n="studioCharacters"></h3>
+              <div id="studio-character-list" class="studio-character-list"></div>
+            </div>
+
+            <div class="studio-panel">
+              <h3 class="studio-panel-title" data-i18n="studioClipSection"></h3>
+              <p id="studio-clip-empty" class="studio-panel-hint" data-i18n="studioClipNone"></p>
+              <div id="studio-clip-editor" class="studio-clip-editor" hidden>
+                <label class="studio-field">
+                  <span data-i18n="studioClipText"></span>
+                  <textarea id="studio-clip-text" rows="3"></textarea>
+                </label>
+                <label class="studio-field">
+                  <span data-i18n="studioClipCharacter"></span>
+                  <select id="studio-clip-character"></select>
+                </label>
+                <div class="studio-clip-actions">
+                  <button id="studio-clip-play" class="btn btn-pill btn-sm" type="button" data-i18n="studioClipPlay"></button>
+                  <button id="studio-clip-delete" class="btn btn-text btn-sm" type="button" data-i18n="studioClipDelete"></button>
+                </div>
+              </div>
+            </div>
+
+            <p id="studio-no-clips" class="home-error" hidden data-i18n="studioNoClips"></p>
+            <button id="studio-build" class="btn btn-primary btn-big" data-i18n="studioBuild"></button>
+            <p id="studio-build-error" class="home-error" hidden></p>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ЭКРАН 5: готово -->
+      <section id="studio-screen-done" class="screen studio-screen" hidden>
+        <div class="studio-done-actions">
+          <button id="studio-play-now" class="btn btn-primary btn-big" data-i18n="studioPlayNow"></button>
+          <button id="studio-download-zip" class="btn btn-pill" data-i18n="studioDownloadZip"></button>
+          <button id="studio-start-over" class="btn btn-text" data-i18n="studioStartOver"></button>
+        </div>
+      </section>
+      <footer class="studio-footer">
+        <button id="feedback-open" class="btn btn-text btn-sm" type="button" data-feedback data-i18n="feedbackOpen"></button>
+      </footer>
+    </div>
+    <script type="module" src="/src/studio/main.ts"></script>
+  </body>
+</html>

@@ -43,7 +43,7 @@ export interface PreloadedPack {
  * пушить не нужно — залил zip + иконку + обновил manifest.json в R2,
  * и он тут же появляется в галерее у всех.
  */
-const PACKS_BASE = "https://pub-6cdcaa2a325441e59991d44af1e68177.r2.dev/";
+export const PACKS_BASE = "https://pub-6cdcaa2a325441e59991d44af1e68177.r2.dev/";
 
 /** Качает актуальный список паков. ?t= — чтобы не словить закэшированный manifest.json. */
 export async function loadPreloadedManifest(): Promise<PreloadedPack[]> {

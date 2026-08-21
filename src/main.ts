@@ -1,6 +1,11 @@
 import "./style.css";
 import { trackEvent } from "./analytics";
 import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/loader";
+import { stashPackForStudio, stashVideoForStudio, takePendingPack } from "./pack/handoff";
+import { downloadPackZip } from "./pack/zip";
+import { looksLikeVideo } from "./studio/source";
+import { initFeedback, setFeedbackContext } from "./feedback";
+import { note } from "./journey";
 import { DubPack, PackError, packCharacters, clipIsActive } from "./pack/types";
 import {
   loadPreloadedManifest,
@@ -43,6 +48,9 @@ const screens = {
 };
 
 function showScreen(name: keyof typeof screens): void {
+  // Дневник сеанса (journey.ts): по нему в отчёте о проблеме видно, каким
+  // путём человек дошёл до поломки.
+  note(`экран: ${name}`);
   for (const [key, el] of Object.entries(screens)) el.hidden = key !== name;
   // Мобильная версия: по имени активного экрана в CSS решаем, показывать ли
   // логотип и переключатель языка в шапке (см. style.css)
@@ -173,6 +181,8 @@ function cancelDownload(): void {
   activeDownload = null;
 }
 // --- Витрина: полка, поиск, сортировка, теги ---
+/** Полка «Новинки» временно скрыта — см. renderPreloadedList. */
+const SHOW_NEW_SHELF = false;
 const shelfNewSection = $("shelf-new");
 const shelfNewTrack = $("shelf-new-track");
 const shelfSection = $("shelf-popular");
@@ -383,15 +393,22 @@ function renderShelves(): void {
     track.replaceChildren(...list.map((pp) => buildPackCard(pp, kind)));
   };
 
-  fill(
-    shelfNewSection,
-    shelfNewTrack,
-    preloadedPacks
-      .slice()
-      .sort(byNew)
-      .slice(0, SHELF_NEW_SIZE),
-    "new"
-  );
+  // Полка «Новинки» временно убрана с главной (решение владельца 2026-08-21):
+  // поле загрузки своего пака поднимается наверх. Разметка и сортировка
+  // остаются на месте — вернуть полку значит поставить флаг обратно в true.
+  if (SHOW_NEW_SHELF) {
+    fill(
+      shelfNewSection,
+      shelfNewTrack,
+      preloadedPacks
+        .slice()
+        .sort(byNew)
+        .slice(0, SHELF_NEW_SIZE),
+      "new"
+    );
+  } else {
+    shelfNewSection.hidden = true;
+  }
 
   fill(
     shelfSection,
@@ -595,22 +612,12 @@ function renderPackList(): void {
 }
 
 $("btn-pick-zip").addEventListener("click", () => $("input-zip").click());
-$("btn-pick-folder").addEventListener("click", () => $("input-folder").click());
 
 $<HTMLInputElement>("input-zip").addEventListener("change", (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (file) {
     cancelDownload(); // свой пак важнее того, что качается из галереи
     void addPack(loadPackFromZip(file));
-  }
-  (e.target as HTMLInputElement).value = "";
-});
-
-$<HTMLInputElement>("input-folder").addEventListener("change", (e) => {
-  const files = (e.target as HTMLInputElement).files;
-  if (files?.length) {
-    cancelDownload();
-    void addPack(loadPackFromFiles(files));
   }
   (e.target as HTMLInputElement).value = "";
 });
@@ -628,6 +635,14 @@ dropZone.addEventListener("drop", (e) => {
   if (!dt) return;
   cancelDownload();
   const single = dt.files.length === 1 ? dt.files[0] : null;
+  // Видео, брошенное сюда, — это заявка на свой пак: уводим прямо в редактор,
+  // минуя экран предупреждения студии.
+  if (single && looksLikeVideo(single)) {
+    void stashVideoForStudio(single).then(() => {
+      location.href = "studio.html";
+    });
+    return;
+  }
   if (single && single.name.toLowerCase().endsWith(".zip")) {
     void addPack(loadPackFromZip(single));
   } else {
@@ -778,6 +793,14 @@ function fillPackCard(pack: DubPack): void {
   warn.textContent = pack.warnings.join(" ");
   renderCharacterFilter(pack);
   void updateClipLength(pack);
+  // Пак без _backing_track (веб-студия, «Закадр») не может играть «Дубляж»:
+  // под дублем была бы тишина. Выбора нет — обе группы радиокнопок прячем.
+  $("pack-mix-modes").hidden = !!pack.forcedMix;
+  $("final-mix-modes").hidden = !!pack.forcedMix;
+  if (pack.forcedMix) {
+    mixMode = pack.forcedMix;
+    syncMixModeUi();
+  }
 }
 
 /** ID пака для аналитики: слаг встроенного, либо "custom" для своего ZIP/папки. */
@@ -790,8 +813,42 @@ function selectPack(pack: DubPack, sourceId = "custom"): void {
   fillPackCard(pack);
   micStatus.textContent = "";
   micStatus.classList.remove("error");
+  syncStudioPackButtons();
   showScreen("pack");
+  note(`выбрал пак: ${currentPackSlug} (реплик ${pack.clips.length})`);
+  setFeedbackContext({
+    extra: {
+      "пак": currentPackSlug,
+      "реплик в паке": pack.clips.length,
+      "видео пака": pack.video?.type || "?",
+    },
+  });
   trackEvent(`pack-select/${currentPackSlug}`);
+}
+
+/**
+ * «Скачать пак» и «Редактировать пак» — только для пака, собранного в
+ * редакторе: встроенные качаются из галереи, а чужой ZIP у игрока и так есть.
+ */
+function syncStudioPackButtons(): void {
+  const own = currentPackSlug === "studio";
+  for (const id of ["btn-pack-download", "btn-pack-edit", "btn-final-download-pack", "btn-final-edit-pack"]) {
+    $(id).hidden = !own;
+  }
+}
+
+for (const id of ["btn-pack-download", "btn-final-download-pack"]) {
+  $(id).addEventListener("click", () => {
+    if (selectedPack) void downloadPackZip(selectedPack);
+  });
+}
+for (const id of ["btn-pack-edit", "btn-final-edit-pack"]) {
+  $(id).addEventListener("click", () => {
+    if (!selectedPack) return;
+    void stashPackForStudio(selectedPack).then(() => {
+      location.href = "studio.html";
+    });
+  });
 }
 
 $("btn-pack-back").addEventListener("click", () => showScreen("home"));
@@ -810,6 +867,7 @@ $("btn-start").addEventListener("click", async () => {
   try {
     await recorder.init(micDeviceId);
   } catch {
+    note("микрофон не дался");
     micStatus.textContent = t("micError");
     micStatus.classList.add("error");
     return;
@@ -830,6 +888,7 @@ $("btn-start").addEventListener("click", async () => {
   composer = new Composer(videoPlayer);
   // Экран показываем до загрузки клипа, чтобы canvas получил размеры
   showScreen("dub");
+  note(`начал озвучивать: ${currentPackSlug}, режим ${mixMode}`);
   trackEvent(`dub-start/${currentPackSlug}`);
   await enterClip(session.firstActiveIndex);
 });
@@ -1625,6 +1684,7 @@ async function finishRecording(auto = false): Promise<void> {
     // но в монтаж уходит запись целиком
     const window = takeWindow(rec, original.duration);
     matchLoudness(rec, original, window);
+    note("записал дубль");
     session.recordings.set(session.clipIndex, rec);
     waveform?.setUserRecording(window, takeTimelineSamples(original, window.length));
   }
@@ -1792,6 +1852,7 @@ async function enterFinal(): Promise<void> {
   };
   showScreen("final");
   startFinalPlayback();
+  note(`дошёл до премьеры: дублей ${session?.recordings.size ?? 0}`);
   trackEvent(`dub-complete/${currentPackSlug}`);
   // Только после showScreen: волнам нужна реальная ширина канвасов
   void renderResults();
@@ -1878,8 +1939,9 @@ async function renderResults(): Promise<void> {
   if (!session) return;
   clearResults();
   const sess = session;
+  const scoringOff = sess.pack.scoringOff;
   const answered = askScoreTrack(sess);
-  $("results-total").hidden = !answered;
+  $("results-total").hidden = !answered || scoringOff;
   resultsSection.hidden = false;
   if (!answered) {
     watchResultsJump(resultsSection);
@@ -1896,9 +1958,10 @@ async function renderResults(): Promise<void> {
     const clip = sess.pack.clips[i];
     const original = await sess.clipBuffer(i, scoreLang ?? ORIGINAL_LANG);
     if (session !== sess) return; // сессию бросили, пока декодировали
-    // Оцениваем только окно реплики: запас по краям — не промах игрока
-    const { score } = scoreTake(original, windowedRecording(take, original.duration));
-    scores.push(score);
+    // scoringOff (веб-студия, «Закадр»): в клипе музыка вместе с голосом,
+    // метрика дала бы мусор — баллы не считаем вовсе, только показываем ряд.
+    const score = scoringOff ? 0 : scoreTake(original, windowedRecording(take, original.duration)).score;
+    if (!scoringOff) scores.push(score);
 
     const row = document.createElement("div");
     row.className = "result-row";
@@ -1931,14 +1994,18 @@ async function renderResults(): Promise<void> {
 
     const info = document.createElement("div");
     info.className = "result-info";
-    const scoreEl = document.createElement("div");
-    scoreEl.className = "result-score";
-    scoreEl.textContent = t("scoreLabel", { v: score.toFixed(2) });
     const caption = document.createElement("div");
     caption.className = "result-caption";
     // Показываем ровно то, что игрок видел, когда дублировал: язык и его правку
     caption.textContent = sess.captionFor(i);
-    info.append(scoreEl, caption);
+    if (scoringOff) {
+      info.append(caption);
+    } else {
+      const scoreEl = document.createElement("div");
+      scoreEl.className = "result-score";
+      scoreEl.textContent = t("scoreLabel", { v: score.toFixed(2) });
+      info.append(scoreEl, caption);
+    }
 
     const canvas = document.createElement("canvas");
     canvas.className = "result-wave";
@@ -1950,9 +2017,11 @@ async function renderResults(): Promise<void> {
   if (rows.length === 0) return;
   resultsList.replaceChildren(...rows);
 
-  const percent = totalPercent(scores);
-  $("results-percent").textContent = `${percent.toFixed(2)}%`;
-  $("results-verdict").textContent = t(verdictKey(percent));
+  if (!scoringOff) {
+    const percent = totalPercent(scores);
+    $("results-percent").textContent = `${percent.toFixed(2)}%`;
+    $("results-verdict").textContent = t(verdictKey(percent));
+  }
   resultsSection.hidden = false;
   watchResultsJump(resultsSection);
 
@@ -2155,6 +2224,13 @@ async function initPreloadedPacks(): Promise<void> {
   renderPreloadedList();
 }
 void initPreloadedPacks();
+initFeedback();
+
+// Пак из веб-студии (studio.html → index.html) — состояние не переживает
+// смену документа, поэтому он ждёт в IndexedDB под одноразовым ключом.
+void takePendingPack().then((pack) => {
+  if (pack) void addPack(Promise.resolve(pack), "studio");
+});
 
 // Дев-хук для автотестов: загрузка пака по URL (только в dev-сборке)
 if (import.meta.env.DEV) {
