@@ -310,6 +310,8 @@ const stageNote = $("studio-stage-note");
 
 /** Подсказки под полоской: ожидание долгое, пустой экран его удлиняет. */
 const STAGE_NOTES: Partial<Record<MsgKey, MsgKey>> = {
+  studioStageModel: "studioStageModelNote",
+  studioStageEngine: "studioStageEngineNote",
   studioStageSeparate: "studioStageSeparateLong",
   studioStageCut: "studioStageAlmost",
 };

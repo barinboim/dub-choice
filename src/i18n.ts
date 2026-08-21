@@ -307,6 +307,19 @@ const dict = {
   studioProcessingTitle: { ru: "Идёт обработка видео", en: "Processing the video" },
   studioStageMedia: { ru: "Читаю видео…", en: "Reading video…" },
   studioStageSeparate: { ru: "Делю голоса и фон…", en: "Separating voices and background…" },
+  studioStageModel: {
+    ru: "Качаю модель разделения ({index} из {of}) — {done} из {total} МБ",
+    en: "Downloading the separation model ({index} of {of}) — {done} of {total} MB",
+  },
+  studioStageEngine: { ru: "Запускаю движок разделения…", en: "Starting the separation engine…" },
+  studioStageEngineNote: {
+    ru: "Первый раз браузер докачивает сам движок — дальше он тоже сохранится",
+    en: "The first time, the browser also fetches the engine itself — it gets kept too",
+  },
+  studioStageModelNote: {
+    ru: "Модель качается один раз: браузер сохранит её, и следующий «Дубляж» начнётся сразу",
+    en: "The model downloads once: the browser keeps it, so your next “Dubbing” starts right away",
+  },
   studioStageSeparateLong: {
     ru: "Это самая долгая часть — модель разбирает дорожку по кусочкам",
     en: "This is the longest part — the model works through the track piece by piece",

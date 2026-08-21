@@ -52,8 +52,20 @@ export async function runDubPipeline(state: StudioState, video: HTMLVideoElement
   const resampled = await timed("ресемплинг 44100", () => resampleTo44100(buffer));
   const channels = Array.from({ length: resampled.numberOfChannels }, (_, c) => resampled.getChannelData(c));
   const { vocals, backing } = await timed("разделение (spleeter)", () =>
-    separateVoiceBackground(channels, 44100, (_stage, ratio) => {
-      progress("studioStageSeparate", 0.05 + 0.35 * ratio);
+    separateVoiceBackground(channels, 44100, (stage, ratio, download) => {
+      // Закачка модели — отдельная подпись с мегабайтами: раньше полоска
+      // замирала на 5 % на всё время скачивания 39 МБ, и это читалось как
+      // «зависло». Работа шла, просто молча.
+      if (stage === "download" && download) {
+        progress("studioStageModel", 0.05 + 0.35 * ratio, {
+          index: download.index,
+          of: download.of,
+          done: (download.loadedBytes / 1024 / 1024).toFixed(0),
+          total: (download.totalBytes / 1024 / 1024).toFixed(0),
+        });
+        return;
+      }
+      progress(stage === "engine" ? "studioStageEngine" : "studioStageSeparate", 0.05 + 0.35 * ratio);
     })
   );
 

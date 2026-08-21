@@ -30,23 +30,75 @@ const MODELS_BASE = import.meta.env.PROD
  */
 const MODEL_CACHE = "studio-models-v1";
 
-async function modelBytes(url: string): Promise<ArrayBuffer> {
+/** Сколько байт скачано и сколько всего — для честной полоски. */
+export interface DownloadProgress {
+  loadedBytes: number;
+  totalBytes: number;
+  /** Какая из моделей едет сейчас (1 или 2) — их две. */
+  index: number;
+  of: number;
+}
+
+async function modelBytes(
+  url: string,
+  index: number,
+  of: number,
+  onDownload?: (p: DownloadProgress) => void
+): Promise<ArrayBuffer> {
   try {
     const cache = await caches.open(MODEL_CACHE);
     const hit = await cache.match(url);
-    if (hit) return await hit.arrayBuffer();
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`модель не скачалась: HTTP ${res.status}`);
-    await cache.put(url, res.clone());
-    return await res.arrayBuffer();
+    // Уже скачано — говорим об этом полоской, а не тишиной: иначе мгновенный
+    // проход выглядит как пропущенный шаг.
+    if (hit) {
+      const bytes = await hit.arrayBuffer();
+      onDownload?.({ loadedBytes: bytes.byteLength, totalBytes: bytes.byteLength, index, of });
+      return bytes;
+    }
+    const bytes = await download(url, index, of, onDownload);
+    await cache.put(url, new Response(bytes.slice(0)));
+    return bytes;
   } catch (err) {
     // Cache Storage бывает недоступен (приватный режим Safari, отказ в
     // квоте) — это повод скачать заново, а не отменять разделение.
     console.warn("[studio] кэш моделей недоступен:", err);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`модель не скачалась: HTTP ${res.status}`);
-    return await res.arrayBuffer();
+    return download(url, index, of, onDownload);
   }
+}
+
+/**
+ * Качаем потоком, а не одним `res.arrayBuffer()`, только ради полоски:
+ * 39 МБ на средней линии — это полминуты, и всё это время экран замирал на
+ * одной цифре. Молчание тут читается как «зависло», а не как «идёт работа».
+ */
+async function download(
+  url: string,
+  index: number,
+  of: number,
+  onDownload?: (p: DownloadProgress) => void
+): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`модель не скачалась: HTTP ${res.status}`);
+  const totalBytes = Number(res.headers.get("Content-Length")) || 0;
+  if (!res.body) return res.arrayBuffer();
+
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loadedBytes = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loadedBytes += value.byteLength;
+    onDownload?.({ loadedBytes, totalBytes: totalBytes || loadedBytes, index, of });
+  }
+  const out = new Uint8Array(loadedBytes);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return out.buffer;
 }
 
 export interface SeparationResult {
@@ -54,13 +106,13 @@ export interface SeparationResult {
   backing: Float32Array[];
 }
 
-export type SeparationStage = "vocals" | "accompaniment" | "mix";
+export type SeparationStage = "download" | "engine" | "vocals" | "accompaniment" | "mix";
 
 /** spleeter обучен на 44100 Гц стерео — вызывающая сторона должна ресемплировать заранее. */
 export async function separateVoiceBackground(
   channels: Float32Array[],
   rate: number,
-  onProgress?: (stage: SeparationStage, ratio: number) => void
+  onProgress?: (stage: SeparationStage, ratio: number, download?: DownloadProgress) => void
 ): Promise<SeparationResult> {
   if (rate !== 44100) throw new Error(`spleeter ждёт 44100 Гц, на входе ${rate}`);
   const stereo = channels.length >= 2 ? channels.slice(0, 2) : [channels[0], channels[0]];
@@ -86,8 +138,17 @@ export async function separateVoiceBackground(
   const stems = ["vocals", "accompaniment"] as const;
   for (let s = 0; s < stems.length; s++) {
     const stem = stems[s];
-    onProgress?.(stem, s / stems.length);
-    const sess = await ort.InferenceSession.create(await modelBytes(`${MODELS_BASE}${stem}.onnx`), opts);
+    // Первая половина доли каждой модели — её закачка, вторая — сам счёт.
+    const bytes = await modelBytes(`${MODELS_BASE}${stem}.onnx`, s + 1, stems.length, (p) => {
+      const own = p.totalBytes > 0 ? p.loadedBytes / p.totalBytes : 0;
+      onProgress?.("download", (s + own * 0.5) / stems.length, p);
+    });
+    // Первый `create` тянет ещё и wasm самого ort (13 МБ) — молча, изнутри
+    // библиотеки, без всякого прогресса. Подписываем хотя бы шаг, иначе
+    // полоска опять замирает без объяснений.
+    if (s === 0) onProgress?.("engine", (s + 0.5) / stems.length);
+    const sess = await ort.InferenceSession.create(bytes, opts);
+    onProgress?.(stem, (s + 0.5) / stems.length);
     const y = await sess.run({ x: new ort.Tensor("float32", x, [2, splits, SEG, BINS]) });
     outs[stem] = y.y.data as Float32Array;
     await sess.release();
