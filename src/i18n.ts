@@ -329,6 +329,18 @@ const dict = {
     ru: "Это самая долгая часть — модель разбирает дорожку по кусочкам",
     en: "This is the longest part — the model works through the track piece by piece",
   },
+  studioStageOgvImport: {
+    ru: "Перекодирую видео (Theora)… {sec} с",
+    en: "Transcoding video (Theora)… {sec}s",
+  },
+  studioStageOgvImportNote: {
+    ru: "Пак The Choicer Voicer открывается медленнее",
+    en: "A The Choicer Voicer pack opens slower",
+  },
+  studioOgvImportFailed: {
+    ru: "Не удалось перекодировать видео этого пака",
+    en: "Couldn't transcode this pack's video",
+  },
   studioStageTracks: { ru: "Собираю дорожки пака…", en: "Assembling the pack's tracks…" },
   studioStageFrames: { ru: "Снимаю кадры реплик…", en: "Grabbing frames for the lines…" },
   studioStageAlmost: { ru: "Почти готово", en: "Almost there" },

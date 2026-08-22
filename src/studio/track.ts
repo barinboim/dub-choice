@@ -23,6 +23,7 @@ export type StudioErrorSlug =
   | "handoff-failed"
   | "build-failed"
   | "pack-read-failed"
+  | "ogv-import-failed"
   | "js";
 
 export function trackStudioOpen(): void {

@@ -24,6 +24,7 @@ import { takePackForStudio, takePendingVideo } from "../pack/handoff";
 import { deleteDraft, listDrafts, loadDraftPack, saveDraft, type DraftMeta } from "../pack/drafts";
 import { loadPackFromZip } from "../pack/loader";
 import { decodePackAudio, packToState } from "./reopen";
+import { audioBufferToWav } from "../audio/wav";
 import { buildReport } from "../diagnostics";
 import { note } from "../journey";
 import { describeProbe, probeVideoFile } from "./probe";
@@ -364,7 +365,9 @@ async function openExistingPack(load: Promise<DubPack>): Promise<void> {
   setProgress("studioStageMedia", 0.2);
   try {
     const pack = await load;
-    await packToState(pack, state);
+    await packToState(pack, state, (ratio, sec) =>
+      setProgress("studioStageOgvImport", 0.2 + ratio * 0.4, { sec: Math.round(sec) })
+    );
     setProgress("studioStageMedia", 0.6);
 
     // Сперва пробуем звук самого видео: если он там есть, отдельная дорожка
@@ -382,8 +385,11 @@ async function openExistingPack(load: Promise<DubPack>): Promise<void> {
       attachSyncedAudio(video, syncAudio, null);
     } else {
       state.audioBuffer = await decodePackAudio(pack);
-      const track = pack.originalTrack ?? pack.backingTrack;
-      attachSyncedAudio(video, syncAudio, track ? URL.createObjectURL(track) : null);
+      // Не сырая дорожка пака (у чужих TCV-паков это часто только
+      // _backing_track — чистый фон без единого слова), а честный микс,
+      // который уже собрал decodePackAudio: иначе предпросмотр в редакторе
+      // звучал бы одной музыкой, даже когда в паке есть голоса.
+      attachSyncedAudio(video, syncAudio, URL.createObjectURL(audioBufferToWav(state.audioBuffer)));
     }
 
     await attachVideoSource(video, state.videoUrl);
@@ -426,6 +432,7 @@ const STAGE_NOTES: Partial<Record<MsgKey, MsgKey>> = {
   studioStageEngine: "studioStageEngineNote",
   studioStageSeparate: "studioStageSeparateLong",
   studioStageCut: "studioStageAlmost",
+  studioStageOgvImport: "studioStageOgvImportNote",
 };
 
 const setProgress: ProgressFn = (labelKey, ratio, vars) => {
@@ -480,7 +487,12 @@ async function startPipeline(mode: StudioMode): Promise<void> {
 }
 
 function isMsgKey(s: string): s is MsgKey {
-  return s === "studioBadVideo" || s === "studioNoClips" || s === "studioNoCodec";
+  return (
+    s === "studioBadVideo" ||
+    s === "studioNoClips" ||
+    s === "studioNoCodec" ||
+    s === "studioOgvImportFailed"
+  );
 }
 
 /**
@@ -509,6 +521,7 @@ function errorSlug(err: unknown): StudioErrorSlug {
   if (message === "studioNoCodec") return "bad-codec";
   if (message === "studioNoClips") return "no-clips";
   if (message === "studioBadVideo") return "pack-read-failed";
+  if (message === "studioOgvImportFailed") return "ogv-import-failed";
   if (message.includes("звук видео не декодировался")) return "decode-failed";
   if (message.includes("не удалось прочитать файл")) return "decode-failed";
   return "build-failed";

@@ -7,11 +7,16 @@
  * аудиофайла реплики. Поэтому конец восстанавливается замером самого
  * аудио (`blobDuration`), а не выдумывается.
  */
-import { audioContext, blobDuration } from "../audio/context";
+import { blobDuration, decodeAudio } from "../audio/context";
 import type { DubPack } from "../pack/types";
 import { newClipId, type StudioState } from "./state";
+import { transcodeOgvToNative, type OgvImportProgress } from "./ogv-import";
 
-export async function packToState(pack: DubPack, state: StudioState): Promise<void> {
+export async function packToState(
+  pack: DubPack,
+  state: StudioState,
+  onOgvProgress?: OgvImportProgress
+): Promise<void> {
   state.packTitle = pack.title;
   state.packAuthor = pack.authors[0] ?? "";
   // Пак несёт готовую иконку — считаем её выбором игрока, даже если она
@@ -19,11 +24,25 @@ export async function packToState(pack: DubPack, state: StudioState): Promise<vo
   // подменила бы её на текущий кадр первой реплики.
   state.packIcon = pack.icon;
   state.sourceUrl = pack.sourceUrl;
-  state.videoFile = new File([pack.video], "dub_video.mp4", { type: pack.video.type || "video/mp4" });
+  // TCV-паки несут Theora (.ogv) — конвейер редактора (скраб, захват кадров
+  // в media.ts) понимает только то, что играет нативный <video>. Пережимаем
+  // один раз здесь, дальше редактор работает как с любым другим паком.
+  const lastTimestamp = Math.max(0, ...pack.clips.flatMap((c) => c.timestamps));
+  const nativeVideo =
+    pack.videoKind === "ogv"
+      ? await transcodeOgvToNative(pack.video, onOgvProgress ?? (() => {}), lastTimestamp)
+      : pack.video;
+  const ext = nativeVideo.type.includes("webm") ? "webm" : "mp4";
+  state.videoFile = new File([nativeVideo], `dub_video.${ext}`, { type: nativeVideo.type || `video/${ext}` });
   state.videoUrl = URL.createObjectURL(state.videoFile);
   state.backingTrack = pack.backingTrack;
   state.originalTrack = pack.originalTrack;
-  state.vocalsBuffer = null;
+  // NN_name.* пака несёт только голос персонажа (формат, не зависит от
+  // режима) — buildPack() режет реплики именно из этого буфера
+  // (voiceSource = state.vocalsBuffer ?? state.audioBuffer, build.ts).
+  // Без него нарезка при пересборке шла бы из общего микса, и в игре
+  // реплика звучала бы с фоном поверх голоса.
+  state.vocalsBuffer = await buildVocalsTimeline(pack).catch(() => null);
   state.mode = pack.forcedMix === "voiceover" ? "voiceover" : "dub";
 
   const clips = [];
@@ -56,18 +75,100 @@ export async function packToState(pack: DubPack, state: StudioState): Promise<vo
  * прочитать видео» — хотя видео исправно, в нём просто нет звука.
  */
 export async function decodePackAudio(pack: DubPack): Promise<AudioBuffer> {
-  const sources: Blob[] = [];
-  if (pack.originalTrack) sources.push(pack.originalTrack);
-  if (pack.backingTrack) sources.push(pack.backingTrack);
-  sources.push(pack.video);
-  let lastError: unknown = null;
-  for (const blob of sources) {
+  try {
+    return await buildSceneAudio(pack);
+  } catch (err) {
+    console.error(err);
+    throw new Error("studioBadVideo");
+  }
+}
+
+/**
+ * Полная сцена одной дорожкой. Если пак несёт `_original_track` — берём его
+ * как есть, это и есть полный микс. Если нет (обычное дело у чужих
+ * TCV-паков — есть только `_backing_track`, чистый фон без единого слова),
+ * раньше редактор откатывался прямо на фон: волны и прослушивание в
+ * студии показывали и играли только музыку, ни одной реплики.
+ *
+ * Чиним тем же приёмом, что уже есть в `game/composer.ts` для «Закадра» без
+ * `_original_track` (см. CLAUDE.md, п. 9 геймплея) — фон плюс голос каждой
+ * реплики поверх него по её таймкодам, — только рендерим офлайн в один
+ * буфер (`OfflineAudioContext`), а не планируем в реальном времени.
+ */
+async function buildSceneAudio(pack: DubPack): Promise<AudioBuffer> {
+  if (pack.originalTrack) {
     try {
-      return await audioContext().decodeAudioData(await blob.arrayBuffer());
-    } catch (err) {
-      lastError = err;
+      return await decodeAudio(pack.originalTrack);
+    } catch {
+      // Дорожка есть, но не прочиталась — падаем на сборку из фона+реплик ниже.
     }
   }
-  console.error(lastError);
-  throw new Error("studioBadVideo");
+
+  const backing = pack.backingTrack ? await decodeAudio(pack.backingTrack).catch(() => null) : null;
+  const clipBuffers = await Promise.all(pack.clips.map((c) => decodeAudio(c.audio).catch(() => null)));
+
+  if (!backing && clipBuffers.every((b) => !b)) {
+    // Ни фона, ни единой реплики не прочиталось — последний шанс: звук видео.
+    return decodeAudio(pack.video);
+  }
+
+  const sampleRate = backing?.sampleRate ?? clipBuffers.find((b): b is AudioBuffer => !!b)?.sampleRate ?? 44100;
+  const channels = backing?.numberOfChannels ?? clipBuffers.find((b): b is AudioBuffer => !!b)?.numberOfChannels ?? 2;
+  let durationSec = backing?.duration ?? 0;
+  for (const [i, buf] of clipBuffers.entries()) {
+    if (!buf) continue;
+    for (const t of pack.clips[i].timestamps) durationSec = Math.max(durationSec, t + buf.duration);
+  }
+  if (durationSec <= 0) durationSec = 1;
+
+  const offline = new OfflineAudioContext(channels, Math.ceil(durationSec * sampleRate), sampleRate);
+  if (backing) {
+    const src = offline.createBufferSource();
+    src.buffer = backing;
+    src.connect(offline.destination);
+    src.start(0);
+  }
+  for (const [i, buf] of clipBuffers.entries()) {
+    if (!buf) continue;
+    for (const t of pack.clips[i].timestamps) {
+      const src = offline.createBufferSource();
+      src.buffer = buf;
+      src.connect(offline.destination);
+      src.start(Math.max(0, t));
+    }
+  }
+  return offline.startRendering();
+}
+
+/**
+ * Голоса реплик, разложенные по своим таймкодам поверх тишины — без фона.
+ * Строится из `NN_name.*` каждой реплики: этот файл в любом dub-паке несёт
+ * только голос персонажа, ни музыки, ни спецэффектов (формат, «Грабли» в
+ * CLAUDE.md про длину клипа — тот же файл).
+ */
+async function buildVocalsTimeline(pack: DubPack): Promise<AudioBuffer | null> {
+  const clipBuffers = await Promise.all(pack.clips.map((c) => decodeAudio(c.audio).catch(() => null)));
+  const first = clipBuffers.find((b): b is AudioBuffer => !!b);
+  if (!first) return null;
+
+  const sampleRate = first.sampleRate;
+  const channels = first.numberOfChannels;
+  let durationSec = 0;
+  for (const [i, buf] of clipBuffers.entries()) {
+    if (!buf) continue;
+    for (const t of pack.clips[i].timestamps) durationSec = Math.max(durationSec, t + buf.duration);
+  }
+  if (durationSec <= 0) return null;
+
+  const offline = new OfflineAudioContext(channels, Math.ceil(durationSec * sampleRate), sampleRate);
+  for (const [i, buf] of clipBuffers.entries()) {
+    if (!buf) continue;
+    for (const t of pack.clips[i].timestamps) {
+      const src = offline.createBufferSource();
+      src.buffer = buf;
+      src.connect(offline.destination);
+      src.start(Math.max(0, t));
+    }
+  }
+  return offline.startRendering();
 }
