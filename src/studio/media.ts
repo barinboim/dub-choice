@@ -57,12 +57,149 @@ export async function loadVideoFile(file: File): Promise<LoadedMedia> {
       `таймаут ${DECODE_TIMEOUT_MS / 1000} с`
     );
     return { audioBuffer, durationSec: audioBuffer.duration };
-  } catch (err) {
-    // Раньше здесь терялась настоящая причина: любой сбой декодирования
-    // подменялся общим «не удалось прочитать это видео», и понять, что
-    // именно сломалось (кодек, память, битый файл, таймаут), было невозможно.
-    throw new Error(`звук видео не декодировался: ${describe(err)}`);
+  } catch (primaryErr) {
+    // decodeAudioData на iOS Safari/WebKit падает на некоторых mov-файлах
+    // (репорт 2026-08-22: avc1.640003, level 0.3 — нетипичная комбинация
+    // профиля и уровня), хотя тот же файл спокойно проигрывается <video> и
+    // декодируется на Android. Фолбэк идёт мимо родного демультиплексора
+    // WebKit: mp4box.js сам разбирает контейнер и достаёт сырые AAC-сэмплы,
+    // а декодирует их уже WebCodecs `AudioDecoder` — более узкая и терпимая
+    // к таким аномалиям задача, чем decodeAudioData всего файла целиком.
+    try {
+      const audioBuffer = await withTimeout(
+        decodeAudioViaWebCodecs(bytes),
+        DECODE_TIMEOUT_MS,
+        `таймаут WebCodecs-фолбэка ${DECODE_TIMEOUT_MS / 1000} с`
+      );
+      note(`decodeAudioData не справился (${describe(primaryErr)}) — помог фолбэк через WebCodecs`);
+      return { audioBuffer, durationSec: audioBuffer.duration };
+    } catch (fallbackErr) {
+      // Раньше здесь терялась настоящая причина: любой сбой декодирования
+      // подменялся общим «не удалось прочитать это видео», и понять, что
+      // именно сломалось (кодек, память, битый файл, таймаут), было невозможно.
+      throw new Error(
+        `звук видео не декодировался: ${describe(primaryErr)}; фолбэк не помог: ${describe(fallbackErr)}`
+      );
+    }
   }
+}
+
+/**
+ * ES-дескрипторные теги из ISO/IEC 14496-1 — mp4box эти константы наружу
+ * не отдаёт, но значения стабильны и в спеке, и во всех версиях либы.
+ */
+const DECODER_CONFIG_DESCR_TAG = 4;
+const DECODER_SPECIFIC_INFO_TAG = 5;
+
+/** Достаёт из mp4-контейнера аудиотрек и декодирует его через WebCodecs, без decodeAudioData. */
+async function decodeAudioViaWebCodecs(bytes: ArrayBuffer): Promise<AudioBuffer> {
+  if (typeof AudioDecoder === "undefined") {
+    throw new Error("WebCodecs (AudioDecoder) в этом браузере недоступен");
+  }
+  const MP4Box = await import("mp4box");
+  const mp4boxFile = MP4Box.createFile();
+
+  const chunksPerChannel: Float32Array[][] = [];
+  let outSampleRate = 0;
+  let outChannels = 0;
+  let totalFrames = 0;
+  let decoder: AudioDecoder | null = null;
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const fail = (err: unknown): void => {
+      if (settled) return;
+      settled = true;
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+
+    mp4boxFile.onError = (e: string) => fail(new Error(`mp4box: ${e}`));
+
+    mp4boxFile.onReady = (info) => {
+      const track = info.tracks.find((t) => t.audio);
+      if (!track) {
+        fail(new Error("в контейнере нет звуковой дорожки"));
+        return;
+      }
+
+      const trak = mp4boxFile.getTrackById(track.id);
+      const entry = trak?.mdia?.minf?.stbl?.stsd?.entries?.[0] as
+        | { esds?: { esd?: { findDescriptor(tag: number): { findDescriptor?(tag: number): { data?: Uint8Array } } | undefined } } }
+        | undefined;
+      const description = entry?.esds?.esd
+        ?.findDescriptor(DECODER_CONFIG_DESCR_TAG)
+        ?.findDescriptor?.(DECODER_SPECIFIC_INFO_TAG)?.data;
+
+      decoder = new AudioDecoder({
+        output: (audioData) => {
+          outSampleRate = audioData.sampleRate;
+          outChannels = audioData.numberOfChannels;
+          for (let ch = 0; ch < audioData.numberOfChannels; ch++) {
+            const plane = new Float32Array(audioData.numberOfFrames);
+            audioData.copyTo(plane, { planeIndex: ch, format: "f32-planar" });
+            (chunksPerChannel[ch] ??= []).push(plane);
+          }
+          totalFrames += audioData.numberOfFrames;
+          audioData.close();
+        },
+        error: fail,
+      });
+      try {
+        decoder.configure({
+          codec: track.codec,
+          sampleRate: track.audio!.sample_rate,
+          numberOfChannels: track.audio!.channel_count,
+          ...(description ? { description } : {}),
+        });
+      } catch (err) {
+        fail(err);
+        return;
+      }
+
+      let received = 0;
+      mp4boxFile.onSamples = (_id, _user, samples) => {
+        if (settled || !decoder) return;
+        for (const sample of samples) {
+          if (sample.data) {
+            decoder.decode(
+              new EncodedAudioChunk({
+                type: "key",
+                timestamp: (sample.cts / sample.timescale) * 1e6,
+                duration: (sample.duration / sample.timescale) * 1e6,
+                data: sample.data,
+              })
+            );
+          }
+          received++;
+        }
+        if (received >= track.nb_samples) resolve();
+      };
+      mp4boxFile.setExtractionOptions(track.id, undefined, { nbSamples: 500 });
+      mp4boxFile.start();
+    };
+
+    const buf = bytes as ArrayBuffer & { fileStart: number };
+    buf.fileStart = 0;
+    mp4boxFile.appendBuffer(buf);
+    mp4boxFile.flush();
+  });
+
+  if (!decoder) throw new Error("аудиодекодер не запустился");
+  await (decoder as AudioDecoder).flush();
+  (decoder as AudioDecoder).close();
+  if (totalFrames === 0) throw new Error("WebCodecs не вернул ни одного аудиофрейма");
+
+  const buffer = new AudioBuffer({ length: totalFrames, numberOfChannels: outChannels, sampleRate: outSampleRate });
+  for (let ch = 0; ch < outChannels; ch++) {
+    const merged = new Float32Array(totalFrames);
+    let offset = 0;
+    for (const chunk of chunksPerChannel[ch] ?? []) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    buffer.copyToChannel(merged as Float32Array<ArrayBuffer>, ch);
+  }
+  return buffer;
 }
 
 function describe(err: unknown): string {
