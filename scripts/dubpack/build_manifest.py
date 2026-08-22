@@ -65,7 +65,7 @@ PACKS = [
     ("bluelock", "Blue Lock (rus sub)", "public/packs/bluelock.zip", ["аниме"], "2026-08-22", None),
     ("klinokgyutaro", "Клинок Гютаро", "public/packs/klinokgyutaro.zip", ["аниме", "русская озвучка"], "2026-08-22", None),
     ("prideprejudice", "Pride & Prejudice (beginning)", "public/packs/prideprejudice.zip", ["фильм", "русская озвучка"], "2026-08-22", None),
-    ("minutpyatogo", "Минут 5-10 пятого в 4ре утра!!!", "public/packs/minut5.zip", ["мем"], "2026-08-22", None),
+    ("minutpyatogo", "Минут 5-10 пятого в 4ре утра!!!", "public/packs/minut5.zip", ["мем"], "2026-08-24", None),
 ]
 
 SHORT_MAX_SEC = 60  # граница тега «короткий ролик»
