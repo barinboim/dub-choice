@@ -4,6 +4,7 @@
  * Поэтому меряем изнутри и печатаем сводку в консоль — оттуда цифры уезжают
  * в docs/STUDIO_WEB_PLAN.md, «Результаты фазы 0».
  */
+import { note } from "../journey";
 
 export interface StageTiming {
   name: string;
@@ -17,6 +18,12 @@ export function resetTimings(): void {
 }
 
 export async function timed<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
+  // Отметка «начал» — единственный способ узнать из отчёта игрока, на каком
+  // этапе пайплайн завис: если fn() не вернётся никогда, ни счётчик времени,
+  // ни консольный лог ниже не сработают, а эта строка в дневнике уже есть
+  // (репорт от 2026-08-22 — «Закадр» на Android замолчал сразу после выбора
+  // режима, и понять, где именно, было нечем).
+  note(`начал: ${name}`);
   const started = performance.now();
   try {
     return await fn();

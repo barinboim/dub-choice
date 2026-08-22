@@ -6,10 +6,40 @@
  * отдельно демультиплексировать не нужно.
  */
 import { audioContext } from "../audio/context";
+import { note } from "../journey";
 
 export interface LoadedMedia {
   audioBuffer: AudioBuffer;
   durationSec: number;
+}
+
+/**
+ * decodeAudioData на слабом мобильном декодере может не резолвиться и не
+ * реджектиться очень долго — тот же класс тихого зависания, что уже разбирали
+ * с воркером ffmpeg.wasm (CLAUDE.md), только на уровне нативного Web Audio.
+ * Репорт от 2026-08-22: «Закадр» на Android замолчал именно на этом шаге,
+ * без единой ошибки в консоли. Таймаут не чинит декодер, но превращает
+ * бесконечную тишину в понятную ошибку с этим фактом внутри отчёта.
+ */
+const DECODE_TIMEOUT_MS = 30000;
+
+/** Подключение <video> к blob-URL — тоже событие, которое теоретически может не прийти вовсе. */
+const ATTACH_TIMEOUT_MS = 15000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (v) => {
+        window.clearTimeout(timer);
+        resolve(v);
+      },
+      (err) => {
+        window.clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
 }
 
 export async function loadVideoFile(file: File): Promise<LoadedMedia> {
@@ -21,12 +51,16 @@ export async function loadVideoFile(file: File): Promise<LoadedMedia> {
     throw new Error(`не удалось прочитать файл (${describe(err)})`);
   }
   try {
-    const audioBuffer = await audioContext().decodeAudioData(bytes.slice(0));
+    const audioBuffer = await withTimeout(
+      audioContext().decodeAudioData(bytes.slice(0)),
+      DECODE_TIMEOUT_MS,
+      `таймаут ${DECODE_TIMEOUT_MS / 1000} с`
+    );
     return { audioBuffer, durationSec: audioBuffer.duration };
   } catch (err) {
     // Раньше здесь терялась настоящая причина: любой сбой декодирования
     // подменялся общим «не удалось прочитать это видео», и понять, что
-    // именно сломалось (кодек, память, битый файл), было невозможно.
+    // именно сломалось (кодек, память, битый файл, таймаут), было невозможно.
     throw new Error(`звук видео не декодировался: ${describe(err)}`);
   }
 }
@@ -39,18 +73,24 @@ function describe(err: unknown): string {
 /** Подключает видео к <video> и ждёт метаданных — нужны для seek-захвата кадров. */
 export function attachVideoSource(video: HTMLVideoElement, url: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const onLoaded = () => {
+    let settled = false;
+    const finish = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
       video.removeEventListener("loadedmetadata", onLoaded);
       video.removeEventListener("error", onError);
-      resolve();
+      fn();
     };
-    const onError = () => {
-      video.removeEventListener("loadedmetadata", onLoaded);
-      video.removeEventListener("error", onError);
+    const onLoaded = () => finish(resolve);
+    const onError = () =>
       // Формат мы приняли, а плеер его не открыл — почти всегда это HEVC
       // в браузере, который его не умеет.
-      reject(new Error("studioNoCodec"));
-    };
+      finish(() => reject(new Error("studioNoCodec")));
+    const timer = window.setTimeout(
+      () => finish(() => reject(new Error(`подключение видео не ответило за ${ATTACH_TIMEOUT_MS / 1000} с`))),
+      ATTACH_TIMEOUT_MS
+    );
     video.addEventListener("loadedmetadata", onLoaded);
     video.addEventListener("error", onError);
     video.src = url;
@@ -102,7 +142,12 @@ export function captureFrame(video: HTMLVideoElement, atSec: number): Promise<Bl
       canvas.toBlob((b) => finish(b), "image/jpeg", 0.82);
     }
 
-    timer = window.setTimeout(() => finish(null), SEEK_TIMEOUT_MS);
+    timer = window.setTimeout(() => {
+      // Отличаем от штатного null (нулевые размеры/canvas): это тот самый
+      // подозреваемый из репорта 2026-08-22 — seeked, который не пришёл.
+      note(`захват кадра: seeked не пришёл за ${SEEK_TIMEOUT_MS / 1000} с`);
+      finish(null);
+    }, SEEK_TIMEOUT_MS);
     const target = Math.max(0, atSec);
     // Перемотка «на месте» события seeked не даёт — браузер считает, что делать
     // нечего. Раньше промис в этом случае не резолвился никогда, и вся сборка

@@ -430,10 +430,15 @@ const STAGE_NOTES: Partial<Record<MsgKey, MsgKey>> = {
 
 const setProgress: ProgressFn = (labelKey, ratio, vars) => {
   const clamped = Math.max(0, Math.min(1, ratio));
+  // Грубые чекпойнты (шаг 10%) внутри одного этапа — timed() в timing.ts
+  // отмечает только его начало, а «кадры-превью» и «разделение» сами по
+  // себе идут минуты и много вызовов progress(); без этого «застряло на
+  // 40-й секунде» и «дошло до 90% и зависло» в отчёте неотличимы.
+  note(`${labelKey} ${Math.round(clamped * 10) * 10}%`);
   stageLabel.textContent = t(labelKey, vars);
   stagePercent.textContent = `${Math.round(clamped * 100)}%`;
-  const note = STAGE_NOTES[labelKey];
-  stageNote.textContent = note ? t(note) : "";
+  const hint = STAGE_NOTES[labelKey];
+  stageNote.textContent = hint ? t(hint) : "";
   progressFill.style.width = `${Math.round(clamped * 100)}%`;
   const duration = processingPreview.duration;
   if (Number.isFinite(duration) && duration > 0 && processingPreview.readyState >= 1) {
