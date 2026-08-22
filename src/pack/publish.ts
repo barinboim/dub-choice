@@ -122,6 +122,10 @@ export async function publishPack(
     characters: [...characters],
     lang: pack.lang,
     mix: pack.forcedMix ?? "dub",
+    // Тот же user-agent, что попадает в блок <pre> отчёта обратной связи
+    // (diagnostics.ts) — модератору полезно видеть, с какого устройства
+    // прислали пак, даже когда автор не оставил ссылки на источник.
+    userAgent: navigator.userAgent,
   });
 
   onStage({ kind: "uploading", percent: 0 });
