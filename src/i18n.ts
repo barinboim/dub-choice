@@ -24,7 +24,6 @@ const dict = {
   shelfNewSub: { ru: "добавлены недавно", en: "recently added" },
   shelfPopular: { ru: "Популярные озвучки", en: "Popular dubs" },
   shelfPopularSub: { ru: "на этой неделе", en: "this week" },
-  suggestBox: { ru: "Предложить сцену для озвучки:", en: "Suggest a scene to dub:" },
   searchPacks: {
     ru: "Найти пак — название, персонаж, тег…",
     en: "Find a pack — title, character, tag…",
@@ -529,6 +528,8 @@ const TAG_EN: Record<string, string> = {
   "монолог": "monologue",
   "русская озвучка": "Russian dub",
   "короткий ролик": "short",
+  "аниме": "anime",
+  "реклама": "ad",
 };
 
 export function tagLabel(tag: string): string {

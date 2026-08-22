@@ -181,8 +181,7 @@ function cancelDownload(): void {
   activeDownload = null;
 }
 // --- Витрина: полка, поиск, сортировка, теги ---
-/** Полка «Новинки» временно скрыта — см. renderPreloadedList. */
-const SHOW_NEW_SHELF = false;
+const SHOW_NEW_SHELF = true;
 const shelfNewSection = $("shelf-new");
 const shelfNewTrack = $("shelf-new-track");
 const shelfSection = $("shelf-popular");
