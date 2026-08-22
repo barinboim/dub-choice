@@ -28,6 +28,12 @@ export interface StudioState {
   packTitle: string;
   packAuthor: string;
   /**
+   * Иконка пака, выбранная руками (кадр по секунде видео или своя картинка).
+   * null — иконка ещё не выбиралась явно, buildPack() берёт кадр первой
+   * реплики (как и раньше).
+   */
+  packIcon: Blob | null;
+  /**
    * Адрес, с которого игрок взял видео, если он приносил ссылку. Уезжает
    * в пак (`source=` в _pack_info.ini) и дальше в письмо модерации: по
    * готовому паку иначе не понять, откуда сцена. Пустая строка — видео
@@ -59,6 +65,7 @@ export function createState(): StudioState {
     characters: [],
     packTitle: "",
     packAuthor: "",
+    packIcon: null,
     sourceUrl: "",
     backingTrack: null,
     originalTrack: null,

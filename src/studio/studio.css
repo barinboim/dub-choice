@@ -401,6 +401,18 @@
 }
 .studio-field textarea { resize: vertical; min-height: 60px; }
 
+.studio-icon-row { display: flex; gap: 10px; align-items: flex-start; }
+.studio-icon-preview {
+  width: 64px; height: 64px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.studio-icon-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.studio-icon-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
 .studio-clip-editor { display: flex; flex-direction: column; gap: 10px; }
 .studio-clip-times { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .studio-clip-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

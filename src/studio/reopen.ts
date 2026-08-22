@@ -14,6 +14,10 @@ import { newClipId, type StudioState } from "./state";
 export async function packToState(pack: DubPack, state: StudioState): Promise<void> {
   state.packTitle = pack.title;
   state.packAuthor = pack.authors[0] ?? "";
+  // Пак несёт готовую иконку — считаем её выбором игрока, даже если она
+  // когда-то совпадала с кадром первой реплики: иначе пересборка молча
+  // подменила бы её на текущий кадр первой реплики.
+  state.packIcon = pack.icon;
   state.sourceUrl = pack.sourceUrl;
   state.videoFile = new File([pack.video], "dub_video.mp4", { type: pack.video.type || "video/mp4" });
   state.videoUrl = URL.createObjectURL(state.videoFile);

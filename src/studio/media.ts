@@ -117,6 +117,33 @@ export function captureFrame(video: HTMLVideoElement, atSec: number): Promise<Bl
   });
 }
 
+/**
+ * Своя картинка для иконки пака → тот же формат, что и кадр видео
+ * (captureFrame): высота не больше THUMB_HEIGHT, JPEG. Игрок мог принести
+ * что угодно — PNG на всю ширину экрана, скриншот телефона, — и без
+ * пересжатия такой файл раздувал бы пак архивом ради одной иконки.
+ */
+export async function imageFileToThumb(file: File): Promise<Blob | null> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return null;
+  }
+  try {
+    const scale = Math.min(1, THUMB_HEIGHT / bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const g = canvas.getContext("2d");
+    if (!g) return null;
+    g.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.82));
+  } finally {
+    bitmap.close();
+  }
+}
+
 export async function captureThumbnails(
   video: HTMLVideoElement,
   clips: { start: number }[],

@@ -1110,7 +1110,10 @@ select.lang-select {
   overflow: hidden;
   clip-path: inset(50%);
 }
-.mix-mode-text { line-height: 1.35; }
+/* .screen-final центрирует весь экран — здесь текст всегда левый,
+   иначе описание на узкой ширине превращается в центрированный абзац
+   с висящим последним словом на отдельной строке */
+.mix-mode-text { line-height: 1.35; text-align: left; }
 .mix-mode-title { font-size: 0.95rem; font-weight: 600; }
 .mix-mode-text small { display: block; color: var(--ink-dim); font-size: 0.78rem; margin-top: 2px; }
 

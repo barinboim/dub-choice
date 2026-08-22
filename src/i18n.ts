@@ -348,6 +348,12 @@ const dict = {
   studioClipPlay: { ru: "▶ Прослушать реплику", en: "▶ Play the line" },
   studioPackTitle: { ru: "Название пака", en: "Pack title" },
   studioPackAuthor: { ru: "Автор", en: "Author" },
+  studioIconHint: {
+    ru: "Иконка пака — кадр видео на текущей секунде или своя картинка.",
+    en: "Pack icon — a video frame at the current second, or your own picture.",
+  },
+  studioIconFrame: { ru: "Взять кадр", en: "Grab frame" },
+  studioIconUpload: { ru: "Загрузить", en: "Upload" },
   studioBuild: { ru: "Собрать пак и играть", en: "Build pack and play" },
   studioEditSection: { ru: "Редактировать dub-пак", en: "Edit a dub pack" },
   studioEditHint: {

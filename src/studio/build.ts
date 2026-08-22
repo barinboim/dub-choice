@@ -42,7 +42,7 @@ export function buildPack(state: StudioState): DubPack {
     title: state.packTitle || "Мой дубляж",
     subtitle: "",
     authors: state.packAuthor ? [state.packAuthor] : [],
-    icon: clips[0]?.image ?? null,
+    icon: state.packIcon ?? clips[0]?.image ?? null,
     video: state.videoFile,
     videoKind: "native",
     backingTrack: state.backingTrack,

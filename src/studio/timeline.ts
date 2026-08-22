@@ -20,7 +20,7 @@ import {
   selectedClipId,
   setActiveCharacter,
 } from "./lanes";
-import { playClipRange } from "./media";
+import { captureFrame, imageFileToThumb, playClipRange } from "./media";
 import { t } from "../i18n";
 import { note } from "../journey";
 
@@ -35,6 +35,7 @@ export function renderTimeline(state: StudioState, video: HTMLVideoElement): voi
   authorInput.oninput = () => {
     state.packAuthor = authorInput.value;
   };
+  initPackIcon(state, video, () => renderIcon(state));
 
   const lanesOpts = {
     onClipsChanged: () => {
@@ -43,6 +44,10 @@ export function renderTimeline(state: StudioState, video: HTMLVideoElement): voi
       renderCharacters(state, rerender);
       $("studio-no-clips").hidden = state.clips.length > 0;
       renderInspector(state, video, rerender);
+      // Пока иконку не выбрали руками, она следует за кадром первой реплики
+      // (buildPack), а он мог только что перерисоваться (перетащили край,
+      // удалили реплику) — превью не должно показывать устаревший кадр.
+      renderIcon(state);
     },
     onSelect: () => renderInspector(state, video, rerender),
   };
@@ -52,6 +57,7 @@ export function renderTimeline(state: StudioState, video: HTMLVideoElement): voi
     $("studio-no-clips").hidden = state.clips.length > 0;
     renderInspector(state, video, rerender);
     renderLanes(state, video, lanesOpts);
+    renderIcon(state);
   };
 
   initLanes(state, video, lanesOpts);
@@ -71,6 +77,53 @@ export function renderTimeline(state: StudioState, video: HTMLVideoElement): voi
     rerender();
     // Имя по умолчанию никому не нужно — сразу даём его переписать.
     beginRename(name);
+  };
+}
+
+// ---------- Иконка пака ----------
+
+/** Предыдущий превью-URL — отзываем перед тем, как завести новый. */
+let iconPreviewUrl: string | null = null;
+
+/**
+ * Пока иконку не выбрали руками (state.packIcon), превью показывает то же,
+ * что возьмёт buildPack() по умолчанию — кадр первой реплики. Так что там,
+ * и что покажет игра, не расходятся.
+ */
+function renderIcon(state: StudioState): void {
+  const img = $<HTMLImageElement>("studio-icon-preview");
+  const blob = state.packIcon ?? state.clips[0]?.thumb ?? null;
+  if (iconPreviewUrl) URL.revokeObjectURL(iconPreviewUrl);
+  iconPreviewUrl = blob ? URL.createObjectURL(blob) : null;
+  img.src = iconPreviewUrl ?? "";
+}
+
+/** Обработчики вешаются один раз — значения обновляет только renderIcon. */
+function initPackIcon(state: StudioState, video: HTMLVideoElement, rerenderIcon: () => void): void {
+  $<HTMLButtonElement>("studio-icon-frame").onclick = () => {
+    note("иконка пака: взял кадр видео");
+    // Кадр берётся там, где сейчас стоит плеер, — так что «выбор секунды»
+    // это просто перемотка видео перед нажатием кнопки, повторное нажатие
+    // на новом месте меняет иконку на новый кадр.
+    void captureFrame(video, video.currentTime).then((blob) => {
+      if (!blob) return;
+      state.packIcon = blob;
+      rerenderIcon();
+    });
+  };
+
+  const fileInput = $<HTMLInputElement>("studio-icon-file");
+  $<HTMLButtonElement>("studio-icon-upload").onclick = () => fileInput.click();
+  fileInput.onchange = () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = "";
+    if (!file) return;
+    note("иконка пака: загрузил свою картинку");
+    void imageFileToThumb(file).then((blob) => {
+      if (!blob) return;
+      state.packIcon = blob;
+      rerenderIcon();
+    });
   };
 }
 
