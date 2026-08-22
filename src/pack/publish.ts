@@ -19,6 +19,7 @@
  */
 import { packToZipBlob, packFolderName } from "./zip";
 import { formatSize } from "./preloaded";
+import { systemLabel } from "../diagnostics";
 import type { DubPack } from "./types";
 
 /** Служба публикации на своём VPS — соседка приёмника обратной связи. */
@@ -122,10 +123,13 @@ export async function publishPack(
     characters: [...characters],
     lang: pack.lang,
     mix: pack.forcedMix ?? "dub",
-    // Тот же user-agent, что попадает в блок <pre> отчёта обратной связи
+    // То же, что попадает в блок <pre> отчёта обратной связи
     // (diagnostics.ts) — модератору полезно видеть, с какого устройства
     // прислали пак, даже когда автор не оставил ссылки на источник.
+    // «система» — из UA-CH («Android 13.0.0»), точнее замороженной строки
+    // user-agent; пусто там, где UA-CH нет (Safari, Firefox).
     userAgent: navigator.userAgent,
+    system: await systemLabel(),
   });
 
   onStage({ kind: "uploading", percent: 0 });

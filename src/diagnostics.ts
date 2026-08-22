@@ -108,14 +108,35 @@ function videoLines(ctx: DiagnosticContext): (string | undefined)[] {
   return lines;
 }
 
+type NavigatorWithUaCh = Navigator & {
+  userAgentData?: {
+    getHighEntropyValues(hints: string[]): Promise<Record<string, unknown>>;
+    brands?: { brand: string; version: string }[];
+    mobile?: boolean;
+  };
+};
+
+/**
+ * «Android 13.0.0» / «Windows 10.0.0» — UA-CH точнее строки user-agent,
+ * которая в Chrome давно заморожена и врёт о версии ОС. Пусто там, где
+ * UA-CH нет вовсе (Safari, Firefox) — там платформа видна из самого
+ * user-agent. Вынесено отдельно от полного отчёта — эта же строка едет
+ * в письмо о публикации пака (`pack/publish.ts`), без остального отчёта.
+ */
+export async function systemLabel(): Promise<string> {
+  const nav = navigator as NavigatorWithUaCh;
+  try {
+    const hints = await nav.userAgentData?.getHighEntropyValues(["platform", "platformVersion"]);
+    if (!hints) return "";
+    return `${hints.platform ?? ""} ${hints.platformVersion ?? ""}`.trim();
+  } catch {
+    return "";
+  }
+}
+
 async function environmentLines(): Promise<(string | undefined)[]> {
-  const nav = navigator as Navigator & {
+  const nav = navigator as NavigatorWithUaCh & {
     deviceMemory?: number;
-    userAgentData?: {
-      getHighEntropyValues(hints: string[]): Promise<Record<string, unknown>>;
-      brands?: { brand: string; version: string }[];
-      mobile?: boolean;
-    };
     connection?: { effectiveType?: string; downlink?: number; saveData?: boolean };
   };
 
