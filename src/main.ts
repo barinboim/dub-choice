@@ -192,16 +192,24 @@ const searchClearBtn = $("search-clear");
 const sortBar = $("sort-bar");
 const tagBar = $("tag-bar");
 const galleryCount = $("gallery-count");
+const galleryPager = $("gallery-pager");
 
 /** 18+ намеренно не фильтр, а пометка: это предупреждение о содержимом. */
 const HIDDEN_TAGS = new Set(["18+"]);
 const SHELF_SIZE = 8;
 const SHELF_NEW_SIZE = 6;
+/**
+ * Сколько паков показывать в сетке за раз. Полки (`SHELF_SIZE`) страниц не
+ * знают — это витрина фиксированной длины, а не выборка.
+ */
+const PAGE_SIZE = 20;
 
 type GallerySort = "new" | "plays";
 let gallerySort: GallerySort = "new";
 let galleryQuery = "";
 const galleryTags = new Set<string>();
+/** Текущая страница сетки, с единицы. Сбрасывается на любую смену выборки. */
+let galleryPage = 1;
 
 function fmtDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -434,7 +442,7 @@ function renderSortBar(): void {
       btn.setAttribute("aria-pressed", String(gallerySort === id));
       btn.addEventListener("click", () => {
         gallerySort = id;
-        renderPreloadedList();
+        gallerySelectionChanged();
       });
       return btn;
     })
@@ -464,11 +472,22 @@ function renderTagBar(): void {
       btn.addEventListener("click", () => {
         if (galleryTags.has(tag)) galleryTags.delete(tag);
         else galleryTags.add(tag);
-        renderPreloadedList();
+        gallerySelectionChanged();
       });
       return btn;
     })
   );
+}
+
+/**
+ * Выборка сменилась — сетку показываем с первой страницы. Отдельная
+ * функция, а не `galleryPage = 1` россыпью: смена языка и конец закачки
+ * тоже перерисовывают список, и им страницу сбрасывать нельзя — иначе
+ * докачавшийся пак утаскивал бы человека со второй страницы на первую.
+ */
+function gallerySelectionChanged(): void {
+  galleryPage = 1;
+  renderPreloadedList();
 }
 
 function resetGalleryFilters(): void {
@@ -476,7 +495,7 @@ function resetGalleryFilters(): void {
   galleryTags.clear();
   searchInput.value = "";
   searchClearBtn.classList.remove("on");
-  renderPreloadedList();
+  gallerySelectionChanged();
 }
 
 function renderPreloadedList(): void {
@@ -502,11 +521,32 @@ function renderPreloadedList(): void {
     reset.addEventListener("click", resetGalleryFilters);
     empty.append(text, reset);
     preloadedList.replaceChildren(empty);
+    // Не только прячем, но и чистим: спрятанный ряд со старыми номерами
+    // остаётся в дереве — его читает поиск по странице и озвучивает
+    // скринридер, для которого `hidden` не отменяет прошлую выборку.
+    galleryPager.replaceChildren();
+    galleryPager.hidden = true;
     return;
   }
 
+  // Выборка могла сократиться под ногами (сменили тег, дописали запрос),
+  // а страница осталась прежней — без зажима сетка молча оказывалась пустой
+  // при непустом списке. Зажимаем здесь, а не только в обработчиках: так
+  // новый фильтр, добавленный позже, не сможет об этом забыть.
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  galleryPage = Math.min(Math.max(1, galleryPage), pages);
+  const from = (galleryPage - 1) * PAGE_SIZE;
+  const pageItems = list.slice(from, from + PAGE_SIZE);
+
   galleryCount.replaceChildren(
-    document.createTextNode(t("galleryShown", { i: list.length, n: preloadedPacks.length }))
+    document.createTextNode(
+      // Пока всё влезает на одну страницу, строка прежняя: сколько нашлось
+      // из скольких. Как только появились страницы, честнее назвать то, что
+      // реально на экране, — иначе «Показано 21» при двадцати карточках.
+      pages > 1
+        ? t("galleryShownRange", { from: from + 1, to: from + pageItems.length, i: list.length })
+        : t("galleryShown", { i: list.length, n: preloadedPacks.length })
+    )
   );
   if (filtered) {
     const reset = document.createElement("button");
@@ -516,20 +556,94 @@ function renderPreloadedList(): void {
     reset.addEventListener("click", resetGalleryFilters);
     galleryCount.append(reset);
   }
-  preloadedList.replaceChildren(...list.map((pp) => buildPackCard(pp, "grid")));
+  preloadedList.replaceChildren(...pageItems.map((pp) => buildPackCard(pp, "grid")));
+  renderPager(pages);
+}
+
+/**
+ * Номера страниц под сеткой. Одна страница — пагинатора нет вовсе:
+ * «1 из 1» это шум.
+ */
+function renderPager(pages: number): void {
+  galleryPager.hidden = pages <= 1;
+  if (pages <= 1) {
+    galleryPager.replaceChildren();
+    return;
+  }
+
+  const go = (page: number): void => {
+    galleryPage = page;
+    renderPreloadedList();
+    // Кнопки страниц внизу: без этого человек нажимает «2» и продолжает
+    // смотреть на подвал. Ведём к строке результатов, а не к началу
+    // страницы — полки он уже проехал.
+    galleryCount.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
+  const arrow = (label: string, page: number, disabled: boolean): HTMLButtonElement => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pager-arrow";
+    btn.textContent = label;
+    btn.disabled = disabled;
+    if (!disabled) btn.addEventListener("click", () => go(page));
+    return btn;
+  };
+
+  const nodes: Node[] = [arrow(t("galleryPrev"), galleryPage - 1, galleryPage === 1)];
+  for (const page of pageWindow(galleryPage, pages)) {
+    if (page === null) {
+      const gap = document.createElement("span");
+      gap.className = "pager-gap";
+      gap.textContent = "…";
+      nodes.push(gap);
+      continue;
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pager-num";
+    btn.textContent = String(page);
+    if (page === galleryPage) btn.setAttribute("aria-current", "page");
+    else btn.addEventListener("click", () => go(page));
+    nodes.push(btn);
+  }
+  nodes.push(arrow(t("galleryNext"), galleryPage + 1, galleryPage === pages));
+  galleryPager.replaceChildren(...nodes);
+}
+
+/**
+ * Какие номера показать: первый, последний, текущий с соседями, между ними
+ * многоточие (`null`). Паков в галерее пока три десятка, но список растёт
+ * сам собой — присланными паками, — и ряд из полусотни номеров однажды
+ * перестал бы влезать на телефон.
+ */
+function pageWindow(current: number, pages: number): (number | null)[] {
+  const keep = new Set([1, pages, current - 1, current, current + 1]);
+  const out: (number | null)[] = [];
+  let gap = false;
+  for (let page = 1; page <= pages; page++) {
+    if (keep.has(page)) {
+      out.push(page);
+      gap = false;
+    } else if (!gap) {
+      out.push(null);
+      gap = true;
+    }
+  }
+  return out;
 }
 
 searchInput.addEventListener("input", () => {
   galleryQuery = searchInput.value.trim();
   searchClearBtn.classList.toggle("on", galleryQuery.length > 0);
-  renderPreloadedList();
+  gallerySelectionChanged();
 });
 searchClearBtn.addEventListener("click", () => {
   galleryQuery = "";
   searchInput.value = "";
   searchClearBtn.classList.remove("on");
   searchInput.focus();
-  renderPreloadedList();
+  gallerySelectionChanged();
 });
 
 async function loadPreloaded(id: string): Promise<void> {

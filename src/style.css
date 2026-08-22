@@ -333,6 +333,50 @@ a:hover { color: #fff; }
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+/* ---------- Страницы сетки паков ---------- */
+.gallery-pager {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0 4px;
+}
+.pager-arrow, .pager-num {
+  font: inherit;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.pager-num { min-width: 38px; }
+.pager-arrow:hover:not(:disabled), .pager-num:hover:not([aria-current]) {
+  border-color: var(--wave-user);
+  color: var(--ink);
+}
+/* Текущая страница — не кнопка по смыслу: жать её некуда */
+.pager-num[aria-current] {
+  background: var(--wave-user);
+  border-color: var(--wave-user);
+  color: #0d0d12;
+  font-weight: 600;
+  cursor: default;
+}
+.pager-arrow:disabled { opacity: 0.35; cursor: default; }
+.pager-gap { color: var(--ink-dim); padding: 0 2px; }
+@media (max-width: 480px) {
+  /* На телефоне стрелки несут подписи — их и режем до знаков */
+  .pager-arrow { padding: 7px 10px; font-size: 0; }
+  .pager-arrow::after { font-size: 0.85rem; }
+  .gallery-pager > .pager-arrow:first-child::after { content: "←"; }
+  .gallery-pager > .pager-arrow:last-child::after { content: "→"; }
+}
+
 .gallery-empty {
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-sm);
