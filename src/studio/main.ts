@@ -365,8 +365,11 @@ async function openExistingPack(load: Promise<DubPack>): Promise<void> {
   setProgress("studioStageMedia", 0.2);
   try {
     const pack = await load;
-    await packToState(pack, state, (ratio, sec) =>
-      setProgress("studioStageOgvImport", 0.2 + ratio * 0.4, { sec: Math.round(sec) })
+    await packToState(
+      pack,
+      state,
+      (ratio, sec) => setProgress("studioStageOgvImport", 0.2 + ratio * 0.4, { sec: Math.round(sec) }),
+      processingPreview
     );
     setProgress("studioStageMedia", 0.6);
 

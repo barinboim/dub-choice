@@ -39,6 +39,17 @@ const RECORDER_MIME =
 /** ogv.js не всегда стреляет loadedmetadata — тот же запасной путь, что в video/player.ts. */
 const METADATA_TIMEOUT_MS = 8000;
 
+/**
+ * Запасной потолок ожидания первого кадра, если `player.currentTime` вовсе
+ * не сдвинется с нуля (событие `loadeddata` тут не годится — проверено
+ * эмпирически, в этой сборке ogv.js оно не стреляет вовсе, и таймаут на
+ * нём давал ложный старт через 4 с УЖЕ идущего воспроизведения: запись
+ * начиналась не с чёрного кадра, а с потерянных первых секунд ролика —
+ * баг хуже исходного). Короткий, потому что это подстраховка на случай
+ * действительно сломанного плеера, а не обычный путь.
+ */
+const FIRST_FRAME_TIMEOUT_MS = 2000;
+
 export async function transcodeOgvToNative(
   videoBlob: Blob,
   onProgress: OgvImportProgress,
@@ -49,7 +60,13 @@ export async function transcodeOgvToNative(
    * часть прогона. Пак сам подсказывает грубую длину (последний таймкод
    * реплики) — этого достаточно для честного «примерно там-то».
    */
-  estimatedDurationSec = 0
+  estimatedDurationSec = 0,
+  /**
+   * Живой предпросмотр транскода (studio-processing-preview): без него весь
+   * проход стоит чёрным экраном — канвас записи не в DOM, показать нечего.
+   * Тот же MediaStream, что уходит в MediaRecorder, просто ещё и на экран.
+   */
+  previewVideo?: HTMLVideoElement
 ): Promise<Blob> {
   if (!RECORDER_MIME) throw new Error("studioOgvImportFailed");
 
@@ -86,6 +103,11 @@ export async function transcodeOgvToNative(
         if (e.data.size) parts.push(e.data);
       };
 
+      if (previewVideo) {
+        previewVideo.srcObject = stream;
+        void previewVideo.play().catch(() => undefined);
+      }
+
       let rafId = 0;
       let safetyTimer = 0;
       let settled = false;
@@ -95,6 +117,7 @@ export async function transcodeOgvToNative(
         settled = true;
         cancelAnimationFrame(rafId);
         clearTimeout(safetyTimer);
+        if (previewVideo) previewVideo.srcObject = null;
         try {
           player.pause?.();
         } catch {
@@ -128,12 +151,45 @@ export async function transcodeOgvToNative(
         rafId = requestAnimationFrame(draw);
       };
 
-      recorder.start(250);
-      draw();
-      // Длительность на момент старта могла быть ещё не известна — берём
-      // с большим запасом (проверяется каждый кадр в draw, так что реальная
-      // остановка по `ended` придёт раньше в подавляющем большинстве случаев).
-      safetyTimer = window.setTimeout(stopSoon, 30 * 60 * 1000);
+      // Раньше recorder.start() и play() стартовали одновременно: канвас ещё
+      // пуст, пока ogv.js не декодировал первый кадр (загрузка/компиляция
+      // wasm-декодера, первый Theora-фрейм) — в запись уходили пустые чёрные
+      // кадры перед реальным содержимым. Эта чёрная затравка сдвигает всё
+      // видео позже на своё время, а `dub_timestamps` пака остаются
+      // привязаны к нулю — на выходе видео и звук/субтитры расходятся на
+      // весь этот сдвиг.
+      //
+      // Ждём реального продвижения `player.currentTime` — не события
+      // (`loadeddata` тут не срабатывает вовсе, см. FIRST_FRAME_TIMEOUT_MS) —
+      // и стартуем запись ровно в тот момент, когда декодер выдал первый
+      // кадр. Опрос идёт тем же rAF, что и сам draw(), так что задержка —
+      // это ровно то время, что ogv.js реально грузился/декодировал первый
+      // кадр, ни секундой больше.
+      let recordingStarted = false;
+      const beginCapture = () => {
+        if (recordingStarted) return;
+        recordingStarted = true;
+        draw();
+        recorder.start(250);
+        // Длительность на момент старта могла быть ещё не известна — берём
+        // с большим запасом (проверяется каждый кадр в draw, так что реальная
+        // остановка по `ended` придёт раньше в подавляющем большинстве случаев).
+        safetyTimer = window.setTimeout(stopSoon, 30 * 60 * 1000);
+      };
+      const waitForFirstFrame = () => {
+        if (recordingStarted) return;
+        if (player.currentTime > 0) {
+          beginCapture();
+          return;
+        }
+        rafId = requestAnimationFrame(waitForFirstFrame);
+      };
+      // Подстраховка на случай, если currentTime тоже не сдвинется: тогда
+      // просто стартуем одновременно с play(), как раньше — не теряя ни
+      // кадра уже сыгранного контента (play() ещё ничего не проиграл).
+      window.setTimeout(beginCapture, FIRST_FRAME_TIMEOUT_MS);
+      waitForFirstFrame();
+
       void Promise.resolve(player.play()).catch(() => finish(new Error("studioOgvImportFailed")));
     });
   } finally {

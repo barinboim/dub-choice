@@ -15,7 +15,8 @@ import { transcodeOgvToNative, type OgvImportProgress } from "./ogv-import";
 export async function packToState(
   pack: DubPack,
   state: StudioState,
-  onOgvProgress?: OgvImportProgress
+  onOgvProgress?: OgvImportProgress,
+  ogvPreviewVideo?: HTMLVideoElement
 ): Promise<void> {
   state.packTitle = pack.title;
   state.packAuthor = pack.authors[0] ?? "";
@@ -30,7 +31,7 @@ export async function packToState(
   const lastTimestamp = Math.max(0, ...pack.clips.flatMap((c) => c.timestamps));
   const nativeVideo =
     pack.videoKind === "ogv"
-      ? await transcodeOgvToNative(pack.video, onOgvProgress ?? (() => {}), lastTimestamp)
+      ? await transcodeOgvToNative(pack.video, onOgvProgress ?? (() => {}), lastTimestamp, ogvPreviewVideo)
       : pack.video;
   const ext = nativeVideo.type.includes("webm") ? "webm" : "mp4";
   state.videoFile = new File([nativeVideo], `dub_video.${ext}`, { type: nativeVideo.type || `video/${ext}` });
