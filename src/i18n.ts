@@ -377,6 +377,16 @@ const dict = {
     ru: "Не получилось разобрать сцену: {error}",
     en: "Couldn't take the scene apart: {error}",
   },
+  studioDraftsTitle: { ru: "Черновики", en: "Drafts" },
+  studioDraftDelete: { ru: "Удалить черновик", en: "Delete draft" },
+  studioDraftDeleteConfirm: {
+    ru: "Удалить черновик «{title}»? Отменить это будет нельзя.",
+    en: "Delete draft “{title}”? This can't be undone.",
+  },
+  studioDraftOpenFailed: {
+    ru: "Не удалось открыть черновик — возможно, он повреждён.",
+    en: "Couldn't open the draft — it may be corrupted.",
+  },
 } as const;
 
 export type MsgKey = keyof typeof dict;

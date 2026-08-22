@@ -64,6 +64,22 @@
 .studio-youtube-explain, .studio-youtube-ads { color: var(--ink-dim); font-size: 0.85rem; line-height: 1.4; }
 .studio-drop-back-hint { color: var(--wave-user); font-size: 0.88rem; font-weight: 600; }
 
+.studio-drafts { display: flex; flex-direction: column; gap: 8px; }
+.studio-drafts-list { display: grid; gap: 8px; }
+.studio-draft-row { display: flex; align-items: center; gap: 6px; }
+.studio-draft-row .pack-list-item { flex: 1; min-width: 0; }
+.studio-draft-remove {
+  flex: none;
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 1rem;
+  border-radius: var(--radius-sm);
+}
+.studio-draft-remove:hover { color: var(--ink); background: var(--panel-2); }
+
 .studio-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 560px) { .studio-modes { grid-template-columns: 1fr; } }
 .studio-mode-card {
@@ -141,7 +157,11 @@
 .btn-sm { padding: 7px 14px; font-size: 0.85rem; }
 
 @media (max-width: 640px) {
-  }
+  /* На телефоне шапка (лого + язык) остаётся только на экране приёма
+     видео — на следующих экранах студии место нужнее, чем логотип. */
+  #studio-app .app-header { display: none; }
+  #studio-app[data-screen="warn"] .app-header { display: flex; }
+}
 
 .studio-done-actions { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
 

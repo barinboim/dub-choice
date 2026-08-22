@@ -20,6 +20,7 @@ import { renderTimeline } from "./timeline";
 import { resetTimings, timed, timings } from "./timing";
 import { buildPack, downloadZip, playInGame } from "./build";
 import { takePackForStudio, takePendingVideo } from "../pack/handoff";
+import { deleteDraft, listDrafts, loadDraftPack, saveDraft, type DraftMeta } from "../pack/drafts";
 import { loadPackFromZip } from "../pack/loader";
 import { decodePackAudio, packToState } from "./reopen";
 import { buildReport } from "../diagnostics";
@@ -53,6 +54,9 @@ function showScreen(name: ScreenName): void {
   for (const key of Object.keys(screens) as ScreenName[]) screens[key].hidden = key !== name;
   // Таймлайн правится мышью — ему нужна ширина, остальным экранам она вредит.
   $("studio-app").classList.toggle("studio-wide", name === "timeline");
+  // На телефоне шапка остаётся только на экране приёма видео (studio.css).
+  $("studio-app").dataset.screen = name;
+  if (name === "warn") void renderDrafts();
   window.scrollTo({ top: 0 });
 }
 
@@ -116,6 +120,7 @@ function clearError(): void {
 
 /** Одно поле на всё: ZIP — это готовый пак, остальное — видео. */
 function acceptDroppedFile(file: File): void {
+  currentDraftId = null; // новый файл — не продолжение открытого черновика
   if (/\.zip$/i.test(file.name) || file.type === "application/zip") {
     note("принёс готовый пак (ZIP)");
     trackSource("zip");
@@ -244,6 +249,100 @@ async function handleYoutubeInput(): Promise<void> {
   state.packAuthor = info.author;
 }
 
+// ---------- Черновики ----------
+// Работа над паком переживает закрытие вкладки: пока открыт таймлайн,
+// текущее состояние тихо уходит в IndexedDB (pack/drafts.ts) и предлагается
+// заново на экране приёма видео.
+const draftsSection = $("studio-drafts");
+const draftsList = $("studio-drafts-list");
+/** null, пока черновик ни разу не сохранён — автосохранение заведёт новый id. */
+let currentDraftId: string | null = null;
+
+function formatDraftDate(ts: number): string {
+  return new Date(ts).toLocaleString(lang() === "ru" ? "ru-RU" : "en-US", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function draftRow(meta: DraftMeta): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "studio-draft-row";
+
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "pack-list-item studio-draft-open";
+  const img = document.createElement("img");
+  img.alt = "";
+  if (meta.icon) img.src = URL.createObjectURL(meta.icon);
+  const info = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "pli-title";
+  title.textContent = meta.title;
+  const sub = document.createElement("div");
+  sub.className = "pli-sub";
+  sub.textContent = `${meta.clipsCount} ${t("clipsCount")} · ${formatDraftDate(meta.updatedAt)}`;
+  info.append(title, sub);
+  open.append(img, info);
+  open.addEventListener("click", () => void openDraft(meta.id));
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "studio-draft-remove";
+  remove.setAttribute("aria-label", t("studioDraftDelete"));
+  remove.textContent = "✕";
+  remove.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!confirm(t("studioDraftDeleteConfirm", { title: meta.title }))) return;
+    void deleteDraft(meta.id).then(() => {
+      if (currentDraftId === meta.id) currentDraftId = null;
+      void renderDrafts();
+    });
+  });
+
+  row.append(open, remove);
+  return row;
+}
+
+async function renderDrafts(): Promise<void> {
+  const items = await listDrafts();
+  draftsSection.hidden = items.length === 0;
+  draftsList.replaceChildren(...items.map(draftRow));
+}
+
+async function openDraft(id: string): Promise<void> {
+  const pack = await loadDraftPack(id);
+  if (!pack) {
+    showError("studioDraftOpenFailed");
+    void renderDrafts(); // черновик мог исчезнуть — убрать из списка
+    return;
+  }
+  currentDraftId = id;
+  note("открыл черновик студии");
+  await openExistingPack(Promise.resolve(pack));
+}
+
+/** Пак ещё пуст (нет реплик) — сохранять нечего, buildPack и не соберёт. */
+async function autosaveDraft(): Promise<void> {
+  if (state.clips.length === 0) return;
+  try {
+    const pack = buildPack(state);
+    if (!currentDraftId) currentDraftId = crypto.randomUUID();
+    await saveDraft(currentDraftId, pack);
+  } catch (err) {
+    console.warn("черновик не сохранился", err);
+  }
+}
+
+// Раз в полминуты, пока открыт таймлайн: достаточно, чтобы не терять больше
+// пары правок при случайном закрытии вкладки, и не дёргать IndexedDB на
+// каждое нажатие клавиши.
+window.setInterval(() => {
+  if (!screens.timeline.hidden) void autosaveDraft();
+}, 30_000);
+
 // ---------- Открыть готовый пак в редакторе ----------
 
 /** Пак (из ZIP или из игры) раскладывается обратно на таймлайн. */
@@ -281,6 +380,7 @@ async function openExistingPack(load: Promise<DubPack>): Promise<void> {
       : state.audioBuffer.duration;
     renderTimeline(state, video);
     showScreen("timeline");
+    void autosaveDraft();
     note(`пак открылся в редакторе: реплик ${state.clips.length}`);
     setFeedbackContext(diagContext({ stage: undefined }));
     trackReady(state.mode ?? "dub");
@@ -350,6 +450,7 @@ async function startPipeline(mode: StudioMode): Promise<void> {
 
     renderTimeline(state, video);
     showScreen("timeline");
+    void autosaveDraft();
     note(`редактор открылся: реплик ${state.clips.length}`);
     setFeedbackContext(diagContext({ stage: undefined }));
     trackReady(mode);
@@ -437,7 +538,10 @@ function offerFeedback(box: HTMLElement, ctx: DiagnosticContext): void {
 }
 
 // ---------- Экран 4: таймлайн ----------
-$("studio-timeline-back").addEventListener("click", () => showScreen("mode"));
+$("studio-timeline-back").addEventListener("click", () => {
+  void autosaveDraft(); // последние правки не должны ждать таймера
+  showScreen("mode");
+});
 const buildButton = $<HTMLButtonElement>("studio-build");
 buildButton.addEventListener("click", () => void buildAndPlay());
 
