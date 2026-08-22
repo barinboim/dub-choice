@@ -57,6 +57,7 @@ PACKS = [
     ("shkyadozhdik", "ШКЯ — Дождик", "studio/projects/shkya_dozhdik/shkya_dozhdik.zip", ["мем"], "2026-08-17", None),
     ("shrekfiona", "Shrek — Fiona and Bird", "studio/projects/shrek_fiona_and_bird/shrek_fiona_and_bird.zip", ["мультфильм", "шрек"], "2026-08-17", None),
     ("krovibeton", "Кровь и бетон — Ублюдок, мать твою", "studio/projects/krov_i_beton_ublyudok_mat_tvoyu/krov_i_beton_ublyudok_mat_tvoyu.zip", ["фильм", "мем", "18+"], "2026-08-17", None),
+    ("rytphp2", "RYTP — Гарри Повар и Тайная Комната, часть 1", "public/packs/rytphp2.zip", ["мем", "18+", "гарри поттер"], "2026-08-22", None),
     ("jjjameson", "Джей Джона Джеймсон на русском + оригинальный смех XD", "public/packs/jjjameson.zip", ["фильм", "русская озвучка"], "2026-08-22", None),
     ("krastykrabpatrick", "Это красти краб Нет это патрик!", "public/packs/krastykrabpatrick.zip", ["мультфильм", "русская озвучка"], "2026-08-22", None),
     ("itprikol", "Оно. Прикол", "public/packs/itprikol.zip", ["фильм", "мем", "18+"], "2026-08-22", None),
@@ -64,7 +65,6 @@ PACKS = [
     ("bluelock", "Blue Lock (rus sub)", "public/packs/bluelock.zip", ["аниме"], "2026-08-22", None),
     ("klinokgyutaro", "Клинок Гютаро", "public/packs/klinokgyutaro.zip", ["аниме", "русская озвучка"], "2026-08-22", None),
     ("prideprejudice", "Pride & Prejudice (beginning)", "public/packs/prideprejudice.zip", ["фильм", "русская озвучка"], "2026-08-22", None),
-    ("rytphp2", "RYTP — Гарри Повар и Тайная Комната, часть 1", "public/packs/rytphp2.zip", ["мем", "18+", "гарри поттер"], "2026-08-22", None),
 ]
 
 SHORT_MAX_SEC = 60  # граница тега «короткий ролик»
