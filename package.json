@@ -11,12 +11,14 @@
     "test:packs": "tsx scripts/test-packs.ts"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
     "@wasm-audio-decoders/ogg-vorbis": "^0.1.15",
     "fflate": "^0.8.2",
     "ogv": "^1.9.0",
     "onnxruntime-web": "^1.27.0"
   },
   "devDependencies": {
+    "@ffmpeg/core": "^0.12.10",
     "playwright": "^1.62.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",

@@ -19,6 +19,7 @@ import { runDubPipeline, runVoiceoverPipeline, type ProgressFn } from "./pipelin
 import { renderTimeline } from "./timeline";
 import { resetTimings, timed, timings } from "./timing";
 import { buildPack, downloadZip, playInGame } from "./build";
+import { openDownloadModal, openPublishModal } from "../pack/own-pack";
 import { takePackForStudio, takePendingVideo } from "../pack/handoff";
 import { deleteDraft, listDrafts, loadDraftPack, saveDraft, type DraftMeta } from "../pack/drafts";
 import { loadPackFromZip } from "../pack/loader";
@@ -209,6 +210,7 @@ async function handleYoutubeInput(): Promise<void> {
   const raw = youtubeInput.value.trim();
   const id = extractYoutubeId(raw);
   currentVideoId = id;
+  rememberSource(raw);
 
   // Ссылка годится любая из тех, что берёт cobalt (vk, rutube, tiktok…),
   // не только ютубовская.
@@ -247,6 +249,16 @@ async function handleYoutubeInput(): Promise<void> {
   youtubeAuthor.textContent = info.author;
   state.packTitle = info.title;
   state.packAuthor = info.author;
+}
+
+/**
+ * Ссылку запоминаем сразу, как только она похожа на адрес видео, — даже
+ * если это не YouTube и oEmbed о ней ничего не расскажет. Она уедет в
+ * `source=` пака и дальше в письмо модерации: по одному лишь архиву не
+ * понять, откуда взята сцена, а спрашивать это формой поздно и бесполезно.
+ */
+function rememberSource(raw: string): void {
+  state.sourceUrl = looksLikeVideoLink(raw) ? raw : "";
 }
 
 // ---------- Черновики ----------
@@ -544,6 +556,27 @@ $("studio-timeline-back").addEventListener("click", () => {
 });
 const buildButton = $<HTMLButtonElement>("studio-build");
 buildButton.addEventListener("click", () => void buildAndPlay());
+
+/**
+ * «Опубликовать» и «Скачать» собирают пак ровно так же, как «Собрать пак и
+ * играть», — только не уносят его в другой документ. Пак пересобирается на
+ * каждое нажатие: игрок мог поправить реплику между двумя кликами, и отдать
+ * ему устаревший архив было бы хуже, чем подождать секунду.
+ */
+function withBuiltPack(action: (pack: DubPack) => void): void {
+  buildErrorBox.hidden = true;
+  try {
+    const pack = buildPack(state);
+    builtPack = pack;
+    action(pack);
+  } catch (err) {
+    console.error(err);
+    showFailure(err, buildErrorBox);
+  }
+}
+
+$("studio-publish").addEventListener("click", () => withBuiltPack(openPublishModal));
+$("studio-download").addEventListener("click", () => withBuiltPack(openDownloadModal));
 
 /**
  * Раньше здесь стояло `void playInGame(pack)` — и любая ошибка передачи пака

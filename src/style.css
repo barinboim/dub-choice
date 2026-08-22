@@ -1387,3 +1387,77 @@ select.lang-select {
 .feedback-actions { display: flex; gap: 10px; align-items: center; }
 .feedback-status { margin: 12px 0 0; font-size: 0.85rem; color: var(--ink-soft); }
 .feedback-status.error { color: #ff9c8f; }
+
+/* ---------- Свой пак: публикация и скачивание (pack/own-pack.ts) ----------
+   Диалоги собираются в JS и живут в обоих документах, поэтому и стили
+   лежат здесь, в общем style.css, а не в studio.css. */
+.own-pack-card { max-width: 520px; }
+.own-pack-text { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.45; margin: 0 0 12px; }
+.own-pack-warn { color: var(--ink-dim); }
+.own-pack-field { display: block; margin-bottom: 12px; }
+.own-pack-field span { display: block; font-size: 0.8rem; color: var(--ink-dim); margin-bottom: 4px; }
+.own-pack-field input {
+  font-family: var(--font);
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+.own-pack-consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin-bottom: 16px;
+  cursor: pointer;
+}
+.own-pack-consent input { margin-top: 2px; flex: none; }
+.own-pack-progress { margin-bottom: 14px; }
+.own-pack-stage { margin: 0 0 8px; font-size: 0.85rem; color: var(--ink-soft); }
+.own-pack-note { margin: 0 0 12px; font-size: 0.78rem; color: var(--ink-dim); line-height: 1.4; }
+.own-pack-actions { display: flex; gap: 10px; align-items: center; }
+.own-pack-status { margin: 12px 0 0; font-size: 0.85rem; color: var(--ink-soft); line-height: 1.45; }
+.own-pack-status.error { color: #ff9c8f; }
+
+/* Полоска прогресса TCV — те же две строчки, что у студии: попап живёт в
+   обоих документах, а studio.css грузит только один из них. */
+.own-pack-progress .studio-progress-bar {
+  height: 4px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.own-pack-progress .studio-progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--wave-user);
+  transition: width 0.25s ease;
+}
+
+/* ---------- Блок «Ваш пак» на премьере ---------- */
+.final-own-pack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  padding: 12px 16px;
+  max-width: 720px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.final-own-pack-title {
+  width: 100%;
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}

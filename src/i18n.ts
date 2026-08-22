@@ -390,6 +390,80 @@ const dict = {
     ru: "Не удалось открыть черновик — возможно, он повреждён.",
     en: "Couldn't open the draft — it may be corrupted.",
   },
+
+  // Свой пак: публикация и скачивание
+  ownPackSection: { ru: "Ваш пак", en: "Your pack" },
+  close: { ru: "Закрыть", en: "Close" },
+  publishPack: { ru: "Опубликовать пак", en: "Publish pack" },
+  publishTitle: { ru: "Опубликовать пак на dubchoice.barinbo.im", en: "Publish the pack on dubchoice.barinbo.im" },
+  publishIntro: {
+    ru: "Пак можно выложить в галерею сайта, чтобы его озвучили другие. Каждый пак проходит модерацию вручную, и публикация не гарантируется. Если пак пройдёт, он станет виден всем посетителям сайта — вместе с названием, именем автора и видео.",
+    en: "You can submit the pack to the site gallery so other people can dub it. Every pack is moderated by hand, and publication is not guaranteed. If it passes, it becomes visible to every visitor of the site — along with its title, the author's name and the video.",
+  },
+  publishRights: {
+    ru: "Выкладывайте только то, на что у вас есть права, — чужое видео могут снять по требованию правообладателя.",
+    en: "Only submit material you have the rights to — someone else's video may be taken down at the rights holder's request.",
+  },
+  publishAuthor: { ru: "Автор пака", en: "Pack author" },
+  publishAuthorPlaceholder: { ru: "Как вас подписать в галерее", en: "How to credit you in the gallery" },
+  publishConsent: { ru: "Согласен на публикацию пака на сайте", en: "I agree to have this pack published on the site" },
+  publishOk: { ru: "ОК", en: "OK" },
+  publishNeedAuthor: { ru: "Укажите автора пака.", en: "Enter the pack author." },
+  publishNeedConsent: { ru: "Без согласия на публикацию пак отправить нельзя.", en: "Without consent to publish the pack can't be submitted." },
+  publishPacking: { ru: "Собираю архив…", en: "Packing the archive…" },
+  publishUploading: { ru: "Отправляю… {percent}%", en: "Uploading… {percent}%" },
+  publishSent: {
+    ru: "Пак отправлен на модерацию. Спасибо! Если он подойдёт галерее, он появится на сайте в ближайшие дни.",
+    en: "The pack has been submitted for moderation. Thank you! If it fits the gallery, it will show up on the site within a few days.",
+  },
+  publishFailed: {
+    ru: "Не удалось отправить пак: {error}. Попробуйте позже или напишите нам.",
+    en: "Couldn't submit the pack: {error}. Try again later or drop us a line.",
+  },
+  publishTooBig: {
+    ru: "Пак весит {size} — это больше, чем принимает галерея ({limit}). Соберите сцену покороче или пережмите видео.",
+    en: "The pack weighs {size} — more than the gallery accepts ({limit}). Use a shorter scene or re-encode the video.",
+  },
+
+  // Скачивание пака: выбор формата
+  downloadModalTitle: { ru: "В каких играх вы планируете использовать этот пак?", en: "Which games are you going to use this pack in?" },
+  downloadOptDub: { ru: "Только Dub Choice", en: "Dub Choice only" },
+  downloadOptDubHint: {
+    ru: "Пак как есть: видео MP4, звук WAV. Скачивается мгновенно.",
+    en: "The pack as is: MP4 video, WAV audio. Downloads instantly.",
+  },
+  downloadOptTcv: { ru: "The Choicer Voicer и Dub Choice", en: "The Choicer Voicer and Dub Choice" },
+  downloadOptTcvHint: {
+    ru: "Полная совместимость с оригинальной игрой: видео пережимается в Theora (.ogv), звук — в Vorbis (.ogg). Это долго и делается прямо в браузере; в первый раз докачается кодировщик, 32 МБ.",
+    en: "Full compatibility with the original game: the video is re-encoded to Theora (.ogv) and the audio to Vorbis (.ogg). It takes a while and happens right in your browser; the first time it also fetches a 32 MB encoder.",
+  },
+  tcvTitle: { ru: "Собираю пак для The Choicer Voicer", en: "Building a pack for The Choicer Voicer" },
+  tcvHint: {
+    ru: "Theora кодируется прямо в браузере — это может занять несколько минут. Не закрывайте вкладку.",
+    en: "Theora is encoded right in your browser — this may take several minutes. Don't close the tab.",
+  },
+  tcvStageEngine: { ru: "Качаю кодировщик…", en: "Downloading the encoder…" },
+  tcvStageEngineBytes: {
+    ru: "Качаю кодировщик — {done} из {total} МБ",
+    en: "Downloading the encoder — {done} of {total} MB",
+  },
+  tcvStageEngineStart: { ru: "Запускаю кодировщик…", en: "Starting the encoder…" },
+  tcvEngineNote: {
+    ru: "Кодировщик качается один раз: браузер сохранит его, и следующий такой пак начнётся сразу с пережатия.",
+    en: "The encoder downloads once: the browser keeps it, so your next pack like this starts straight at re-encoding.",
+  },
+  tcvStageVideo: { ru: "Пережимаю видео в Theora…", en: "Re-encoding the video to Theora…" },
+  tcvStageAudio: { ru: "Пережимаю звук в Vorbis…", en: "Re-encoding the audio to Vorbis…" },
+  tcvStageZip: { ru: "Упаковываю архив…", en: "Zipping the archive…" },
+  tcvDone: { ru: "Готово — архив скачивается.", en: "Done — the archive is downloading." },
+  tcvFailed: {
+    ru: "Не удалось собрать пак для The Choicer Voicer: {error}",
+    en: "Couldn't build the pack for The Choicer Voicer: {error}",
+  },
+  tcvTooBig: {
+    ru: "Видео весит {size} — пережать такое прямо в браузере не выйдет, не хватит памяти. Возьмите сцену покороче.",
+    en: "The video weighs {size} — re-encoding that in the browser would run out of memory. Use a shorter scene.",
+  },
 } as const;
 
 export type MsgKey = keyof typeof dict;

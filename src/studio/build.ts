@@ -53,6 +53,7 @@ export function buildPack(state: StudioState): DubPack {
     langNames: {},
     translations: [],
     warnings: [],
+    sourceUrl: state.sourceUrl,
     scoringOff: state.mode === "voiceover",
     forcedMix: state.mode === "voiceover" ? "voiceover" : null,
   };

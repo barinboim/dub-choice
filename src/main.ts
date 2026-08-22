@@ -2,7 +2,7 @@ import "./style.css";
 import { trackEvent } from "./analytics";
 import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/loader";
 import { stashPackForStudio, stashVideoForStudio, takePendingPack } from "./pack/handoff";
-import { downloadPackZip } from "./pack/zip";
+import { openDownloadModal, openPublishModal } from "./pack/own-pack";
 import { looksLikeVideo } from "./studio/source";
 import { initFeedback, setFeedbackContext } from "./feedback";
 import { note } from "./journey";
@@ -941,21 +941,27 @@ function selectPack(pack: DubPack, sourceId = "custom"): void {
 }
 
 /**
- * «Скачать пак» и «Редактировать пак» — только для пака, собранного в
- * редакторе: встроенные качаются из галереи, а чужой ZIP у игрока и так есть.
+ * Действия со своим паком — только для пака, собранного в редакторе:
+ * встроенные качаются из галереи, а чужой ZIP у игрока и так есть.
+ * На премьере они собраны в один блок, на карточке пака стоят россыпью.
  */
 function syncStudioPackButtons(): void {
   const own = currentPackSlug === "studio";
-  for (const id of ["btn-pack-download", "btn-pack-edit", "btn-final-download-pack", "btn-final-edit-pack"]) {
+  for (const id of ["btn-pack-download", "btn-pack-edit", "final-own-pack"]) {
     $(id).hidden = !own;
   }
 }
 
 for (const id of ["btn-pack-download", "btn-final-download-pack"]) {
   $(id).addEventListener("click", () => {
-    if (selectedPack) void downloadPackZip(selectedPack);
+    // Не сразу ZIP: пак можно забрать и в кодеках оригинальной игры —
+    // спрашиваем, во что игрок собирается играть (pack/own-pack.ts).
+    if (selectedPack) openDownloadModal(selectedPack);
   });
 }
+$("btn-final-publish-pack").addEventListener("click", () => {
+  if (selectedPack) openPublishModal(selectedPack);
+});
 for (const id of ["btn-pack-edit", "btn-final-edit-pack"]) {
   $(id).addEventListener("click", () => {
     if (!selectedPack) return;

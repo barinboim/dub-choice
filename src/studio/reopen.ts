@@ -14,6 +14,7 @@ import { newClipId, type StudioState } from "./state";
 export async function packToState(pack: DubPack, state: StudioState): Promise<void> {
   state.packTitle = pack.title;
   state.packAuthor = pack.authors[0] ?? "";
+  state.sourceUrl = pack.sourceUrl;
   state.videoFile = new File([pack.video], "dub_video.mp4", { type: pack.video.type || "video/mp4" });
   state.videoUrl = URL.createObjectURL(state.videoFile);
   state.backingTrack = pack.backingTrack;

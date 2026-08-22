@@ -364,6 +364,11 @@
 .studio-editor-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .studio-editor-side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; }
 
+/* Второй ряд под «Собрать пак и играть»: публикация и скачивание — это
+   выходы из редактора, но не главный, поэтому они мельче и в строку. */
+.studio-build-more { display: flex; gap: 8px; }
+.studio-build-more .btn { flex: 1; }
+
 .studio-panel {
   display: flex;
   flex-direction: column;

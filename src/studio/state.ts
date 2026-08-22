@@ -27,6 +27,13 @@ export interface StudioState {
   characters: string[];
   packTitle: string;
   packAuthor: string;
+  /**
+   * Адрес, с которого игрок взял видео, если он приносил ссылку. Уезжает
+   * в пак (`source=` в _pack_info.ini) и дальше в письмо модерации: по
+   * готовому паку иначе не понять, откуда сцена. Пустая строка — видео
+   * принесли файлом, и знать нам неоткуда.
+   */
+  sourceUrl: string;
   /** _backing_track — только «Дубляж» (реально даёт разделение). */
   backingTrack: Blob | null;
   /** _original_track — вся сцена с голосами, нужна обоим режимам. */
@@ -52,6 +59,7 @@ export function createState(): StudioState {
     characters: [],
     packTitle: "",
     packAuthor: "",
+    sourceUrl: "",
     backingTrack: null,
     originalTrack: null,
     vocalsBuffer: null,

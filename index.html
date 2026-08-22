@@ -288,12 +288,19 @@
           <input id="voiceover-volume" type="range" min="0" max="100" value="30" />
           <span id="voiceover-volume-value" class="monitor-volume-value">30%</span>
         </div>
+        <!-- Свой пак из студии: правка, публикация, скачивание. Отдельным
+             блоком, а не в общем ряду — это действия с самим паком, а не с
+             роликом, и в ряду с «Скачать видео» они читались как его соседи -->
+        <div id="final-own-pack" class="final-own-pack" hidden>
+          <p class="final-own-pack-title" data-i18n="ownPackSection"></p>
+          <button id="btn-final-edit-pack" class="btn btn-pill btn-studio" data-i18n="editPack"></button>
+          <button id="btn-final-publish-pack" class="btn btn-pill" data-i18n="publishPack"></button>
+          <button id="btn-final-download-pack" class="btn btn-pill" data-i18n="downloadPack"></button>
+        </div>
         <div class="final-controls">
           <button id="btn-final-play" class="btn btn-primary btn-big" data-i18n="watch"></button>
           <button id="btn-export" class="btn btn-pill"></button>
           <button id="btn-export-audio" class="btn btn-pill" data-i18n="downloadAudio"></button>
-          <button id="btn-final-download-pack" class="btn btn-pill" data-i18n="downloadPack" hidden></button>
-          <button id="btn-final-edit-pack" class="btn btn-pill btn-studio" data-i18n="editPack" hidden></button>
           <button id="btn-retry" class="btn btn-pill" data-i18n="redub"></button>
           <button id="btn-home" class="btn btn-pill" data-i18n="otherPack"></button>
         </div>
