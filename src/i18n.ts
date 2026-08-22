@@ -358,6 +358,8 @@ const dict = {
   studioClipSection: { ru: "Реплика", en: "Line" },
   studioClipNone: { ru: "Выберите реплику на таймлайне.", en: "Pick a line on the timeline." },
   studioClipPlay: { ru: "▶ Прослушать реплику", en: "▶ Play the line" },
+  studioClipPrev: { ru: "Предыдущая реплика", en: "Previous line" },
+  studioClipNext: { ru: "Следующая реплика", en: "Next line" },
   studioPackTitle: { ru: "Название пака", en: "Pack title" },
   studioPackAuthor: { ru: "Автор", en: "Author" },
   studioIconHint: {

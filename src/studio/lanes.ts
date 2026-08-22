@@ -239,7 +239,19 @@ function startTextEdit(
   input.addEventListener("keydown", (e) => {
     e.stopPropagation(); // пробел здесь — пробел, а не «играть»
     if (e.key === "Enter") commit(true);
-    if (e.key === "Escape") commit(false);
+    else if (e.key === "Escape") commit(false);
+    else if ((e.key === "Backspace" || e.key === "Delete") && input.value === "") {
+      // Пусто и ещё раз Backspace/Delete — значит реплика тут не нужна вовсе.
+      e.preventDefault();
+      if (done) return;
+      done = true; // иначе blur ниже переиграет commit(true) поверх удаления
+      note("удалил реплику (пусто)");
+      state.clips = state.clips.filter((c) => c.id !== clip.id);
+      if (selectedId === clip.id) selectedId = null;
+      pushHistory(state);
+      opts.onClipsChanged();
+      renderLanes(state, video, opts);
+    }
   });
   input.addEventListener("blur", () => commit(true));
 }
@@ -697,21 +709,62 @@ export function initLanes(state: StudioState, video: HTMLVideoElement, opts: Lan
   const zoom = $<HTMLInputElement>("studio-tl-zoom");
   const playBtn = $("studio-tl-play");
 
-  zoom.value = String(pxPerSec);
-  zoom.oninput = () => {
-    pxPerSec = Number(zoom.value) || 40;
+  // Зум держит на месте не левый край таймлайна, а курсор (плейхед):
+  // иначе на длинном ролике каждое движение ползунка — или пинч трекпадом —
+  // уносило рабочий участок за пределы экрана, и приходилось заново его
+  // искать прокруткой.
+  const applyZoom = (nextPxPerSec: number) => {
+    const min = Number(zoom.min) || 10;
+    const max = Number(zoom.max) || 200;
+    const oldPxPerSec = pxPerSec;
+    const anchorX = video.currentTime * oldPxPerSec - scroll.scrollLeft;
+    pxPerSec = clamp(nextPxPerSec, min, max);
+    zoom.value = String(Math.round(pxPerSec));
     renderLanes(state, video, opts);
+    const maxScroll = Math.max(0, $("studio-tl-inner").scrollWidth - scroll.clientWidth);
+    scroll.scrollLeft = clamp(video.currentTime * pxPerSec - anchorX, 0, maxScroll);
+    redrawWave(scroll);
   };
+
+  zoom.value = String(pxPerSec);
+  zoom.oninput = () => applyZoom(Number(zoom.value) || 40);
+
+  // Пинч трекпадом браузер сообщает как wheel с ctrlKey — так же, как и
+  // настоящий Ctrl+колесо; отличить их нельзя, да и незачем.
+  scroll.addEventListener(
+    "wheel",
+    (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      applyZoom(pxPerSec * Math.exp(-e.deltaY * 0.01));
+    },
+    { passive: false }
+  );
 
   scroll.onscroll = () => redrawWave(scroll);
 
-  // Клик по линейке и по волне — перемотка.
+  // Клик по линейке — перемотка; зажатая кнопка тянет курсор дальше, а не
+  // только ставит его в точку первого клика.
   const seekFrom = (e: PointerEvent) => {
     const inner = $("studio-tl-inner");
     const rect = inner.getBoundingClientRect();
     video.currentTime = clamp((e.clientX - rect.left) / pxPerSec, 0, state.durationSec || video.duration || 0);
+    updatePlayhead(video, state.durationSec || video.duration || 0);
   };
-  $("studio-tl-ruler").onpointerdown = seekFrom;
+  const ruler = $("studio-tl-ruler");
+  ruler.onpointerdown = (e) => {
+    seekFrom(e);
+    ruler.setPointerCapture(e.pointerId);
+    const onMove = (ev: PointerEvent) => seekFrom(ev);
+    const onUp = () => {
+      ruler.removeEventListener("pointermove", onMove);
+      ruler.removeEventListener("pointerup", onUp);
+      ruler.removeEventListener("pointercancel", onUp);
+    };
+    ruler.addEventListener("pointermove", onMove);
+    ruler.addEventListener("pointerup", onUp);
+    ruler.addEventListener("pointercancel", onUp);
+  };
 
   // Присваивание, а не addEventListener: initLanes зовётся на каждый прогон,
   // а <video> в разметке один и тот же — иначе обработчики копились бы.

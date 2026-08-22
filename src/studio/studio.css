@@ -468,6 +468,23 @@
 .studio-clip-times { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .studio-clip-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
+/* Пред./след. реплика — по хронологии, не по персонажу. */
+.studio-clip-nav { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.studio-clip-nav-btn {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  width: 30px;
+  height: 30px;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.studio-clip-nav-btn:hover:not(:disabled) { background: var(--panel); border-color: var(--ink-dim); }
+.studio-clip-nav-btn:disabled { opacity: 0.35; cursor: default; }
+.studio-clip-nav-pos { font-size: 0.8rem; color: var(--ink-dim); min-width: 3.5em; text-align: center; }
+
 /* Направляющая прилипания: показывает, к чему именно прилип край реплики. */
 .studio-tl-snap {
   position: absolute;

@@ -197,6 +197,19 @@ function clipAtTime(state: StudioState, time: number): StudioClip | null {
   return state.clips.find((c) => time >= c.start && time < c.end) ?? null;
 }
 
+/** Хронологический порядок — персонаж роли не играет: «след. реплика» листает сцену, а не роль. */
+function clipsByStart(state: StudioState): StudioClip[] {
+  return [...state.clips].sort((a, b) => a.start - b.start);
+}
+
+/** Общий путь удаления — кнопка «Удалить», Backspace на пустом тексте в любом из трёх полей. */
+function deleteClip(state: StudioState, clip: StudioClip): void {
+  note("удалил реплику");
+  state.clips = state.clips.filter((c) => c.id !== clip.id);
+  pushHistory(state);
+  selectClip(null);
+}
+
 // ---------- Субтитр поверх видео ----------
 
 /**
@@ -260,6 +273,16 @@ function initVideoCaption(state: StudioState, video: HTMLVideoElement, rerender:
     } else if (e.key === "Escape") {
       e.preventDefault();
       closeEditor(false);
+    } else if ((e.key === "Backspace" || e.key === "Delete") && editor.value === "") {
+      // Пусто и ещё раз Backspace/Delete — значит реплика тут не нужна вовсе.
+      e.preventDefault();
+      const clip = editingClip;
+      if (!clip) return;
+      editingClip = null;
+      editor.hidden = true;
+      deleteClip(state, clip);
+      rerender();
+      update();
     }
   });
 
@@ -285,6 +308,15 @@ function initInspector(state: StudioState, video: HTMLVideoElement, rerender: ()
   // История пишется на потерю фокуса, а не на каждую клавишу — иначе Ctrl+Z
   // откатывал бы правку по одной букве вместо всей правки разом.
   textInput.addEventListener("blur", () => pushHistory(state));
+  textInput.addEventListener("keydown", (e) => {
+    if ((e.key !== "Backspace" && e.key !== "Delete") || textInput.value !== "") return;
+    // Пусто и ещё раз Backspace/Delete — значит реплика тут не нужна вовсе.
+    const clip = currentClip(state);
+    if (!clip) return;
+    e.preventDefault();
+    deleteClip(state, clip);
+    rerender();
+  });
   characterSelect.onchange = () => {
     const clip = currentClip(state);
     if (!clip) return;
@@ -299,13 +331,32 @@ function initInspector(state: StudioState, video: HTMLVideoElement, rerender: ()
     note("слушал реплику");
     if (clip) void playClipRange(video, clip.start, clip.end);
   };
+
+  // Пред./след. реплика — по хронологии всей сцены, а не по одному персонажу:
+  // так проверяют стыки реплик друг с другом, а не переслушивают одну роль.
+  const prevBtn = $<HTMLButtonElement>("studio-clip-prev");
+  const nextBtn = $<HTMLButtonElement>("studio-clip-next");
+  prevBtn.title = t("studioClipPrev");
+  prevBtn.setAttribute("aria-label", t("studioClipPrev"));
+  nextBtn.title = t("studioClipNext");
+  nextBtn.setAttribute("aria-label", t("studioClipNext"));
+  const goToClip = (direction: -1 | 1) => {
+    const ordered = clipsByStart(state);
+    if (ordered.length === 0) return;
+    const current = currentClip(state);
+    const index = current ? ordered.findIndex((c) => c.id === current.id) : -1;
+    const target = ordered[index < 0 ? 0 : index + direction];
+    if (!target) return;
+    selectClip(target.id);
+    video.currentTime = target.start;
+    rerender();
+  };
+  prevBtn.onclick = () => goToClip(-1);
+  nextBtn.onclick = () => goToClip(1);
   $("studio-clip-delete").onclick = () => {
     const clip = currentClip(state);
     if (!clip) return;
-    note("удалил реплику");
-    state.clips = state.clips.filter((c) => c.id !== clip.id);
-    pushHistory(state);
-    selectClip(null);
+    deleteClip(state, clip);
     rerender();
   };
 
@@ -346,6 +397,13 @@ function renderInspector(state: StudioState, video: HTMLVideoElement, rerender: 
   }
   select.replaceChildren(...options);
   select.value = clip.character;
+
+  const ordered = clipsByStart(state);
+  const index = ordered.findIndex((c) => c.id === clip.id);
+  $<HTMLButtonElement>("studio-clip-prev").disabled = index <= 0;
+  $<HTMLButtonElement>("studio-clip-next").disabled = index < 0 || index >= ordered.length - 1;
+  $("studio-clip-nav-pos").textContent = index >= 0 ? `${index + 1} / ${ordered.length}` : "";
+
   void video;
   void rerender;
 }
