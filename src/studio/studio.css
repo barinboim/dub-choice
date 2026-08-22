@@ -154,6 +154,16 @@
   padding: 2px 4px;
   font-size: 0.9rem;
 }
+.studio-character-add {
+  background: transparent;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.studio-character-add:hover { color: var(--ink); border-color: var(--ink-dim); }
 .btn-sm { padding: 7px 14px; font-size: 0.85rem; }
 
 @media (max-width: 640px) {
@@ -318,6 +328,12 @@
   position: absolute;
   top: 5px;
   bottom: 5px;
+  /* Без явного z-index соседи по одной дорожке красятся по порядку в DOM
+     (по началу реплики) — тогда край более ранней реплики, накрытый более
+     поздней внахлёст, вообще нечем ухватить: события мыши уходят верхней
+     пилюле. Выбор поднимает пилюлю над остальными, и потянуть скрытый край
+     можно, сначала кликнув по свободной от нахлёста части этой реплики. */
+  z-index: 1;
   border-radius: 7px;
   /* Фон полупрозрачный, чтобы под пилюлей была видна волна — по ней и
      правят границы. Прозрачность именно у фона, а не у всей пилюли:
@@ -335,7 +351,7 @@
   user-select: none;
 }
 .studio-tl-pill:hover { background: color-mix(in srgb, var(--pill-color) 40%, transparent); }
-.studio-tl-pill.selected { box-shadow: 0 0 0 2px var(--pill-color); }
+.studio-tl-pill.selected { box-shadow: 0 0 0 2px var(--pill-color); z-index: 2; }
 .studio-tl-pill.dragging { cursor: grabbing; }
 /* Белый без прозрачности: текст реплики читается поверх любой волны. */
 .studio-tl-pill-text {

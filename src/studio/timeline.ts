@@ -20,6 +20,7 @@ import {
   selectedClipId,
   setActiveCharacter,
 } from "./lanes";
+import { pushHistory } from "./history";
 import { captureFrame, imageFileToThumb, playClipRange } from "./media";
 import { t } from "../i18n";
 import { note } from "../journey";
@@ -68,17 +69,21 @@ export function renderTimeline(state: StudioState, video: HTMLVideoElement): voi
   // кадре — до показа она нулевая, и зум «по ширине» посчитался бы мимо.
   requestAnimationFrame(() => resetView(state, video, lanesOpts));
 
-  $("studio-add-character").onclick = () => {
-    const name = `${t("studioClipCharacter")} ${state.characters.length + 1}`;
-    note("добавил персонажа");
-    state.characters.push(name);
-    // Только что созданный персонаж сразу активен — иначе первый клик всегда
-    // уходит на то, чтобы выбрать дорожку, в которую и так собирались класть.
-    setActiveCharacter(name);
-    rerender();
-    // Имя по умолчанию никому не нужно — сразу даём его переписать.
-    beginRename(name);
-  };
+  $("studio-add-character").onclick = () => addCharacter(state, rerender);
+}
+
+/** Общая точка входа: кнопка над таймлайном и «+» в списке персонажей справа. */
+function addCharacter(state: StudioState, rerender: () => void): void {
+  const name = `${t("studioClipCharacter")} ${state.characters.length + 1}`;
+  note("добавил персонажа");
+  state.characters.push(name);
+  pushHistory(state);
+  // Только что созданный персонаж сразу активен — иначе первый клик всегда
+  // уходит на то, чтобы выбрать дорожку, в которую и так собирались класть.
+  setActiveCharacter(name);
+  rerender();
+  // Имя по умолчанию никому не нужно — сразу даём его переписать.
+  beginRename(name);
 }
 
 // ---------- Иконка пака ----------
@@ -130,45 +135,55 @@ function initPackIcon(state: StudioState, video: HTMLVideoElement, rerenderIcon:
 
 function renderCharacters(state: StudioState, rerender: () => void): void {
   const list = $("studio-character-list");
-  list.replaceChildren(
-    ...state.characters.map((name, i) => {
-      const chip = document.createElement("div");
-      chip.className = "studio-character-chip";
+  const chips = state.characters.map((name, i) => {
+    const chip = document.createElement("div");
+    chip.className = "studio-character-chip";
 
-      const swatch = document.createElement("span");
-      swatch.className = "studio-character-swatch";
-      swatch.style.background = colorFor(i);
+    const swatch = document.createElement("span");
+    swatch.className = "studio-character-swatch";
+    swatch.style.background = colorFor(i);
 
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = name;
-      input.addEventListener("change", () => {
-        const old = state.characters[i];
-        const next = input.value.trim() || old;
-        state.characters[i] = next;
-        for (const clip of state.clips) if (clip.character === old) clip.character = next;
-        setActiveCharacter(next);
-        rerender();
-      });
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = name;
+    input.addEventListener("change", () => {
+      const old = state.characters[i];
+      const next = input.value.trim() || old;
+      state.characters[i] = next;
+      for (const clip of state.clips) if (clip.character === old) clip.character = next;
+      setActiveCharacter(next);
+      pushHistory(state);
+      rerender();
+    });
 
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "studio-character-remove";
-      remove.textContent = "✕";
-      remove.addEventListener("click", () => {
-        const removed = state.characters[i];
-        note("удалил персонажа");
-        state.characters.splice(i, 1);
-        // Реплики удалённого персонажа не пропадают — уезжают в дорожку «Без персонажа».
-        for (const clip of state.clips) if (clip.character === removed) clip.character = "";
-        setActiveCharacter("");
-        rerender();
-      });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "studio-character-remove";
+    remove.textContent = "✕";
+    remove.addEventListener("click", () => {
+      const removed = state.characters[i];
+      note("удалил персонажа");
+      state.characters.splice(i, 1);
+      // Реплики удалённого персонажа не пропадают — уезжают в дорожку «Без персонажа».
+      for (const clip of state.clips) if (clip.character === removed) clip.character = "";
+      setActiveCharacter("");
+      pushHistory(state);
+      rerender();
+    });
 
-      chip.append(swatch, input, remove);
-      return chip;
-    })
-  );
+    chip.append(swatch, input, remove);
+    return chip;
+  });
+
+  // Тот же путь, что кнопка «+ Персонаж» над таймлайном — она далеко от этой
+  // панели, и добавлять персонажа удобнее прямо там, где виден их список.
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "studio-character-add";
+  add.textContent = t("studioAddCharacter");
+  add.addEventListener("click", () => addCharacter(state, rerender));
+
+  list.replaceChildren(...chips, add);
 }
 
 // ---------- Инспектор выбранной реплики ----------
@@ -230,6 +245,7 @@ function initVideoCaption(state: StudioState, video: HTMLVideoElement, rerender:
     editor.hidden = true;
     if (save) {
       clip.text = editor.value;
+      pushHistory(state);
       rerender();
     }
     update();
@@ -266,11 +282,15 @@ function initInspector(state: StudioState, video: HTMLVideoElement, rerender: ()
       onSelect: () => renderInspector(state, video, rerender),
     });
   };
+  // История пишется на потерю фокуса, а не на каждую клавишу — иначе Ctrl+Z
+  // откатывал бы правку по одной букве вместо всей правки разом.
+  textInput.addEventListener("blur", () => pushHistory(state));
   characterSelect.onchange = () => {
     const clip = currentClip(state);
     if (!clip) return;
     note("сменил персонажа реплики");
     clip.character = characterSelect.value;
+    pushHistory(state);
     rerender();
   };
 
@@ -284,6 +304,7 @@ function initInspector(state: StudioState, video: HTMLVideoElement, rerender: ()
     if (!clip) return;
     note("удалил реплику");
     state.clips = state.clips.filter((c) => c.id !== clip.id);
+    pushHistory(state);
     selectClip(null);
     rerender();
   };
@@ -294,6 +315,7 @@ function initInspector(state: StudioState, video: HTMLVideoElement, rerender: ()
     const end = state.durationSec > 0 ? Math.min(state.durationSec, start + 2) : start + 2;
     state.clips.push({ id: newClipId(), start, end, text: "", character: "", thumb: null });
     state.clips.sort((a, b) => a.start - b.start);
+    pushHistory(state);
     rerender();
   });
 }

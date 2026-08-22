@@ -14,6 +14,7 @@ import { $ } from "./dom";
 import { t } from "../i18n";
 import { note } from "../journey";
 import { buildEnvelope, drawBand, prepareCanvas, type Envelope } from "./envelope";
+import { pushHistory, redo, resetHistory, undo } from "./history";
 import { captureFrame, playClipRange } from "./media";
 import { newClipId, type StudioClip, type StudioState } from "./state";
 
@@ -163,6 +164,14 @@ export function renderLanes(state: StudioState, video: HTMLVideoElement, opts: L
       lane.style.height = `${LANE_H}px`;
       lane.dataset.lane = String(i);
       lane.classList.toggle("active", name === activeCharacter);
+      // Клик по пустому месту дорожки — быстрый способ добавить реплику этому
+      // персонажу без похода к кнопке «+ Реплика». Пилюли сами гасят это
+      // событие (stopPropagation на pointerdown), поэтому сюда доходит
+      // только настоящий клик по фону: e.target остаётся самой дорожкой.
+      lane.addEventListener("click", (e) => {
+        if (e.target !== lane) return;
+        void createClip(state, video, opts, name, pointerSec(e));
+      });
       for (const clip of state.clips) {
         if ((clip.character || "") !== name) continue;
         lane.append(makePill(clip, i, state, video, opts));
@@ -222,6 +231,7 @@ function startTextEdit(
     done = true;
     if (save && clip.text !== input.value) note("правил текст реплики");
     if (save) clip.text = input.value;
+    pushHistory(state);
     opts.onClipsChanged();
     renderLanes(state, video, opts);
   };
@@ -282,6 +292,7 @@ function startRename(
       state.characters[index] = next;
       for (const clip of state.clips) if (clip.character === old) clip.character = next;
       if (activeCharacter === old) activeCharacter = next;
+      pushHistory(state);
       opts.onClipsChanged();
     }
     renderLanes(state, video, opts);
@@ -460,7 +471,7 @@ function onPillPointerDown(
 }
 
 /** Секунда под курсором — с поправкой на прокрутку таймлайна. */
-function pointerSec(e: PointerEvent): number {
+function pointerSec(e: { clientX: number }): number {
   const inner = $("studio-tl-inner");
   const rect = inner.getBoundingClientRect();
   return (e.clientX - rect.left) / pxPerSec;
@@ -555,6 +566,7 @@ function finishDrag(e: PointerEvent, state: StudioState, video: HTMLVideoElement
 
   // Реплики держим отсортированными по времени: пак так и собирается.
   state.clips.sort((a, b) => a.start - b.start);
+  pushHistory(state);
   opts.onClipsChanged();
   renderLanes(state, video, opts);
   if (clip.start !== drag0Start) void refreshThumb(video, clip, () => opts.onClipsChanged());
@@ -679,6 +691,7 @@ export function initLanes(state: StudioState, video: HTMLVideoElement, opts: Lan
   pxPerSec = 40;
   selectedId = null;
   activeCharacter = "";
+  resetHistory(state);
 
   const scroll = $("studio-tl-scroll");
   const zoom = $<HTMLInputElement>("studio-tl-zoom");
@@ -751,9 +764,36 @@ function onKeyDown(e: KeyboardEvent, state: StudioState, video: HTMLVideoElement
     togglePlay(video);
     return;
   }
+
+  // Undo/redo — Ctrl+Z / Ctrl+Shift+Z (и Ctrl+Y как частый альтернативный
+  // вариант redo). Cmd на Mac — через metaKey.
+  const withMod = e.ctrlKey || e.metaKey;
+  if (withMod && e.key.toLowerCase() === "z") {
+    e.preventDefault();
+    const applied = e.shiftKey ? redo(state) : undo(state);
+    if (applied) {
+      selectedId = null;
+      opts.onSelect(null);
+      opts.onClipsChanged();
+      renderLanes(state, video, opts);
+    }
+    return;
+  }
+  if (withMod && e.key.toLowerCase() === "y") {
+    e.preventDefault();
+    if (redo(state)) {
+      selectedId = null;
+      opts.onSelect(null);
+      opts.onClipsChanged();
+      renderLanes(state, video, opts);
+    }
+    return;
+  }
+
   if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
     e.preventDefault();
     state.clips = state.clips.filter((c) => c.id !== selectedId);
+    pushHistory(state);
     selectedId = null;
     opts.onSelect(null);
     opts.onClipsChanged();
@@ -788,21 +828,34 @@ function stopFollowing(): void {
 }
 
 async function addClipAtPlayhead(state: StudioState, video: HTMLVideoElement, opts: LanesOptions): Promise<void> {
+  await createClip(state, video, opts, activeCharacter, video.currentTime);
+}
+
+/** Общий путь создания реплики — с курсора («+ Реплика») и кликом по пустой дорожке. */
+async function createClip(
+  state: StudioState,
+  video: HTMLVideoElement,
+  opts: LanesOptions,
+  character: string,
+  atSec: number
+): Promise<void> {
   const duration = state.durationSec || video.duration || 0;
-  const start = clamp(video.currentTime, 0, Math.max(0, duration - MIN_CLIP_SEC));
+  const start = clamp(atSec, 0, Math.max(0, duration - MIN_CLIP_SEC));
   const end = duration > 0 ? Math.min(duration, start + NEW_CLIP_SEC) : start + NEW_CLIP_SEC;
   const clip: StudioClip = {
     id: newClipId(),
     start,
     end,
     text: "",
-    character: activeCharacter,
+    character,
     thumb: null,
   };
   note("добавил реплику");
   state.clips.push(clip);
   state.clips.sort((a, b) => a.start - b.start);
+  pushHistory(state);
   selectedId = clip.id;
+  activeCharacter = character;
   opts.onSelect(clip.id);
   opts.onClipsChanged();
   renderLanes(state, video, opts);
