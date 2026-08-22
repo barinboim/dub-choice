@@ -62,6 +62,7 @@ export function renderTimeline(state: StudioState, video: HTMLVideoElement): voi
 
   initLanes(state, video, lanesOpts);
   initInspector(state, video, rerender);
+  initVideoCaption(state, video, rerender);
   rerender();
   // Экран показывается после этого вызова, поэтому ширину меряем на следующем
   // кадре — до показа она нулевая, и зум «по ширине» посчитался бы мимо.
@@ -175,6 +176,80 @@ function renderCharacters(state: StudioState, rerender: () => void): void {
 function currentClip(state: StudioState): StudioClip | null {
   const id = selectedClipId();
   return state.clips.find((c) => c.id === id) ?? null;
+}
+
+function clipAtTime(state: StudioState, time: number): StudioClip | null {
+  return state.clips.find((c) => time >= c.start && time < c.end) ?? null;
+}
+
+// ---------- Субтитр поверх видео ----------
+
+/**
+ * Показывает текст реплики, идущей под плейхедом, поверх видео — и даёт
+ * править его прямо там. Пишет в тот же clip.text, что и поле в
+ * инспекторе справа: два поля одного значения, как заголовок/подзаголовок
+ * нигде не дублируются в паке. Правка коммитится целиком при закрытии
+ * (Enter/blur), как в экране игры (`openCaptionEditor` в main.ts) — не на
+ * каждую клавишу, чтобы не гонять rerender() по нажатию.
+ */
+function initVideoCaption(state: StudioState, video: HTMLVideoElement, rerender: () => void): void {
+  const caption = $("studio-video-caption");
+  const editor = $<HTMLTextAreaElement>("studio-video-caption-edit");
+  let editingClip: StudioClip | null = null;
+
+  const update = () => {
+    if (editingClip) return; // не перебиваем то, что человек сейчас печатает
+    const clip = clipAtTime(state, video.currentTime);
+    caption.hidden = !clip;
+    const text = clip?.text ?? "";
+    // Пустой субтитр всё равно кликабелен — иначе первую реплику текстом
+    // просто нечем было бы открыть с оверлея.
+    caption.textContent = text || t("noCaption");
+    caption.classList.toggle("empty", !text);
+  };
+
+  const openEditor = () => {
+    const clip = clipAtTime(state, video.currentTime);
+    if (!clip) return;
+    editingClip = clip;
+    editor.value = clip.text;
+    caption.hidden = true;
+    editor.hidden = false;
+    editor.focus();
+    editor.select();
+    // Правка идёт по времени под плейхедом — таймлайн и инспектор должны
+    // показывать ту же реплику, а не ту, что была выбрана до этого.
+    selectClip(clip.id);
+    rerender();
+  };
+
+  const closeEditor = (save: boolean) => {
+    if (!editingClip) return;
+    const clip = editingClip;
+    editingClip = null;
+    editor.hidden = true;
+    if (save) {
+      clip.text = editor.value;
+      rerender();
+    }
+    update();
+  };
+
+  caption.addEventListener("click", openEditor);
+  editor.addEventListener("blur", () => closeEditor(true));
+  editor.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      closeEditor(true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeEditor(false);
+    }
+  });
+
+  video.addEventListener("timeupdate", update);
+  video.addEventListener("seeked", update);
+  update();
 }
 
 /** Обработчики вешаются один раз, значения обновляются в renderInspector. */

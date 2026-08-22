@@ -132,7 +132,13 @@
         <div class="studio-editor">
           <!-- Левая колонка: видео и таймлайн -->
           <div class="studio-editor-main">
-            <video id="studio-video" class="studio-video" controls playsinline></video>
+            <div class="studio-video-wrap">
+              <video id="studio-video" class="studio-video" controls playsinline></video>
+              <!-- Субтитр текущей реплики поверх видео; клик открывает правку
+                   того же clip.text, что и поле в инспекторе справа. -->
+              <p id="studio-video-caption" class="studio-video-caption" hidden></p>
+              <textarea id="studio-video-caption-edit" class="studio-video-caption-edit" rows="2" hidden></textarea>
+            </div>
             <!-- Звук паков, чьё видео идёт без аудиодорожки (см. media.ts) -->
             <audio id="studio-sync-audio" preload="auto"></audio>
 

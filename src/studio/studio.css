@@ -173,6 +173,41 @@
   object-fit: contain;
 }
 
+.studio-video-wrap { position: relative; }
+
+.studio-video-caption,
+.studio-video-caption-edit {
+  position: absolute;
+  left: 50%;
+  bottom: 52px;
+  transform: translateX(-50%);
+  max-width: 88%;
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 1.15rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.studio-video-caption {
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  cursor: text;
+  white-space: pre-wrap;
+}
+.studio-video-caption.empty { opacity: 0.65; font-style: italic; }
+
+.studio-video-caption-edit {
+  width: 88%;
+  max-width: 640px;
+  resize: none;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  border: 1px solid var(--wave-user);
+}
+
 /* Редактор занимает всю ширину окна: реплики правятся мышью, и чем длиннее
    видно таймлайн, тем меньше возни с прокруткой. Остальные экраны студии
    остаются в прежней узкой колонке. */
