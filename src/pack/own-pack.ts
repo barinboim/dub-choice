@@ -85,7 +85,6 @@ export function openPublishModal(pack: DubPack): void {
 
   const title = el("h3", "modal-title", t("publishTitle"));
   const intro = el("p", "own-pack-text", t("publishIntro"));
-  const rights = el("p", "own-pack-text own-pack-warn", t("publishRights"));
 
   const authorLabel = el("label", "own-pack-field");
   authorLabel.append(el("span", "", t("publishAuthor")));
@@ -172,7 +171,7 @@ export function openPublishModal(pack: DubPack): void {
       });
   });
 
-  card.append(title, intro, rights, authorLabel, consentLabel, bar.wrap, actions, status);
+  card.append(title, intro, authorLabel, consentLabel, bar.wrap, actions, status);
   author.focus();
 }
 

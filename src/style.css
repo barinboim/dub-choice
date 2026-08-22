@@ -1393,7 +1393,6 @@ select.lang-select {
    лежат здесь, в общем style.css, а не в studio.css. */
 .own-pack-card { max-width: 520px; }
 .own-pack-text { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.45; margin: 0 0 12px; }
-.own-pack-warn { color: var(--ink-dim); }
 .own-pack-field { display: block; margin-bottom: 12px; }
 .own-pack-field span { display: block; font-size: 0.8rem; color: var(--ink-dim); margin-bottom: 4px; }
 .own-pack-field input {
@@ -1439,25 +1438,17 @@ select.lang-select {
   transition: width 0.25s ease;
 }
 
-/* ---------- Блок «Ваш пак» на премьере ---------- */
+/* ---------- Действия со своим паком на премьере ----------
+   Стоят сразу под заголовком, до ролика. Подписи здесь длинные («…пак»):
+   ниже по экрану лежат кнопки про сам ролик («Скачать видео», «Скачать
+   аудио»), и короткое «Скачать» на одной странице с ними читалось бы
+   двусмысленно. Рамки и заголовка у блока нет — под «Премьерой» он и так
+   отдельная строка, а лишняя коробка спорила бы с кадром. */
 .final-own-pack {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 14px;
-  padding: 12px 16px;
-  max-width: 720px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.final-own-pack-title {
-  width: 100%;
-  margin: 0;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
+  margin: -6px 0 18px;
 }

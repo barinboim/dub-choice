@@ -174,8 +174,8 @@
         <div class="pack-start-row">
           <button id="btn-start" class="btn btn-primary btn-big" data-i18n="start"></button>
           <!-- Только для пака из редактора: встроенные скачивать неоткуда -->
-          <button id="btn-pack-download" class="btn btn-pill" data-i18n="downloadPack" hidden></button>
-          <button id="btn-pack-edit" class="btn btn-pill btn-studio" data-i18n="editPack" hidden></button>
+          <button id="btn-pack-download" class="btn btn-pill" data-i18n="downloadShort" hidden></button>
+          <button id="btn-pack-edit" class="btn btn-pill btn-studio" data-i18n="editShort" hidden></button>
           <p id="mic-status" class="mic-status"></p>
         </div>
       </section>
@@ -252,6 +252,16 @@
       <section id="screen-final" class="screen screen-final" hidden>
         <button id="btn-final-back" class="btn btn-text" data-i18n="backToClips"></button>
         <h2 class="final-title" data-i18n="premiere"></h2>
+        <!-- Свой пак из студии: правка, публикация, скачивание. Сразу под
+             заголовком, а не в ряду с «Скачать видео»: это действия с самим
+             паком, а не с роликом, и внизу они читались как соседи экспорта.
+             Подписи здесь длинные («…пак») — рядом стоят кнопки про ролик,
+             и одно «Скачать» на всю премьеру было бы двусмысленным -->
+        <div id="final-own-pack" class="final-own-pack" hidden>
+          <button id="btn-final-edit-pack" class="btn btn-pill btn-studio" data-i18n="editPack"></button>
+          <button id="btn-final-publish-pack" class="btn btn-pill" data-i18n="publishPack"></button>
+          <button id="btn-final-download-pack" class="btn btn-pill" data-i18n="downloadPack"></button>
+        </div>
         <div class="lang-rows">
           <div id="final-audio-langs" class="lang-row" hidden>
             <span class="lang-row-label" data-i18n="audioTrackLabel"></span>
@@ -287,15 +297,6 @@
           <span data-i18n="voiceoverVolume"></span>
           <input id="voiceover-volume" type="range" min="0" max="100" value="30" />
           <span id="voiceover-volume-value" class="monitor-volume-value">30%</span>
-        </div>
-        <!-- Свой пак из студии: правка, публикация, скачивание. Отдельным
-             блоком, а не в общем ряду — это действия с самим паком, а не с
-             роликом, и в ряду с «Скачать видео» они читались как его соседи -->
-        <div id="final-own-pack" class="final-own-pack" hidden>
-          <p class="final-own-pack-title" data-i18n="ownPackSection"></p>
-          <button id="btn-final-edit-pack" class="btn btn-pill btn-studio" data-i18n="editPack"></button>
-          <button id="btn-final-publish-pack" class="btn btn-pill" data-i18n="publishPack"></button>
-          <button id="btn-final-download-pack" class="btn btn-pill" data-i18n="downloadPack"></button>
         </div>
         <div class="final-controls">
           <button id="btn-final-play" class="btn btn-primary btn-big" data-i18n="watch"></button>

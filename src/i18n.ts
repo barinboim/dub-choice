@@ -95,6 +95,8 @@ const dict = {
   start: { ru: "Озвучить!", en: "Voice it!" },
   downloadPack: { ru: "Скачать пак", en: "Download pack" },
   editPack: { ru: "Редактировать пак", en: "Edit pack" },
+  downloadShort: { ru: "Скачать", en: "Download" },
+  editShort: { ru: "Редактировать", en: "Edit" },
   micRequest: { ru: "Запрашиваю доступ к микрофону…", en: "Requesting microphone access…" },
   micError: {
     ru: "Микрофон недоступен. Разреши доступ к микрофону в браузере и попробуй ещё раз.",
@@ -392,17 +394,13 @@ const dict = {
   },
 
   // Свой пак: публикация и скачивание
-  ownPackSection: { ru: "Ваш пак", en: "Your pack" },
   close: { ru: "Закрыть", en: "Close" },
   publishPack: { ru: "Опубликовать пак", en: "Publish pack" },
+  publishShort: { ru: "Опубликовать", en: "Publish" },
   publishTitle: { ru: "Опубликовать пак на dubchoice.barinbo.im", en: "Publish the pack on dubchoice.barinbo.im" },
   publishIntro: {
     ru: "Пак можно выложить в галерею сайта, чтобы его озвучили другие. Каждый пак проходит модерацию вручную, и публикация не гарантируется. Если пак пройдёт, он станет виден всем посетителям сайта — вместе с названием, именем автора и видео.",
     en: "You can submit the pack to the site gallery so other people can dub it. Every pack is moderated by hand, and publication is not guaranteed. If it passes, it becomes visible to every visitor of the site — along with its title, the author's name and the video.",
-  },
-  publishRights: {
-    ru: "Выкладывайте только то, на что у вас есть права, — чужое видео могут снять по требованию правообладателя.",
-    en: "Only submit material you have the rights to — someone else's video may be taken down at the rights holder's request.",
   },
   publishAuthor: { ru: "Автор пака", en: "Pack author" },
   publishAuthorPlaceholder: { ru: "Как вас подписать в галерее", en: "How to credit you in the gallery" },
