@@ -308,6 +308,12 @@ const dict = {
     ru: "Голоса персонажей отделены от фоновых звуков. Вы сможете полностью переозвучить ролик и получить баллы за свою озвучку. Внимание: обработка видео может занять несколько минут.",
     en: "Character voices are separated from background sound. You can fully re-dub the scene and get scored for it. Heads-up: processing may take several minutes.",
   },
+  studioIphoneWarnTitle: { ru: "На iPhone это может зависнуть", en: "This may hang on iPhone" },
+  studioIphoneWarnText: {
+    ru: "«Дубляж» разделяет голоса и фон прямо в браузере — тяжёлая по памяти обработка. На iPhone у любого браузера (Safari, Chrome, Firefox — там всё равно движок WebKit) жёсткий лимит памяти на вкладку, и такая обработка нередко заканчивается зависанием или перезагрузкой страницы. Надёжнее открыть эту ссылку на компьютере.",
+    en: "“Dubbing” separates voices from background right in the browser — a memory-heavy job. On iPhone every browser (Safari, Chrome, Firefox — they all run on WebKit there) has a hard per-tab memory limit, and this processing often ends in a hang or a page reload. It's more reliable to open this link on a computer.",
+  },
+  studioIphoneWarnContinue: { ru: "Всё равно продолжить", en: "Continue anyway" },
   studioProcessingTitle: { ru: "Идёт обработка видео", en: "Processing the video" },
   studioStageMedia: { ru: "Читаю видео…", en: "Reading video…" },
   studioStageSeparate: { ru: "Делю голоса и фон…", en: "Separating voices and background…" },

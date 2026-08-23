@@ -415,7 +415,69 @@ async function openExistingPack(load: Promise<DubPack>): Promise<void> {
 // ---------- Экран 2: выбор режима ----------
 $("studio-mode-back").addEventListener("click", () => showScreen("warn"));
 $("studio-mode-voiceover").addEventListener("click", () => void startPipeline("voiceover"));
-$("studio-mode-dub").addEventListener("click", () => void startPipeline("dub"));
+$("studio-mode-dub").addEventListener("click", () => {
+  if (isIPhone()) openIphoneDubWarning(() => void startPipeline("dub"));
+  else void startPipeline("dub");
+});
+
+/**
+ * Apple обязывает все браузеры на iOS работать на движке WebKit, поэтому
+ * даже Chrome/Firefox на iPhone (UA несёт CriOS/FxiOS) всё равно содержат
+ * "iPhone" — сниффинг ловит устройство независимо от того, какой браузер
+ * сверху. iPad сюда намеренно не попадает: у него памяти на вкладку больше,
+ * а с iPadOS 13 он и вовсе представляется как десктопный Mac.
+ */
+function isIPhone(): boolean {
+  return /iPhone/.test(navigator.userAgent);
+}
+
+/** Предупреждение перед тяжёлым по памяти разделением голоса/фона на iPhone. */
+function openIphoneDubWarning(onContinue: () => void): void {
+  if (document.getElementById("iphone-dub-warn-modal")) return;
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "iphone-dub-warn-modal";
+  backdrop.className = "modal-backdrop";
+  const close = (): void => backdrop.remove();
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) close();
+  });
+
+  const card = document.createElement("div");
+  card.className = "modal-card";
+
+  const title = document.createElement("h3");
+  title.className = "modal-title";
+  title.textContent = t("studioIphoneWarnTitle");
+
+  const text = document.createElement("p");
+  text.className = "own-pack-text";
+  text.textContent = t("studioIphoneWarnText");
+
+  const continueBtn = document.createElement("button");
+  continueBtn.type = "button";
+  continueBtn.className = "btn btn-primary";
+  continueBtn.textContent = t("studioIphoneWarnContinue");
+  continueBtn.addEventListener("click", () => {
+    close();
+    onContinue();
+  });
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "btn btn-text";
+  cancel.textContent = t("modalCancel");
+  cancel.addEventListener("click", close);
+
+  const actions = document.createElement("div");
+  actions.className = "own-pack-actions";
+  actions.append(continueBtn, cancel);
+
+  card.append(title, text, actions);
+  backdrop.append(card);
+  document.body.append(backdrop);
+  note("предупреждение про iPhone показано");
+}
 
 const stageLabel = $("studio-stage-label");
 const progressFill = $("studio-progress-fill");
