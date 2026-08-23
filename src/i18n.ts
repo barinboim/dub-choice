@@ -487,6 +487,12 @@ const dict = {
     ru: "Видео весит {size} — пережать такое прямо в браузере не выйдет, не хватит памяти. Возьмите сцену покороче.",
     en: "The video weighs {size} — re-encoding that in the browser would run out of memory. Use a shorter scene.",
   },
+  mp4FallbackStageMux: { ru: "Свожу видео со звуком…", en: "Combining video with audio…" },
+  mp4FallbackStageDone: { ru: "Дособираю файл…", en: "Finishing the file…" },
+  mp4FallbackFailed: {
+    ru: "Не удалось собрать видео: {error}",
+    en: "Couldn't put the video together: {error}",
+  },
 } as const;
 
 export type MsgKey = keyof typeof dict;

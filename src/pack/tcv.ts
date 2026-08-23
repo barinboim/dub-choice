@@ -138,7 +138,7 @@ const ENGINE_TO = 0.15;
 
 const MB = 1024 * 1024;
 
-function loadEngine(onProgress: TcvProgress): Promise<FFmpeg> {
+export function loadEngine(onProgress: TcvProgress): Promise<FFmpeg> {
   if (engine) return engine;
   engine = (async () => {
     const [coreURL, wasmURL] = await Promise.all([
@@ -165,6 +165,59 @@ function loadEngine(onProgress: TcvProgress): Promise<FFmpeg> {
     throw err;
   });
   return engine;
+}
+
+/**
+ * Резервная сборка MP4 премьеры мимо живого captureStream/MediaRecorder:
+ * на части устройств скрытый экспорт-канвас не отдаёт кадры (см. CLAUDE.md,
+ * баг «152 КБ без видео» — вероятно связано с `display:none` у export-canvas
+ * и throttling'ом rAF/энкодера в фоне на мобильных). Здесь видео и звук не
+ * зависят от живого воспроизведения: звук уже офлайн-смикширован тем же
+ * путём, что и «Скачать аудио» (OfflineAudioContext), видео — исходный файл
+ * пака как есть. Видео почти всегда приходится перекодировать (вход может
+ * быть Theora/WebM, MP4 не унесёт), звук — в AAC. `padSec` — на сколько
+ * дольше звука видео (хвост последней реплики, TAIL_SEC): без этого
+ * последний кадр обрывался бы до того, как дозвучит хвост.
+ */
+export async function muxMixedAudioVideo(
+  video: Blob,
+  audioWav: Blob,
+  padSec: number,
+  onProgress: TcvProgress
+): Promise<Blob> {
+  if (video.size > MAX_VIDEO_BYTES) {
+    throw new Error(`Видео весит ${formatSize(video.size)} — перекодировать такое в браузере не выйдет`);
+  }
+  const ffmpeg = await loadEngine(onProgress);
+  onProgress("mp4FallbackStageMux", ENGINE_TO);
+  const inVideoName = `in.${extOf(video, "mp4")}`;
+  const inAudioName = "audio.wav";
+  const outName = "out.mp4";
+  await ffmpeg.writeFile(inVideoName, new Uint8Array(await video.arrayBuffer()));
+  await ffmpeg.writeFile(inAudioName, new Uint8Array(await audioWav.arrayBuffer()));
+  // Копия потока быстрее и без потерь, но только когда вход уже MP4 и не
+  // нужно дорисовывать хвост фильтром (фильтр требует перекодирования).
+  const canCopy = inVideoName.endsWith(".mp4") && padSec < 0.05;
+  const args = ["-i", inVideoName, "-i", inAudioName, "-map", "0:v:0", "-map", "1:a:0"];
+  if (canCopy) {
+    args.push("-c:v", "copy");
+  } else {
+    if (padSec >= 0.05) args.push("-vf", `tpad=stop_mode=clone:stop_duration=${padSec.toFixed(3)}`);
+    args.push("-c:v", "libx264", "-preset", "veryfast", "-crf", "20");
+  }
+  args.push("-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", outName);
+  try {
+    const code = await ffmpeg.exec(args);
+    if (code !== 0) throw new Error(`ffmpeg завершился с кодом ${code}`);
+    onProgress("mp4FallbackStageDone", 0.95);
+    const data = await ffmpeg.readFile(outName);
+    if (typeof data === "string") throw new Error("ffmpeg вернул текст вместо видео");
+    return new Blob([data.slice().buffer], { type: "video/mp4" });
+  } finally {
+    await ffmpeg.deleteFile(inVideoName).catch(() => {});
+    await ffmpeg.deleteFile(inAudioName).catch(() => {});
+    await ffmpeg.deleteFile(outName).catch(() => {});
+  }
 }
 
 function extOf(blob: Blob, fallback: string): string {

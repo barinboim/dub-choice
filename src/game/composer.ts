@@ -1,8 +1,9 @@
-import { audioContext } from "../audio/context";
+import { audioContext, blobDuration } from "../audio/context";
 import { recordingToBuffer, playbackEndSec, TAIL_SEC } from "../audio/recorder";
 import { audioBufferToWav } from "../audio/wav";
 import { DubVideoPlayer } from "../video/player";
 import { DubSession } from "./session";
+import type { TcvProgress } from "../pack/tcv";
 
 /**
  * Что делать с оригинальными голосами:
@@ -78,6 +79,9 @@ export class Composer {
   private capturing = false;
   private recorder: MediaRecorder | null = null;
   private recorderParts: Blob[] = [];
+  private captureStartedAt = 0;
+  /** Живой захват прошёл, но результат явно битый (см. `finishCaptureBlob`). */
+  private suspicious = false;
   /** Формат записи: MP4 (H.264+AAC, Chrome/Safari) или WebM (фолбэк для Firefox). */
   readonly recorderMime =
     [
@@ -111,6 +115,7 @@ export class Composer {
   ): Promise<void> {
     this.backing = await session.backingBuffer();
     this.capturedBlob = null; // записи могли измениться — старый файл невалиден
+    this.suspicious = false;
     this.cues = [];
     for (let i = 0; i < session.pack.clips.length; i++) {
       const clip = session.pack.clips[i];
@@ -178,6 +183,15 @@ export class Composer {
 
   get isCapturing(): boolean {
     return this.capturing;
+  }
+
+  /**
+   * Живой захват завершился, но результат явно битый (эвристика по объёму
+   * в `checkCaptureHealth`) — эту запись отдавать нельзя, нужен резервный
+   * путь (`renderVideoMp4Fallback`).
+   */
+  get captureWasSuspicious(): boolean {
+    return this.suspicious;
   }
 
   /** Расширение файла для текущего формата записи. */
@@ -276,11 +290,14 @@ export class Composer {
       videoBitsPerSecond: 5_000_000,
     });
     this.recorderParts = [];
+    this.captureStartedAt = performance.now();
+    this.suspicious = false;
     this.recorder.ondataavailable = (e) => e.data.size && this.recorderParts.push(e.data);
     this.recorder.onstop = () => {
       const discard = this.discardCurrentCapture;
-      const blob = discard ? null : new Blob(this.recorderParts, { type: this.recorderMime || "video/webm" });
+      let blob = discard ? null : new Blob(this.recorderParts, { type: this.recorderMime || "video/webm" });
       this.recorderParts = [];
+      if (blob) blob = this.checkCaptureHealth(blob);
       if (blob) this.capturedBlob = blob;
       this.onCaptureFinished?.(blob);
     };
@@ -293,6 +310,27 @@ export class Composer {
       this.drawRaf = requestAnimationFrame(draw);
     };
     draw();
+  }
+
+  /**
+   * Эвристика на явно сорвавшийся живой захват: на части устройств скрытый
+   * export-canvas (`display:none`) не отдаёт кадры `captureStream()`, а
+   * throttling rAF/энкодера в фоне на мобильных душит запись и подавно —
+   * итог: файл на порядки легче любой вменяемой записи видео+звука за
+   * столько же времени (баг с прода — 152 КБ на трёхминутный ролик).
+   * Порог занижен нарочно, чтобы не поймать честную
+   * короткую сцену на низком битрейте — ложный отрицательный тут безопаснее
+   * ложного положительного: первый просто не подхватит резервный путь,
+   * второй заставит игрока ждать перекодирование без повода.
+   */
+  private checkCaptureHealth(blob: Blob): Blob | null {
+    const elapsedSec = (performance.now() - this.captureStartedAt) / 1000;
+    const MIN_BYTES_PER_SEC = 20_000; // ~160 кбит/с — заведомо ниже любой честной записи
+    if (elapsedSec > 1 && blob.size < elapsedSec * MIN_BYTES_PER_SEC) {
+      this.suspicious = true;
+      return null;
+    }
+    return blob;
   }
 
   /**
@@ -418,6 +456,26 @@ export class Composer {
     for (const cue of cues) startSource(cue.buffer, cue.at, cue.gain, cue.until);
 
     return audioBufferToWav(await offline.startRendering());
+  }
+
+  /**
+   * Резервная сборка MP4 мимо живого captureStream/MediaRecorder (см.
+   * `pack/tcv.ts`, `muxMixedAudioVideo`): та же аудиодорожка, что и у
+   * «Скачать аудио», муксится с исходным видео пака напрямую в браузере
+   * через ffmpeg.wasm. Медленнее фоновой записи (перекодирование, а не
+   * захват по ходу просмотра), зато не зависит ни от видимости canvas, ни
+   * от throttling'а rAF в фоне — надёжный путь для тех, у кого живой
+   * захват выходит битым. `tcv.ts` тянется динамическим `import()`, а не
+   * статически: обёртку ffmpeg незачем возить в бандле игры тем, у кого
+   * живой захват и так работает (см. докстринг `pack/tcv.ts`).
+   */
+  async renderVideoMp4Fallback(session: DubSession, onProgress: TcvProgress): Promise<Blob> {
+    const wav = await this.renderAudioWav();
+    const wavDuration = await blobDuration(wav);
+    const videoDuration = this.video.duration || 0;
+    const padSec = Math.max(0, wavDuration - videoDuration);
+    const { muxMixedAudioVideo } = await import("../pack/tcv");
+    return muxMixedAudioVideo(session.pack.video, wav, padSec, onProgress);
   }
 
   /** Останавливает просмотр; недописанная фоновая запись выбрасывается. */

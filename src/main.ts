@@ -1876,6 +1876,14 @@ const exportCanvas = $<HTMLCanvasElement>("export-canvas");
 /** Игрок нажал «Скачать», но файл ещё пишется — отдадим, как только готов. */
 let downloadRequested = false;
 let exportProgressTimer = 0;
+/**
+ * Сколько раз нажали «Скачать» на этой премьере. Второй и следующий клик —
+ * сигнал «в прошлый раз что-то не так» (даже если эвристика ничего не
+ * заподозрила): переключаемся на резервный офлайн-рендер, а не отдаём тот
+ * же путь живого захвата ещё раз. Сбрасывается при входе в финал заново и
+ * при пересборке микса — там всё равно стартует новый захват.
+ */
+let downloadAttempts = 0;
 
 const mixModeInputs = [
   ...document.querySelectorAll<HTMLInputElement>('input[name="mix-mode"], input[name="mix-mode-pack"]'),
@@ -1968,6 +1976,7 @@ async function enterFinal(): Promise<void> {
   finalSlot.replaceChildren(videoPlayer.element);
   exportStatus.hidden = true;
   downloadRequested = false;
+  downloadAttempts = 0;
   btnExport.textContent = t("downloadVideo", { fmt: composer.videoExt.toUpperCase() });
   fitFrameWhenReady(document.querySelector(".final-screen-frame"));
   composer.onCaptureFinished = (blob) => {
@@ -1976,8 +1985,16 @@ async function enterFinal(): Promise<void> {
       downloadRequested = false;
       downloadBlob(blob);
     } else if (!blob && downloadRequested) {
-      exportStatus.hidden = false;
-      exportStatus.textContent = t("exportInterrupted");
+      downloadRequested = false;
+      if (composer?.captureWasSuspicious) {
+        // Живой захват вышел явно битым (эвристика по объёму) — не
+        // показываем игроку файл, который не проиграется, а тихо
+        // переключаемся на надёжный, хоть и более медленный путь.
+        void runMp4Fallback();
+      } else {
+        exportStatus.hidden = false;
+        exportStatus.textContent = t("exportInterrupted");
+      }
     }
   };
   showScreen("final");
@@ -2195,13 +2212,45 @@ function safeFileName(): string {
   return (session?.pack.title ?? "dub").replace(/[^\p{L}\p{N} _-]/gu, "");
 }
 
-function downloadBlob(blob: Blob): void {
+function downloadBlob(blob: Blob, ext = composer?.videoExt ?? "webm"): void {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${safeFileName()} — ${t("dubFileSuffix")}.${composer?.videoExt ?? "webm"}`;
+  a.download = `${safeFileName()} — ${t("dubFileSuffix")}.${ext}`;
   a.click();
   exportStatus.hidden = false;
   exportStatus.textContent = t("exportDone");
+}
+
+/**
+ * Резервная сборка MP4 в обход живого captureStream/MediaRecorder: та же
+ * аудиодорожка, что и «Скачать аудио» (OfflineAudioContext), смукшенная с
+ * исходным видео пака через ffmpeg.wasm (`Composer.renderVideoMp4Fallback`).
+ * На части устройств скрытый export-canvas (`display:none`) не отдаёт
+ * кадры `captureStream()`, а throttling rAF/энкодера в фоне на мобильных
+ * душит запись и подавно — итог: файл на порядки легче честной записи
+ * (баг с прода — 152 КБ на трёхминутный ролик). Этот путь не зависит ни от
+ * видимости canvas, ни от фонового throttling'а вовсе, но и не бесплатен
+ * (перекодирование, а не захват по ходу просмотра) — поэтому не дефолт, а
+ * то, что включает эвристика (`composer.captureWasSuspicious`) или сам
+ * игрок повторным нажатием «Скачать» (`downloadAttempts`).
+ */
+async function runMp4Fallback(): Promise<void> {
+  if (!composer || !session) return;
+  exportStatus.hidden = false;
+  exportStatus.textContent = t("tcvStageEngine");
+  btnExport.disabled = true;
+  try {
+    const blob = await composer.renderVideoMp4Fallback(session, (stage, ratio, vars) => {
+      exportStatus.textContent = `${t(stage, vars)} ${Math.round(ratio * 100)}%`;
+    });
+    downloadBlob(blob, "mp4");
+  } catch (err) {
+    console.error("[export] резервная сборка MP4 сорвалась:", err);
+    exportStatus.hidden = false;
+    exportStatus.textContent = t("mp4FallbackFailed", { error: err instanceof Error ? err.message : String(err) });
+  } finally {
+    btnExport.disabled = false;
+  }
 }
 
 function startExportProgressTimer(): void {
@@ -2219,6 +2268,7 @@ function stopExportProgressTimer(): void {
 function stopExportUi(): void {
   stopExportProgressTimer();
   downloadRequested = false;
+  downloadAttempts = 0;
   exportStatus.hidden = true;
 }
 
@@ -2226,6 +2276,15 @@ $("btn-final-play").addEventListener("click", () => startFinalPlayback());
 
 btnExport.addEventListener("click", () => {
   if (!composer) return;
+  downloadAttempts++;
+  if (downloadAttempts >= 2 || composer.captureWasSuspicious) {
+    // Живой захват мог всё ещё лететь в фоне (первый клик его ждал) — его
+    // завершение не должно ещё раз скачать файл поверх фолбэка.
+    downloadRequested = false;
+    stopExportProgressTimer();
+    void runMp4Fallback();
+    return;
+  }
   const ready = composer.captured;
   if (ready) {
     downloadBlob(ready);
