@@ -1661,6 +1661,13 @@ let savingTail = false;
 let countdownToken = 0;
 let countdownActive = false;
 
+/**
+ * Пауза после «1» перед стартом записи — только когда отсчёт включён.
+ * Без неё запись начиналась вплотную к последней цифре, и игрок не успевал
+ * выдохнуть: первые доли секунды дубля улетали на вдох.
+ */
+const POST_COUNTDOWN_PAUSE_MS = 300;
+
 function cancelCountdown(): void {
   if (!countdownActive) return;
   countdownToken++;
@@ -1702,6 +1709,10 @@ async function runCountdown(): Promise<boolean> {
     if (token !== countdownToken) return false;
   }
   dubCountdown.hidden = true;
+  // Отсчёт формально кончился, но кнопка ещё «Отмена» и запись ещё не
+  // стартовала — если её отменят в этот зазор, ниже словим по token
+  await new Promise((resolve) => setTimeout(resolve, POST_COUNTDOWN_PAUSE_MS));
+  if (token !== countdownToken) return false;
   countdownActive = false;
   return true;
 }
