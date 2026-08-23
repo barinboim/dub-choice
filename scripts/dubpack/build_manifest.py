@@ -67,6 +67,7 @@ PACKS = [
     ("prideprejudice", "Pride & Prejudice (beginning)", "public/packs/prideprejudice.zip", ["фильм", "русская озвучка"], "2026-08-22", None),
     ("minutpyatogo", "Минут 5-10 пятого в 4ре утра!!!", "public/packs/minut5.zip", ["мем"], "2026-08-24", None),
     ("fightclub", "Fight Club", "public/packs/fightclub.zip", ["фильм", "русская озвучка"], "2026-08-23", None),
+    ("nachtonose", "Подождите а что у вас на носу", "public/packs/nachtonose.zip", ["мем", "русская озвучка"], "2026-08-23", None),
 ]
 
 SHORT_MAX_SEC = 60  # граница тега «короткий ролик»
