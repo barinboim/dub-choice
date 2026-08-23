@@ -196,7 +196,7 @@ const galleryPager = $("gallery-pager");
 /** 18+ намеренно не фильтр, а пометка: это предупреждение о содержимом. */
 const HIDDEN_TAGS = new Set(["18+"]);
 const SHELF_SIZE = 8;
-const SHELF_NEW_SIZE = 6;
+const SHELF_NEW_SIZE = 10;
 /**
  * Сколько паков показывать в сетке за раз. Полки (`SHELF_SIZE`) страниц не
  * знают — это витрина фиксированной длины, а не выборка.
