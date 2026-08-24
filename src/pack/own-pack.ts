@@ -149,8 +149,15 @@ export function openPublishModal(pack: DubPack): void {
         bar.wrap.hidden = true;
         status.textContent = t("publishSent");
         status.hidden = false;
+        // Сообщение об успехе — над кнопкой, а не после неё: `status` стоял
+        // в разметке ниже `actions`, и на успехе получалось «Закрыть», а
+        // текст с благодарностью — обрубком под сгибом. Кнопка заодно
+        // становится акцентной: это финал диалога, а не отказ от него.
+        card.insertBefore(status, actions);
         ok.hidden = true;
-        cancel.textContent = t("close");
+        cancel.classList.remove("btn-text");
+        cancel.classList.add("btn-primary");
+        cancel.textContent = t("publishSentClose");
       })
       .catch((err: unknown) => {
         console.error(err);

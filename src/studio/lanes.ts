@@ -39,6 +39,13 @@ const HANDLE_PX = 10;
  * именно прилипло.
  */
 const SNAP_PX = 12;
+/**
+ * Радиус прилипания к плейхеду при создании реплики кликом по пустой
+ * дорожке — шире, чем SNAP_PX у растяжения края: там рука ведёт уже готовый
+ * край пилюли и целится в него прицельно, а здесь клик произвольный, и в
+ * SNAP_PX почти невозможно попасть нарочно.
+ */
+const CREATE_SNAP_PX = 32;
 
 /**
  * Бирюзовый (--wave-user) закреплён за дорожкой «Без персонажа» — она идёт
@@ -151,6 +158,11 @@ export function renderLanes(state: StudioState, video: HTMLVideoElement, opts: L
           setActiveLane(name);
           startRename(label, state, video, opts, name);
         });
+        // Перетаскивание заголовка меняет порядок персонажей (и, с ним, порядок
+        // дорожек). «Без персонажа» из перетаскивания исключён нарочно — она
+        // всегда первая (см. комментарий у laneCharacters).
+        head.style.cursor = "grab";
+        head.addEventListener("pointerdown", (e) => onHeadPointerDown(e, name, head, state, video, opts));
       }
       return head;
     })
@@ -168,8 +180,28 @@ export function renderLanes(state: StudioState, video: HTMLVideoElement, opts: L
       // персонажу без похода к кнопке «+ Реплика». Пилюли сами гасят это
       // событие (stopPropagation на pointerdown), поэтому сюда доходит
       // только настоящий клик по фону: e.target остаётся самой дорожкой.
-      lane.addEventListener("click", (e) => {
+      // Но пока реплика выбрана (инспектор её редактирует), тот же клик по
+      // пустому месту должен просто снять выбор — как в Премьере: игрок
+      // явно тычет мимо, чтобы выйти из правки, а не заказывает новую
+      // реплику. Без этой развилки первый клик мимо инспектора всегда
+      // создавал лишний блок, который потом приходилось удалять руками.
+      // Событие — pointerdown, а не click: инлайн-правка текста прямо на
+      // пилюле (startTextEdit) коммитит и перерисовывает дорожки по blur, а
+      // blur браузер шлёт раньше click, но позже pointerdown/mousedown. Из-за
+      // этого renderLanes успевал подменить саму дорожку (mousedown-таргет)
+      // до того, как долетал click, — браузер такой клик просто не отправлял,
+      // и первый тычок мимо инлайн-редактора не делал вообще ничего, кроме
+      // закрытия текстового поля; снять выбор получалось только со второго.
+      lane.addEventListener("pointerdown", (e) => {
         if (e.target !== lane) return;
+        if (selectedId !== null) {
+          selectedId = null;
+          opts.onSelect(null);
+          for (const other of Array.from($("studio-tl-tracks").querySelectorAll(".studio-tl-pill"))) {
+            other.classList.remove("selected");
+          }
+          return;
+        }
         void createClip(state, video, opts, name, pointerSec(e));
       });
       for (const clip of state.clips) {
@@ -269,6 +301,78 @@ function laneIndexOf(name: string, count: number): number {
   if (!lastState) return -1;
   const index = laneCharacters(lastState).indexOf(name);
   return index < count ? index : -1;
+}
+
+/**
+ * Перетаскивание заголовка дорожки за собой — так меняют порядок персонажей.
+ * Ведёт себя как драг пилюли (pointer capture + порог сдвига), но двигает
+ * не время, а позицию в `state.characters`: соседние заголовки визуально
+ * подвигаются транформом, освобождая место, а сама перестановка массива
+ * происходит один раз на отпускании, с полной перерисовкой.
+ */
+function onHeadPointerDown(
+  e: PointerEvent,
+  name: string,
+  head: HTMLElement,
+  state: StudioState,
+  video: HTMLVideoElement,
+  opts: LanesOptions
+): void {
+  const fromIndex = state.characters.indexOf(name);
+  if (fromIndex < 0) return;
+  const startY = e.clientY;
+  let moved = false;
+  let targetIndex = fromIndex;
+  head.setPointerCapture(e.pointerId);
+
+  // «Без персонажа» всегда первая в heads — заголовки персонажей идут следом.
+  const siblings = () => (Array.from($("studio-tl-heads").children) as HTMLElement[]).slice(1);
+  const clearShifts = () => {
+    for (const el of siblings()) el.style.transform = "";
+  };
+
+  const onMove = (ev: PointerEvent) => {
+    const dy = ev.clientY - startY;
+    if (!moved && Math.abs(dy) > CLICK_SLOP_PX) {
+      moved = true;
+      head.classList.add("head-dragging");
+    }
+    if (!moved) return;
+    head.style.transform = `translateY(${dy}px)`;
+    targetIndex = clamp(fromIndex + Math.round(dy / LANE_H), 0, state.characters.length - 1);
+    siblings().forEach((el, idx) => {
+      if (idx === fromIndex) return;
+      const shift =
+        fromIndex < targetIndex
+          ? idx > fromIndex && idx <= targetIndex
+            ? -1
+            : 0
+          : idx >= targetIndex && idx < fromIndex
+            ? 1
+            : 0;
+      el.style.transform = shift ? `translateY(${shift * LANE_H}px)` : "";
+    });
+  };
+
+  const finish = () => {
+    head.removeEventListener("pointermove", onMove);
+    head.removeEventListener("pointerup", finish);
+    head.removeEventListener("pointercancel", finish);
+    head.classList.remove("head-dragging");
+    head.style.transform = "";
+    clearShifts();
+    if (moved && targetIndex !== fromIndex) {
+      const [entry] = state.characters.splice(fromIndex, 1);
+      state.characters.splice(targetIndex, 0, entry);
+      note("сменил порядок персонажей");
+      pushHistory(state);
+      opts.onClipsChanged();
+      renderLanes(state, video, opts);
+    }
+  };
+  head.addEventListener("pointermove", onMove);
+  head.addEventListener("pointerup", finish);
+  head.addEventListener("pointercancel", finish);
 }
 
 /** Имя дорожки превращается в поле ввода; Enter сохраняет, Escape отменяет. */
@@ -470,7 +574,7 @@ function onPillPointerDown(
   pill.classList.add("dragging");
   pill.setPointerCapture(e.pointerId);
 
-  const onMove = (ev: PointerEvent) => onPillPointerMove(ev, state);
+  const onMove = (ev: PointerEvent) => onPillPointerMove(ev, state, video);
   const onUp = (ev: PointerEvent) => {
     pill.removeEventListener("pointermove", onMove);
     pill.removeEventListener("pointerup", onUp);
@@ -489,7 +593,7 @@ function pointerSec(e: { clientX: number }): number {
   return (e.clientX - rect.left) / pxPerSec;
 }
 
-function onPillPointerMove(e: PointerEvent, state: StudioState): void {
+function onPillPointerMove(e: PointerEvent, state: StudioState, video: HTMLVideoElement): void {
   if (!drag) return;
   if (Math.abs(e.clientX - drag.downX) > CLICK_SLOP_PX || Math.abs(e.clientY - drag.downY) > CLICK_SLOP_PX) {
     drag.moved = true;
@@ -499,7 +603,7 @@ function onPillPointerMove(e: PointerEvent, state: StudioState): void {
   const duration = state.durationSec || env?.durationSec || 0;
   const dt = pointerSec(e) - drag.grabbedAtSec;
 
-  const points = snapPoints(state, drag.clip.id);
+  const points = withPlayhead(snapPoints(state, drag.clip.id), video.currentTime);
 
   if (drag.mode === "move") {
     const len = drag.originEnd - drag.originStart;
@@ -552,7 +656,7 @@ function finishDrag(e: PointerEvent, state: StudioState, video: HTMLVideoElement
   const duration = state.durationSec || env?.durationSec || 0;
   const dt = pointerSec(e) - drag.grabbedAtSec;
 
-  const points = snapPoints(state, clip.id);
+  const points = withPlayhead(snapPoints(state, clip.id), video.currentTime);
 
   note(mode === "move" ? "двигал реплику" : "тянул границу реплики");
   if (mode === "move") {
@@ -617,6 +721,16 @@ function snapPoints(state: StudioState, exceptId: string): SnapTargets {
   const speech: number[] = [];
   for (const iv of speechRanges) speech.push(iv.start, iv.end);
   return { clips, speech };
+}
+
+/**
+ * Плейхед — тоже точка прилипания, наравне с краями соседних реплик: и при
+ * растяжении края, и при переносе реплики целиком. Игрок остановил видео
+ * ровно на границе фразы на слух, и подвести к этому кадру край или всю
+ * реплику проще так, чем ловить его потом на глаз.
+ */
+function withPlayhead(points: SnapTargets, playheadSec: number): SnapTargets {
+  return { clips: [...points.clips, playheadSec], speech: points.speech };
 }
 
 /**
@@ -893,7 +1007,20 @@ async function createClip(
   atSec: number
 ): Promise<void> {
   const duration = state.durationSec || video.duration || 0;
-  const start = clamp(atSec, 0, Math.max(0, duration - MIN_CLIP_SEC));
+  // Рядом с плейхедом реплика магнитится к нему тем краем, что ближе к клику:
+  // кликнули правее плейхеда — на него садится начало, левее — конец. Так
+  // проще завести реплику ровно на границу, которую уже нашли на слух и
+  // остановили там видео, а не потом тянуть край руками. Радиус шире, чем у
+  // растяжения края (SNAP_PX): клик — жест грубее, чем прицельное
+  // перетаскивание готового края пилюли, ловить им ту же узкую полоску
+  // почти невозможно.
+  const radius = CREATE_SNAP_PX / pxPerSec;
+  const anchored = Math.abs(atSec - video.currentTime) <= radius;
+  const start = clamp(
+    anchored ? (atSec >= video.currentTime ? video.currentTime : video.currentTime - NEW_CLIP_SEC) : atSec,
+    0,
+    Math.max(0, duration - MIN_CLIP_SEC)
+  );
   const end = duration > 0 ? Math.min(duration, start + NEW_CLIP_SEC) : start + NEW_CLIP_SEC;
   const clip: StudioClip = {
     id: newClipId(),
@@ -913,10 +1040,13 @@ async function createClip(
   opts.onClipsChanged();
   renderLanes(state, video, opts);
 
-  // Кадр снимаем после отрисовки: перемотка вернёт плеер на место сама.
-  const at = video.currentTime;
+  // Кадр снимаем после отрисовки. Плеер сюда же и остаётся, не откатывается
+  // назад: новая реплика — это и есть новая рабочая точка, логично смотреть
+  // дальше с неё, а не там, где стояли до клика. Раньше плеер откатывали к
+  // прежней позиции, и на каждое создание реплики красная линия дёргалась
+  // туда-обратно — выглядело как рандомные скачки, особенно если реплики
+  // создавали одну за другой быстро.
   clip.thumb = await captureFrame(video, start);
-  video.currentTime = at;
   opts.onClipsChanged();
 }
 

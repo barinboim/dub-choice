@@ -439,6 +439,7 @@ const dict = {
     ru: "Пак отправлен на модерацию. Спасибо! Если он подойдёт галерее, он появится на сайте в ближайшие дни.",
     en: "The pack has been submitted for moderation. Thank you! If it fits the gallery, it will show up on the site within a few days.",
   },
+  publishSentClose: { ru: "Буду ждать!", en: "Can't wait!" },
   publishFailed: {
     ru: "Не удалось отправить пак: {error}. Попробуйте позже или напишите нам.",
     en: "Couldn't submit the pack: {error}. Try again later or drop us a line.",

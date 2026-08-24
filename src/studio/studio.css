@@ -277,10 +277,19 @@
   text-align: left;
   cursor: pointer;
   box-sizing: border-box;
+  transition: transform 0.12s ease;
 }
 .studio-tl-head:hover { color: var(--ink); }
 /* Активная дорожка — в неё лягут новые реплики. */
 .studio-tl-head.active { color: var(--ink); background: var(--panel-2); box-shadow: inset 2px 0 0 var(--wave-user); }
+/* Перетаскивание заголовка персонажа — меняет порядок дорожек. */
+.studio-tl-head.head-dragging {
+  position: relative;
+  z-index: 3;
+  transition: none;
+  background: var(--panel-2);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+}
 .studio-tl-head-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-tl-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 
