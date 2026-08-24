@@ -149,6 +149,17 @@ export class DubSession {
     return this.captionEdits.has(`${index}:${lang}`);
   }
 
+  /** Снимок правок текста — для сохранения прохождения в историю (`pack/history.ts`). */
+  captionEditsSnapshot(): [string, string][] {
+    return [...this.captionEdits];
+  }
+
+  /** Восстанавливает правки текста при открытии прохождения из истории. */
+  restoreCaptionEdits(edits: Iterable<[string, string]>): void {
+    this.captionEdits.clear();
+    for (const [key, text] of edits) this.captionEdits.set(key, text);
+  }
+
   async originalBuffer(index = this.clipIndex): Promise<AudioBuffer> {
     let buf = this.originals.get(index);
     if (!buf) {

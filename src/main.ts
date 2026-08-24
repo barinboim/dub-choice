@@ -2,6 +2,14 @@ import "./style.css";
 import { trackEvent } from "./analytics";
 import { loadPackFromZip, loadPackFromFiles, collectDroppedFiles } from "./pack/loader";
 import { stashPackForStudio, stashVideoForStudio, takePendingPack } from "./pack/handoff";
+import {
+  saveCompletedPlay,
+  listCompletedPlays,
+  loadCompletedPlay,
+  packFromHistoryPayload,
+  deleteCompletedPlay,
+  type HistoryMeta,
+} from "./pack/history";
 import { openDownloadModal, openPublishModal } from "./pack/own-pack";
 import { looksLikeVideo } from "./studio/source";
 import { initFeedback, setFeedbackContext } from "./feedback";
@@ -59,10 +67,17 @@ function showScreen(name: keyof typeof screens): void {
 }
 
 // ---------- Состояние приложения ----------
-const packs: DubPack[] = [];
 let selectedPack: DubPack | null = null;
 let session: DubSession | null = null;
 let videoPlayer: DubVideoPlayer | null = null;
+/**
+ * Id текущего прохождения в истории («Прошлые игры», `pack/history.ts`):
+ * заводится заново при каждом старте озвучки (`crypto.randomUUID()`) и
+ * держится на всю сессию, чтобы повторные визиты на премьеру (после
+ * «← К репликам» и новых дублей) обновляли ту же запись, а не плодили
+ * дубликаты. При открытии прохождения из истории — id самой этой записи.
+ */
+let currentHistoryId: string | null = null;
 let composer: Composer | null = null;
 const recorder = new MicRecorder();
 
@@ -119,7 +134,7 @@ $("logo").addEventListener("click", () => {
 /** Обновляет тексты, которые рисуются из кода (не через data-i18n). */
 function refreshDynamicTexts(): void {
   renderPreloadedList();
-  renderPackList();
+  void renderHistoryList();
   if (selectedPack && !screens.pack.hidden) fillPackCard(selectedPack);
   if (session) {
     $("dub-counter").textContent = t("clipCounter", {
@@ -139,7 +154,7 @@ function refreshDynamicTexts(): void {
 // ================= ЭКРАН 1: дом =================
 const dropZone = $("drop-zone");
 const homeError = $("home-error");
-const packList = $("pack-list");
+const historyList = $("history-list");
 const preloadedList = $("preloaded-list");
 
 function showHomeError(message: string): void {
@@ -152,8 +167,6 @@ async function addPack(load: Promise<DubPack>, sourceId: string | null = null): 
   dropZone.classList.remove("dragover");
   try {
     const pack = await load;
-    packs.push(pack);
-    renderPackList();
     selectPack(pack, sourceId ?? "custom");
   } catch (err) {
     if (err instanceof PackError) showHomeError(err.message);
@@ -400,9 +413,6 @@ function renderShelves(): void {
     track.replaceChildren(...list.map((pp) => buildPackCard(pp, kind)));
   };
 
-  // Полка «Новинки» временно убрана с главной (решение владельца 2026-08-21):
-  // поле загрузки своего пака поднимается наверх. Разметка и сортировка
-  // остаются на месте — вернуть полку значит поставить флаг обратно в true.
   if (SHOW_NEW_SHELF) {
     fill(
       shelfNewSection,
@@ -700,28 +710,139 @@ async function loadPreloaded(id: string): Promise<void> {
   }
 }
 
-function renderPackList(): void {
-  $("loaded-label").hidden = packs.length === 0;
-  packList.replaceChildren(
-    ...packs.map((pack, i) => {
-      const btn = document.createElement("button");
-      btn.className = "pack-list-item";
-      const img = document.createElement("img");
-      img.alt = "";
-      if (pack.icon) img.src = URL.createObjectURL(pack.icon);
-      const meta = document.createElement("div");
-      const title = document.createElement("div");
-      title.className = "pli-title";
-      title.textContent = pack.title;
-      const sub = document.createElement("div");
-      sub.className = "pli-sub";
-      sub.textContent = `${pack.clips.length} ${t("clipsCount")}${pack.authors.length ? " · " + pack.authors.join(", ") : ""}`;
-      meta.append(title, sub);
-      btn.append(img, meta);
-      btn.addEventListener("click", () => selectPack(packs[i]));
-      return btn;
-    })
-  );
+// ---------- Прошлые игры ----------
+// Прохождение, дошедшее до премьеры, сохраняется в IndexedDB
+// (pack/history.ts) и переживает перезагрузку страницы — если рендер MP4
+// на слабом устройстве уронит вкладку (см. попапы «Собрать сейчас»/
+// «Собрать и включить перемотку»), дубляж не потерян: он снова здесь.
+
+function formatHistoryDate(ts: number): string {
+  return new Date(ts).toLocaleString(lang() === "ru" ? "ru-RU" : "en-US", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function ensurePreloadedManifest(): Promise<void> {
+  if (preloadedPacks.length === 0) preloadedPacks = await loadPreloadedManifest();
+}
+
+/** Восстанавливает DubPack прохождения: свой пак — из сохранённых байт, встроенный — перекачкой заново. */
+async function resolveHistoryPack(meta: HistoryMeta, payload: Awaited<ReturnType<typeof loadCompletedPlay>>): Promise<DubPack> {
+  const own = payload && (await packFromHistoryPayload(payload));
+  if (own) return own;
+  await ensurePreloadedManifest();
+  const pp = preloadedPacks.find((p) => p.id === meta.packSourceId);
+  if (!pp) throw new Error("Пак больше не в галерее");
+  const blob = await (await fetch(packUrl(pp))).blob();
+  return loadPackFromZip(new File([blob], `${pp.id}.zip`));
+}
+
+async function openHistoryEntry(meta: HistoryMeta): Promise<void> {
+  homeError.hidden = true;
+  try {
+    const payload = await loadCompletedPlay(meta.id);
+    if (!payload) return;
+    const pack = await resolveHistoryPack(meta, payload);
+    abandonSession();
+    selectedPack = pack;
+    currentPackSlug = meta.packSourceId;
+    disabledCharacters = new Set(payload.disabledCharacters);
+    syncStudioPackButtons();
+    setFeedbackContext({
+      extra: {
+        "пак": currentPackSlug,
+        "реплик в паке": pack.clips.length,
+        "видео пака": pack.video?.type || "?",
+      },
+    });
+    videoPlayer = await createVideoPlayer(pack.video, pack.videoKind);
+    session = new DubSession(pack, payload.captionLang, new Set(payload.disabledCharacters));
+    session.captionLang = payload.captionLang;
+    session.audioLang = payload.audioLang;
+    session.restoreCaptionEdits(payload.captionEdits);
+    for (const [i, rec] of payload.recordings) session.recordings.set(i, rec);
+    mixMode = payload.mixMode;
+    voiceoverGain = payload.voiceoverGain;
+    takeVolume = payload.takeVolume;
+    composer = new Composer(videoPlayer);
+    currentHistoryId = meta.id;
+    await enterFinal(true);
+  } catch (err) {
+    console.error("[history] не удалось открыть прохождение:", err);
+    showHomeError(t("historyOpenError"));
+  }
+}
+
+function historyRow(meta: HistoryMeta): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "history-row";
+
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "pack-list-item";
+  const img = document.createElement("img");
+  img.alt = "";
+  if (meta.packIcon) img.src = URL.createObjectURL(meta.packIcon);
+  const info = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "pli-title";
+  title.textContent = meta.packTitle;
+  const sub = document.createElement("div");
+  sub.className = "pli-sub";
+  sub.textContent = `${meta.clipsCount} ${t("clipsCount")} · ${formatHistoryDate(meta.savedAt)}`;
+  info.append(title, sub);
+  open.append(img, info);
+  open.addEventListener("click", () => void openHistoryEntry(meta));
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "history-remove";
+  remove.setAttribute("aria-label", t("historyDelete"));
+  remove.textContent = "✕";
+  remove.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!confirm(t("historyDeleteConfirm", { title: meta.packTitle }))) return;
+    void deleteCompletedPlay(meta.id).then(() => {
+      if (currentHistoryId === meta.id) currentHistoryId = null;
+      void renderHistoryList();
+    });
+  });
+
+  row.append(open, remove);
+  return row;
+}
+
+async function renderHistoryList(): Promise<void> {
+  const items = await listCompletedPlays();
+  $("history-label").hidden = items.length === 0;
+  historyList.replaceChildren(...items.map(historyRow));
+}
+
+/** Записывает текущую сессию в историю — молча: сбой (квота, приватный режим) не должен ломать премьеру. */
+async function saveSessionToHistory(): Promise<void> {
+  if (!session || !currentHistoryId) return;
+  const isOwnPack = currentPackSlug === "custom" || currentPackSlug === "studio";
+  try {
+    await saveCompletedPlay(currentHistoryId, {
+      pack: session.pack,
+      packSourceId: currentPackSlug,
+      storePackFully: isOwnPack,
+      recordings: session.recordings,
+      mixMode,
+      disabledCharacters,
+      audioLang: session.audioLang,
+      captionLang: session.captionLang,
+      captionEdits: session.captionEditsSnapshot(),
+      voiceoverGain,
+      takeVolume,
+    });
+    void renderHistoryList();
+  } catch (err) {
+    console.warn("[history] не удалось сохранить прохождение:", err);
+  }
 }
 
 $("btn-pick-zip").addEventListener("click", () => $("input-zip").click());
@@ -1002,6 +1123,7 @@ $("btn-start").addEventListener("click", async () => {
     return;
   }
   session = new DubSession(selectedPack, lang(), new Set(disabledCharacters));
+  currentHistoryId = crypto.randomUUID();
   scoreLang = null;
   composer?.dispose();
   composer = new Composer(videoPlayer);
@@ -1860,11 +1982,15 @@ function abandonSession(): void {
   stopExportUi();
   clearResults();
   clipThumbs.clear();
+  scrubPlayer?.dispose();
+  scrubPlayer = null;
+  scrubRenderedBlob = null;
   composer?.dispose();
   composer = null;
   videoPlayer?.dispose();
   videoPlayer = null;
   session = null;
+  currentHistoryId = null;
 }
 
 // ================= ЭКРАН 4: финал =================
@@ -1884,6 +2010,29 @@ let exportProgressTimer = 0;
  * при пересборке микса — там всё равно стартует новый захват.
  */
 let downloadAttempts = 0;
+
+/**
+ * Игрок заказал ручной рендер ради перемотки (клик по превью → попап →
+ * «Собрать и включить перемотку»): `scrubPlayer` — нативный плеер поверх
+ * уже готового файла (звук зашит внутри, синхронизировать нечего),
+ * `scrubRenderedBlob` — сам этот файл, чтобы «Скачать» отдавал его
+ * мгновенно, не рендеря повторно. Оба сбрасываются при новом входе в финал
+ * и при пересборке микса — старый рендер им уже не соответствует.
+ */
+let scrubPlayer: DubVideoPlayer | null = null;
+let scrubRenderedBlob: Blob | null = null;
+
+function resetScrubRender(): void {
+  if (!scrubPlayer) return;
+  scrubPlayer.dispose();
+  scrubPlayer = null;
+  scrubRenderedBlob = null;
+  // Отрендеренный плеер занимал слот вместо обычного — вернуть его на место,
+  // иначе пересборка микса оставит слот пустым до конца просмотра.
+  if (videoPlayer && finalSlot.firstElementChild !== videoPlayer.element) {
+    finalSlot.replaceChildren(videoPlayer.element);
+  }
+}
 
 const mixModeInputs = [
   ...document.querySelectorAll<HTMLInputElement>('input[name="mix-mode"], input[name="mix-mode-pack"]'),
@@ -1916,6 +2065,7 @@ async function applyMixMode(): Promise<void> {
   stopExportUi();
   exportStatus.hidden = true;
   downloadRequested = false;
+  resetScrubRender();
   await composer.prepare(session, mixMode, voiceoverGain, takeGain());
   startFinalPlayback();
 }
@@ -1966,13 +2116,21 @@ function renderFinalAudioPills(): void {
   });
 }
 
-async function enterFinal(): Promise<void> {
+/**
+ * `fromHistory` — открыли готовое прохождение из «Прошлых игр», а не сами
+ * только что дошли до премьеры: событие воронки (`dub-complete`) и запись в
+ * дневник сеанса не пересчитываем повторно, это не новое прохождение.
+ * В историю прохождение всё равно пересохраняется (см. `saveSessionToHistory`)
+ * — открытие просто поднимает запись наверх списка, как «недавно смотрел».
+ */
+async function enterFinal(fromHistory = false): Promise<void> {
   if (!session || !composer || !videoPlayer) return;
   $("dub-progress-fill").style.width = "100%";
   syncMixModeUi();
   renderFinalAudioPills();
   await composer.prepare(session, mixMode, voiceoverGain, takeGain());
   hideWatchVideo(false); // плеер сейчас переедет в финальный слот
+  resetScrubRender();
   finalSlot.replaceChildren(videoPlayer.element);
   exportStatus.hidden = true;
   downloadRequested = false;
@@ -1999,8 +2157,11 @@ async function enterFinal(): Promise<void> {
   };
   showScreen("final");
   startFinalPlayback();
-  note(`дошёл до премьеры: дублей ${session?.recordings.size ?? 0}`);
-  trackEvent(`dub-complete/${currentPackSlug}`);
+  if (!fromHistory) {
+    note(`дошёл до премьеры: дублей ${session?.recordings.size ?? 0}`);
+    trackEvent(`dub-complete/${currentPackSlug}`);
+  }
+  void saveSessionToHistory();
   // Только после showScreen: волнам нужна реальная ширина канвасов
   void renderResults();
 }
@@ -2253,6 +2414,181 @@ async function runMp4Fallback(): Promise<void> {
   }
 }
 
+/** Идёт ли сейчас ручной рендер ради перемотки/досрочного экспорта — защита от повторного клика. */
+let scrubRendering = false;
+
+/**
+ * Общий попап-подтверждение «собрать файл заранее»: используется и для
+ * клика по превью (перемотка), и для клика «Скачать» до конца просмотра
+ * (см. `openScrubConfirm`/`openDownloadWaitConfirm`). Один и тот же
+ * backdrop-id — открыт может быть только один такой попап разом.
+ */
+function openBuildNowConfirm(opts: {
+  titleKey: Parameters<typeof t>[0];
+  bodyKey: Parameters<typeof t>[0];
+  okKey: Parameters<typeof t>[0];
+  cancelKey: Parameters<typeof t>[0];
+  onOk: () => void;
+  onCancel: () => void;
+}): boolean {
+  if (document.getElementById("scrub-modal")) return false;
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "scrub-modal";
+  backdrop.className = "modal-backdrop";
+  const card = document.createElement("div");
+  card.className = "modal-card own-pack-card";
+  const title = document.createElement("h3");
+  title.className = "modal-title";
+  title.textContent = t(opts.titleKey);
+  const body = document.createElement("p");
+  body.className = "own-pack-text";
+  body.textContent = t(opts.bodyKey);
+  const actions = document.createElement("div");
+  actions.className = "own-pack-actions";
+  const ok = document.createElement("button");
+  ok.type = "button";
+  ok.className = "btn btn-primary";
+  ok.textContent = t(opts.okKey);
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "btn btn-text";
+  cancel.textContent = t(opts.cancelKey);
+  actions.append(ok, cancel);
+  card.append(title, body, actions);
+  backdrop.append(card);
+  document.body.append(backdrop);
+
+  const close = () => backdrop.remove();
+  const cancelHandler = () => {
+    close();
+    opts.onCancel();
+  };
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) cancelHandler();
+  });
+  cancel.addEventListener("click", cancelHandler);
+  ok.addEventListener("click", () => {
+    close();
+    opts.onOk();
+  });
+  return true;
+}
+
+/**
+ * Рендерит готовый файл целиком тем же путём, что и резервная сборка MP4
+ * (`renderVideoMp4Fallback`: тот же WAV-микс, что и «Скачать аудио»,
+ * смукшенный с исходным видео пака через ffmpeg.wasm), но не скачивает его
+ * сразу, а отдаёт нативному `<video controls>` — звук уже зашит в файл,
+ * поэтому пауза и перемотка работают сами, без ручной синхронизации с Web
+ * Audio. Блоб кэшируется в `scrubRenderedBlob`: «Скачать» дальше отдаёт его
+ * мгновенно, не рендеря повторно. `resumeAt` не передан — значит исходное
+ * видео всё это время играло само по себе (путь «Скачать» до конца
+ * просмотра, см. `openDownloadWaitConfirm`), и место для перемотки берём
+ * по текущей позиции прямо перед подменой, а не по моменту клика.
+ */
+async function renderForScrub(resumeAt?: number, autoDownload = false): Promise<void> {
+  if (!composer || !session || !videoPlayer) return;
+  scrubRendering = true;
+  exportStatus.hidden = false;
+  exportStatus.textContent = t("tcvStageEngine");
+  btnExport.disabled = true;
+  try {
+    const blob = await composer.renderVideoMp4Fallback(session, (stage, ratio, vars) => {
+      exportStatus.textContent = `${t(stage, vars)} ${Math.round(ratio * 100)}%`;
+    });
+    const at = resumeAt ?? videoPlayer.currentTime;
+    // Старое видео могло всё это время играть само по себе (путь «Скачать»
+    // без паузы) — глушим его граф перед тем, как подменить слот, иначе
+    // секунду-две звучали бы одновременно два микса.
+    composer.stop();
+    const player = await createVideoPlayer(blob, "native");
+    scrubPlayer = player;
+    scrubRenderedBlob = blob;
+    finalSlot.replaceChildren(player.element);
+    (player.element as HTMLVideoElement).controls = true;
+    player.currentTime = at;
+    await player.play().catch(() => {});
+    exportStatus.hidden = true;
+    if (autoDownload) downloadBlob(blob, "mp4");
+  } catch (err) {
+    console.error("[export] сборка для перемотки сорвалась:", err);
+    exportStatus.hidden = false;
+    exportStatus.textContent = t("scrubRenderFailed");
+    startFinalPlayback();
+  } finally {
+    scrubRendering = false;
+    btnExport.disabled = false;
+  }
+}
+
+/**
+ * Клик по превью на премьере: пока идёт живой захват, «перемотка» не имеет
+ * смысла — звук у него отдельный Web Audio-граф, не привязанный к
+ * currentTime видео, и пауза/скраб развели бы картинку со звуком. Поэтому
+ * вместо нативных controls на текущем видео спрашиваем, стоит ли ради
+ * перемотки заранее собрать готовый файл (`renderForScrub`). На паузу
+ * попапа ставим синхронно и видео, и звук (`audioContext().suspend()`) —
+ * иначе даже секунды раздумья успели бы их развести; «Отмена» синхронно же
+ * их возвращает, живой захват при этом не прерывался.
+ */
+function openScrubConfirm(): void {
+  if (!composer || !videoPlayer || scrubPlayer || scrubRendering) return;
+  const resumeAt = videoPlayer.currentTime;
+  videoPlayer.pause();
+  void audioContext().suspend();
+  const opened = openBuildNowConfirm({
+    titleKey: "scrubModalTitle",
+    bodyKey: "scrubModalBody",
+    okKey: "scrubModalOk",
+    cancelKey: "scrubModalCancel",
+    onOk: () => {
+      composer?.abandonCapture();
+      void renderForScrub(resumeAt);
+    },
+    onCancel: () => {
+      void audioContext().resume();
+      void videoPlayer?.play().catch(() => {});
+    },
+  });
+  if (!opened) {
+    // Попап уже открыт (второй клик) — не оставляем видео и звук висеть
+    // на паузе просто так.
+    void audioContext().resume();
+    void videoPlayer.play().catch(() => {});
+  }
+}
+
+/**
+ * Клик «Скачать» до того, как живой захват дописался: раньше это молча
+ * ждало конца просмотра. Теперь — тот же выбор, что и в `openScrubConfirm`,
+ * только без паузы (видео и так уже играет само по себе, спешить ему
+ * незачем — досрочная сборка идёт параллельно с обычным просмотром).
+ * «Собрать сейчас» — тот же `renderForScrub`, но с автоскачиванием;
+ * «Ждать» — прежнее поведение: тихое ожидание конца живого захвата.
+ */
+function openDownloadWaitConfirm(): void {
+  if (!composer) return;
+  openBuildNowConfirm({
+    titleKey: "downloadWaitTitle",
+    bodyKey: "downloadWaitBody",
+    okKey: "downloadWaitOk",
+    cancelKey: "downloadWaitCancel",
+    onOk: () => {
+      composer?.abandonCapture();
+      void renderForScrub(undefined, true);
+    },
+    onCancel: () => {
+      downloadRequested = true;
+      exportStatus.hidden = false;
+      if (!composer?.isCapturing) startFinalPlayback();
+      startExportProgressTimer();
+    },
+  });
+}
+
+finalSlot.addEventListener("click", openScrubConfirm);
+
 function startExportProgressTimer(): void {
   stopExportProgressTimer();
   exportProgressTimer = window.setInterval(() => {
@@ -2272,10 +2608,24 @@ function stopExportUi(): void {
   exportStatus.hidden = true;
 }
 
-$("btn-final-play").addEventListener("click", () => startFinalPlayback());
+$("btn-final-play").addEventListener("click", () => {
+  // Отрендеренный для перемотки файл — свой отдельный плеер: обычный
+  // "Играть" должен перезапустить его же, а не разбудить composer,
+  // который сейчас невидим (его видео уехало из слота).
+  if (scrubPlayer) {
+    scrubPlayer.currentTime = 0;
+    void scrubPlayer.play().catch(() => {});
+    return;
+  }
+  startFinalPlayback();
+});
 
 btnExport.addEventListener("click", () => {
   if (!composer) return;
+  if (scrubRenderedBlob) {
+    downloadBlob(scrubRenderedBlob, "mp4");
+    return;
+  }
   downloadAttempts++;
   if (downloadAttempts >= 2 || composer.captureWasSuspicious) {
     // Живой захват мог всё ещё лететь в фоне (первый клик его ждал) — его
@@ -2290,10 +2640,7 @@ btnExport.addEventListener("click", () => {
     downloadBlob(ready);
     return;
   }
-  downloadRequested = true;
-  exportStatus.hidden = false;
-  if (!composer.isCapturing) startFinalPlayback(); // просмотр (и запись) начнутся заново
-  startExportProgressTimer();
+  openDownloadWaitConfirm();
 });
 
 // Аудиодорожка рендерится офлайн — мгновенно, без просмотра. Кнопка
@@ -2400,6 +2747,7 @@ applyNarrowLayout();
 setLang(lang()); // применяет переводы к статике и <html lang>
 syncLangButtons();
 renderPreloadedList(); // сразу пустая галерея, манифест ещё в пути
+void renderHistoryList();
 showScreen("home");
 
 /** Список встроенных паков не зашит в бандл — качается из R2 при каждом заходе. */

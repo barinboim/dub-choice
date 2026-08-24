@@ -478,6 +478,17 @@ export class Composer {
     return muxMixedAudioVideo(session.pack.video, wav, padSec, onProgress);
   }
 
+  /**
+   * Останавливает и выбрасывает идущий live-захват, не трогая просмотр —
+   * плеер и звук продолжают идти как ни в чём не бывало. Нужно, когда игрок
+   * заказывает ручной рендер для перемотки (см. `main.ts`, клик по превью
+   * на премьере): фоновую запись, которая всё равно не пригодится, незачем
+   * дописывать до конца.
+   */
+  abandonCapture(): void {
+    if (this.capturing) this.finishCapture(true);
+  }
+
   /** Останавливает просмотр; недописанная фоновая запись выбрасывается. */
   stop(): void {
     clearTimeout(this.overhangTimer);

@@ -598,6 +598,20 @@ a:hover { color: #fff; }
 .pack-list-item .pli-title { font-weight: 500; }
 .pack-list-item .pli-sub { color: var(--ink-dim); font-size: 0.82rem; }
 
+.history-row { display: flex; align-items: center; gap: 6px; }
+.history-row .pack-list-item { flex: 1; min-width: 0; }
+.history-remove {
+  flex: none;
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 1rem;
+  border-radius: var(--radius-sm);
+}
+.history-remove:hover { color: var(--ink); background: var(--panel-2); }
+
 .credits {
   margin-top: 48px;
   padding-top: 18px;
