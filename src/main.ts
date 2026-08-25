@@ -2515,6 +2515,7 @@ function openDownloadBrokenConfirm(): void {
     onCancel: () => {
       downloadedOnce = false;
       earlyDownloadNoticeShown = false;
+      composer?.discardCaptured();
       startFinalPlayback();
     },
   });
@@ -2534,6 +2535,7 @@ function openDownloadBrokenConfirmMobile(): void {
     onOk: () => {
       downloadedOnce = false;
       earlyDownloadNoticeShown = false;
+      composer?.discardCaptured();
       startFinalPlayback();
     },
     onCancel: () => {},

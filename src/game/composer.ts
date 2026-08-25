@@ -177,6 +177,17 @@ export class Composer {
     return this.capturedBlob;
   }
 
+  /**
+   * Выбрасывает уже записанный файл, не трогая остальное состояние —
+   * нужно, когда игрок просит пересобрать битый файл заново («Смотреть
+   * заново» в попапе «что-то не так с файлом?», `main.ts`). Без этого
+   * `play()` видит непустой `capturedBlob` и молча пропускает новую
+   * запись, считая прошлый (битый) файл всё ещё годным.
+   */
+  discardCaptured(): void {
+    this.capturedBlob = null;
+  }
+
   get isCapturing(): boolean {
     return this.capturing;
   }
