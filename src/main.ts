@@ -889,45 +889,43 @@ const micStatus = $("mic-status");
 
 /**
  * Выбор системного микрофона — только на десктопе (`isMobile()`, у телефонов
- * почти всегда один вход, выбирать не из чего). Список появляется, только
- * когда доступ к микрофону уже есть без нового диалога: либо разрешение
- * выдано в прошлой сессии (Permissions API отдаёт "granted" молча), либо
- * прямо сейчас, после того как игрок сам запросил доступ кликом «Озвучить!»
- * (`recorder.init()` в обработчике `btn-start`). Специального probe-вызова
- * `getUserMedia()` ради одних лейблов нет: строка на карточке пака не
- * должна выпрашивать разрешение раньше, чем игрок решил играть.
+ * почти всегда один вход, выбирать не из чего). Решение владельца
+ * 2026-08-25: выбор должен работать уже на карточке пака, до «Озвучить!» —
+ * поэтому список запрашивается (с диалогом разрешения, если он ещё не был
+ * дан) сразу при первом заходе на карточку, а не после старта записи.
+ * Разрешение просится один раз за сессию (`micProbed`) — повторный выбор
+ * пака его не переспрашивает.
  */
 const micDeviceRow = $("mic-device-row");
 const micDeviceSelect = $<HTMLSelectElement>("mic-device-select");
 let micDeviceId: string | undefined;
+let micProbed = false;
 
 if (!isMobile()) {
   micDeviceSelect.addEventListener("change", () => {
     micDeviceId = micDeviceSelect.value || undefined;
   });
-  void refreshMicDevicesIfPermitted();
-  navigator.mediaDevices?.addEventListener?.("devicechange", () => void refreshMicDevicesIfPermitted());
+  navigator.mediaDevices?.addEventListener?.("devicechange", () => void refreshMicDevices());
 }
 
-/** Обновляет список, только если браузер уже отдаёт лейблы без нового диалога. */
-async function refreshMicDevicesIfPermitted(): Promise<void> {
-  try {
-    const status = await navigator.permissions?.query?.({ name: "microphone" as PermissionName });
-    if (status && status.state !== "granted") return;
-  } catch {
-    // Permissions API для "microphone" поддержан не везде (Safari, Firefox) —
-    // тогда просто пробуем enumerateDevices() ниже: если лейблов нет, список
-    // не покажется, и следующий шанс — после recorder.init().
-  }
-  await refreshMicDevices();
+/** Запрашивает список микрофонов на карточке пака, один раз за сессию. */
+function probeMicDevicesOnce(): void {
+  if (isMobile() || micProbed) return;
+  micProbed = true;
+  void refreshMicDevices();
 }
 
-/** Список устройств без запроса разрешения — если лейблов нет, строка остаётся скрытой. */
+/** Названия устройств доступны только после разрешения — запрашиваем его молча, если нужно. */
 async function refreshMicDevices(): Promise<void> {
   try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const inputs = devices.filter((d) => d.kind === "audioinput" && d.deviceId);
-    if (!inputs.length || inputs.some((d) => !d.label)) return;
+    let devices = await navigator.mediaDevices.enumerateDevices();
+    let inputs = devices.filter((d) => d.kind === "audioinput");
+    if (inputs.some((d) => !d.label)) {
+      const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+      probe.getTracks().forEach((t) => t.stop());
+      devices = await navigator.mediaDevices.enumerateDevices();
+      inputs = devices.filter((d) => d.kind === "audioinput");
+    }
     const prev = micDeviceSelect.value;
     micDeviceSelect.replaceChildren(
       ...inputs.map((d, i) => {
@@ -939,7 +937,7 @@ async function refreshMicDevices(): Promise<void> {
     );
     if (inputs.some((d) => d.deviceId === prev)) micDeviceSelect.value = prev;
     micDeviceId = micDeviceSelect.value || undefined;
-    micDeviceRow.hidden = false;
+    micDeviceRow.hidden = inputs.length === 0;
   } catch {
     micDeviceRow.hidden = true;
   }
@@ -1062,6 +1060,7 @@ function selectPack(pack: DubPack, sourceId = "custom"): void {
   micStatus.classList.remove("error");
   syncStudioPackButtons();
   showScreen("pack");
+  probeMicDevicesOnce();
   note(`выбрал пак: ${currentPackSlug} (реплик ${pack.clips.length})`);
   setFeedbackContext({
     extra: {
@@ -1125,7 +1124,6 @@ $("btn-start").addEventListener("click", async () => {
     micStatus.classList.add("error");
     return;
   }
-  if (!isMobile()) void refreshMicDevices(); // теперь лейблы доступны без нового диалога
   micStatus.textContent = t("videoPreparing");
   try {
     videoPlayer?.dispose();
