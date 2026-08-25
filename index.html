@@ -38,8 +38,7 @@
       <section id="screen-home" class="screen">
         <p class="tagline" data-i18n="tagline"></p>
 
-        <!-- Новинки временно убраны с главной (решение владельца): полка
-             скрыта флагом SHOW_NEW_SHELF в main.ts, разметка оставлена. -->
+        <!-- Полка «Новинки»: SHELF_NEW_SIZE паков по addedAt (byNew), см. renderShelves. -->
         <section id="shelf-new" class="shelf shelf-first" hidden>
           <div class="shelf-head">
             <h2 class="shelf-title" data-i18n="shelfNew"></h2>
@@ -264,6 +263,7 @@
             <span id="final-audio-pills" class="lang-pills"></span>
           </div>
         </div>
+        <p id="export-status" class="export-status" hidden></p>
         <div class="final-screen-frame">
           <div id="final-video-slot" class="final-video-slot"></div>
           <canvas id="export-canvas" hidden></canvas>
@@ -301,7 +301,6 @@
           <button id="btn-retry" class="btn btn-pill" data-i18n="redub"></button>
           <button id="btn-home" class="btn btn-pill" data-i18n="otherPack"></button>
         </div>
-        <p id="export-status" class="export-status" hidden></p>
 
         <!-- Результаты: попадание дубля в оригинальные реплики -->
         <section id="results" class="results" hidden>

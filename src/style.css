@@ -1178,7 +1178,7 @@ select.lang-select {
   flex-wrap: wrap;
   margin-top: 20px;
 }
-.export-status { color: var(--ink-soft); margin-top: 14px; font-size: 0.9rem; }
+.export-status { color: var(--ink-soft); margin-bottom: 14px; font-size: 0.9rem; }
 
 /* ---------- Результаты ---------- */
 .results {

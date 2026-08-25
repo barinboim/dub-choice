@@ -1982,9 +1982,6 @@ function abandonSession(): void {
   stopExportUi();
   clearResults();
   clipThumbs.clear();
-  scrubPlayer?.dispose();
-  scrubPlayer = null;
-  scrubRenderedBlob = null;
   composer?.dispose();
   composer = null;
   videoPlayer?.dispose();
@@ -2002,37 +1999,15 @@ const exportCanvas = $<HTMLCanvasElement>("export-canvas");
 /** Игрок нажал «Скачать», но файл ещё пишется — отдадим, как только готов. */
 let downloadRequested = false;
 let exportProgressTimer = 0;
+/** Уже показывали «дождитесь завершения» на этом клипе — следующий клик до конца просмотра предлагает ускоренный рендер. */
+let earlyDownloadNoticeShown = false;
 /**
- * Сколько раз нажали «Скачать» на этой премьере. Второй и следующий клик —
- * сигнал «в прошлый раз что-то не так» (даже если эвристика ничего не
- * заподозрила): переключаемся на резервный офлайн-рендер, а не отдаём тот
- * же путь живого захвата ещё раз. Сбрасывается при входе в финал заново и
- * при пересборке микса — там всё равно стартует новый захват.
+ * Игроку уже отдавали файл на этой премьере (живым захватом, автоскачиванием
+ * или ускоренным рендером). Повторный клик после этого — сигнал «с прошлым
+ * файлом что-то не так», а не обычное скачивание. Сбрасывается при входе в
+ * финал заново, при пересборке микса и при перезапуске просмотра.
  */
-let downloadAttempts = 0;
-
-/**
- * Игрок заказал ручной рендер ради перемотки (клик по превью → попап →
- * «Собрать и включить перемотку»): `scrubPlayer` — нативный плеер поверх
- * уже готового файла (звук зашит внутри, синхронизировать нечего),
- * `scrubRenderedBlob` — сам этот файл, чтобы «Скачать» отдавал его
- * мгновенно, не рендеря повторно. Оба сбрасываются при новом входе в финал
- * и при пересборке микса — старый рендер им уже не соответствует.
- */
-let scrubPlayer: DubVideoPlayer | null = null;
-let scrubRenderedBlob: Blob | null = null;
-
-function resetScrubRender(): void {
-  if (!scrubPlayer) return;
-  scrubPlayer.dispose();
-  scrubPlayer = null;
-  scrubRenderedBlob = null;
-  // Отрендеренный плеер занимал слот вместо обычного — вернуть его на место,
-  // иначе пересборка микса оставит слот пустым до конца просмотра.
-  if (videoPlayer && finalSlot.firstElementChild !== videoPlayer.element) {
-    finalSlot.replaceChildren(videoPlayer.element);
-  }
-}
+let downloadedOnce = false;
 
 const mixModeInputs = [
   ...document.querySelectorAll<HTMLInputElement>('input[name="mix-mode"], input[name="mix-mode-pack"]'),
@@ -2065,7 +2040,6 @@ async function applyMixMode(): Promise<void> {
   stopExportUi();
   exportStatus.hidden = true;
   downloadRequested = false;
-  resetScrubRender();
   await composer.prepare(session, mixMode, voiceoverGain, takeGain());
   startFinalPlayback();
 }
@@ -2130,29 +2104,23 @@ async function enterFinal(fromHistory = false): Promise<void> {
   renderFinalAudioPills();
   await composer.prepare(session, mixMode, voiceoverGain, takeGain());
   hideWatchVideo(false); // плеер сейчас переедет в финальный слот
-  resetScrubRender();
   finalSlot.replaceChildren(videoPlayer.element);
   exportStatus.hidden = true;
   downloadRequested = false;
-  downloadAttempts = 0;
+  earlyDownloadNoticeShown = false;
+  downloadedOnce = false;
   btnExport.textContent = t("downloadVideo", { fmt: composer.videoExt.toUpperCase() });
   fitFrameWhenReady(document.querySelector(".final-screen-frame"));
   composer.onCaptureFinished = (blob) => {
     stopExportProgressTimer();
     if (blob && downloadRequested) {
       downloadRequested = false;
+      downloadedOnce = true;
       downloadBlob(blob);
     } else if (!blob && downloadRequested) {
       downloadRequested = false;
-      if (composer?.captureWasSuspicious) {
-        // Живой захват вышел явно битым (эвристика по объёму) — не
-        // показываем игроку файл, который не проиграется, а тихо
-        // переключаемся на надёжный, хоть и более медленный путь.
-        void runMp4Fallback();
-      } else {
-        exportStatus.hidden = false;
-        exportStatus.textContent = t("exportInterrupted");
-      }
+      exportStatus.hidden = false;
+      exportStatus.textContent = t("exportInterrupted");
     }
   };
   showScreen("final");
@@ -2388,12 +2356,14 @@ function downloadBlob(blob: Blob, ext = composer?.videoExt ?? "webm"): void {
  * исходным видео пака через ffmpeg.wasm (`Composer.renderVideoMp4Fallback`).
  * На части устройств скрытый export-canvas (`display:none`) не отдаёт
  * кадры `captureStream()`, а throttling rAF/энкодера в фоне на мобильных
- * душит запись и подавно — итог: файл на порядки легче честной записи
- * (баг с прода — 152 КБ на трёхминутный ролик). Этот путь не зависит ни от
- * видимости canvas, ни от фонового throttling'а вовсе, но и не бесплатен
- * (перекодирование, а не захват по ходу просмотра) — поэтому не дефолт, а
- * то, что включает эвристика (`composer.captureWasSuspicious`) или сам
- * игрок повторным нажатием «Скачать» (`downloadAttempts`).
+ * душит запись и подавно — итог: файл на порядки легче честной записи.
+ * Этот путь не зависит ни от видимости canvas, ни от фонового
+ * throttling'а, но и не бесплатен (перекодирование, а не захват по ходу
+ * просмотра) — поэтому его предлагают попапы «Скачать» (см. ниже), а не
+ * он идёт по умолчанию. На iPhone ffmpeg.wasm иногда падает по памяти
+ * (`RuntimeError: Out of bounds memory access`) — это WASM-крэш, его
+ * нельзя поймать `catch`, поэтому попапы честно предупреждают заранее
+ * (`downloadRushIphoneCaveat`), а не пытаются его отловить здесь.
  */
 async function runMp4Fallback(): Promise<void> {
   if (!composer || !session) return;
@@ -2404,6 +2374,7 @@ async function runMp4Fallback(): Promise<void> {
     const blob = await composer.renderVideoMp4Fallback(session, (stage, ratio, vars) => {
       exportStatus.textContent = `${t(stage, vars)} ${Math.round(ratio * 100)}%`;
     });
+    downloadedOnce = true;
     downloadBlob(blob, "mp4");
   } catch (err) {
     console.error("[export] резервная сборка MP4 сорвалась:", err);
@@ -2414,27 +2385,32 @@ async function runMp4Fallback(): Promise<void> {
   }
 }
 
-/** Идёт ли сейчас ручной рендер ради перемотки/досрочного экспорта — защита от повторного клика. */
-let scrubRendering = false;
+/**
+ * Apple обязывает все браузеры на iOS работать на движке WebKit, поэтому
+ * даже Chrome/Firefox на iPhone (UA несёт CriOS/FxiOS) всё равно содержат
+ * "iPhone" — сниффинг ловит устройство независимо от того, какой браузер
+ * сверху (тот же приём, что и в `studio/main.ts` перед «Дубляжом»).
+ */
+function isIPhone(): boolean {
+  return /iPhone/.test(navigator.userAgent);
+}
 
 /**
- * Общий попап-подтверждение «собрать файл заранее»: используется и для
- * клика по превью (перемотка), и для клика «Скачать» до конца просмотра
- * (см. `openScrubConfirm`/`openDownloadWaitConfirm`). Один и тот же
- * backdrop-id — открыт может быть только один такой попап разом.
+ * Общий попап-подтверждение для обоих сценариев «Скачать» ниже. Один и тот
+ * же backdrop-id — открыт может быть только один такой попап разом.
  */
 function openBuildNowConfirm(opts: {
   titleKey: Parameters<typeof t>[0];
-  bodyKey: Parameters<typeof t>[0];
+  body: string;
   okKey: Parameters<typeof t>[0];
   cancelKey: Parameters<typeof t>[0];
   onOk: () => void;
   onCancel: () => void;
 }): boolean {
-  if (document.getElementById("scrub-modal")) return false;
+  if (document.getElementById("download-confirm-modal")) return false;
 
   const backdrop = document.createElement("div");
-  backdrop.id = "scrub-modal";
+  backdrop.id = "download-confirm-modal";
   backdrop.className = "modal-backdrop";
   const card = document.createElement("div");
   card.className = "modal-card own-pack-card";
@@ -2443,7 +2419,7 @@ function openBuildNowConfirm(opts: {
   title.textContent = t(opts.titleKey);
   const body = document.createElement("p");
   body.className = "own-pack-text";
-  body.textContent = t(opts.bodyKey);
+  body.textContent = opts.body;
   const actions = document.createElement("div");
   actions.className = "own-pack-actions";
   const ok = document.createElement("button");
@@ -2475,119 +2451,55 @@ function openBuildNowConfirm(opts: {
   return true;
 }
 
-/**
- * Рендерит готовый файл целиком тем же путём, что и резервная сборка MP4
- * (`renderVideoMp4Fallback`: тот же WAV-микс, что и «Скачать аудио»,
- * смукшенный с исходным видео пака через ffmpeg.wasm), но не скачивает его
- * сразу, а отдаёт нативному `<video controls>` — звук уже зашит в файл,
- * поэтому пауза и перемотка работают сами, без ручной синхронизации с Web
- * Audio. Блоб кэшируется в `scrubRenderedBlob`: «Скачать» дальше отдаёт его
- * мгновенно, не рендеря повторно. `resumeAt` не передан — значит исходное
- * видео всё это время играло само по себе (путь «Скачать» до конца
- * просмотра, см. `openDownloadWaitConfirm`), и место для перемотки берём
- * по текущей позиции прямо перед подменой, а не по моменту клика.
- */
-async function renderForScrub(resumeAt?: number, autoDownload = false): Promise<void> {
-  if (!composer || !session || !videoPlayer) return;
-  scrubRendering = true;
-  exportStatus.hidden = false;
-  exportStatus.textContent = t("tcvStageEngine");
-  btnExport.disabled = true;
-  try {
-    const blob = await composer.renderVideoMp4Fallback(session, (stage, ratio, vars) => {
-      exportStatus.textContent = `${t(stage, vars)} ${Math.round(ratio * 100)}%`;
-    });
-    const at = resumeAt ?? videoPlayer.currentTime;
-    // Старое видео могло всё это время играть само по себе (путь «Скачать»
-    // без паузы) — глушим его граф перед тем, как подменить слот, иначе
-    // секунду-две звучали бы одновременно два микса.
-    composer.stop();
-    const player = await createVideoPlayer(blob, "native");
-    scrubPlayer = player;
-    scrubRenderedBlob = blob;
-    finalSlot.replaceChildren(player.element);
-    (player.element as HTMLVideoElement).controls = true;
-    player.currentTime = at;
-    await player.play().catch(() => {});
-    exportStatus.hidden = true;
-    if (autoDownload) downloadBlob(blob, "mp4");
-  } catch (err) {
-    console.error("[export] сборка для перемотки сорвалась:", err);
-    exportStatus.hidden = false;
-    exportStatus.textContent = t("scrubRenderFailed");
-    startFinalPlayback();
-  } finally {
-    scrubRendering = false;
-    btnExport.disabled = false;
-  }
+/** Текст попапов ускоренного рендера: на iPhone — с оговоркой про возможный крэш. */
+function rushBody(baseKey: "downloadRushBody" | "downloadBrokenBody"): string {
+  const base = t(baseKey);
+  return isIPhone() ? `${base} ${t("downloadRushIphoneCaveat")}` : base;
 }
 
 /**
- * Клик по превью на премьере: пока идёт живой захват, «перемотка» не имеет
- * смысла — звук у него отдельный Web Audio-граф, не привязанный к
- * currentTime видео, и пауза/скраб развели бы картинку со звуком. Поэтому
- * вместо нативных controls на текущем видео спрашиваем, стоит ли ради
- * перемотки заранее собрать готовый файл (`renderForScrub`). На паузу
- * попапа ставим синхронно и видео, и звук (`audioContext().suspend()`) —
- * иначе даже секунды раздумья успели бы их развести; «Отмена» синхронно же
- * их возвращает, живой захват при этом не прерывался.
+ * Повторный клик «Скачать» до того, как живой захват дописался: первый
+ * клик просто просит подождать (`downloadWaitNotice`) и подписывается на
+ * автоскачивание по готовности; этот, второй, предлагает настоящий выбор —
+ * ускоренный офлайн-рендер (`runMp4Fallback`) прямо сейчас или подождать
+ * дальше.
  */
-function openScrubConfirm(): void {
-  if (!composer || !videoPlayer || scrubPlayer || scrubRendering) return;
-  const resumeAt = videoPlayer.currentTime;
-  videoPlayer.pause();
-  void audioContext().suspend();
-  const opened = openBuildNowConfirm({
-    titleKey: "scrubModalTitle",
-    bodyKey: "scrubModalBody",
-    okKey: "scrubModalOk",
-    cancelKey: "scrubModalCancel",
-    onOk: () => {
-      composer?.abandonCapture();
-      void renderForScrub(resumeAt);
-    },
-    onCancel: () => {
-      void audioContext().resume();
-      void videoPlayer?.play().catch(() => {});
-    },
-  });
-  if (!opened) {
-    // Попап уже открыт (второй клик) — не оставляем видео и звук висеть
-    // на паузе просто так.
-    void audioContext().resume();
-    void videoPlayer.play().catch(() => {});
-  }
-}
-
-/**
- * Клик «Скачать» до того, как живой захват дописался: раньше это молча
- * ждало конца просмотра. Теперь — тот же выбор, что и в `openScrubConfirm`,
- * только без паузы (видео и так уже играет само по себе, спешить ему
- * незачем — досрочная сборка идёт параллельно с обычным просмотром).
- * «Собрать сейчас» — тот же `renderForScrub`, но с автоскачиванием;
- * «Ждать» — прежнее поведение: тихое ожидание конца живого захвата.
- */
-function openDownloadWaitConfirm(): void {
-  if (!composer) return;
+function openDownloadRushConfirm(): void {
   openBuildNowConfirm({
-    titleKey: "downloadWaitTitle",
-    bodyKey: "downloadWaitBody",
-    okKey: "downloadWaitOk",
-    cancelKey: "downloadWaitCancel",
+    titleKey: "downloadRushTitle",
+    body: rushBody("downloadRushBody"),
+    okKey: "downloadRushOk",
+    cancelKey: "downloadRushCancel",
     onOk: () => {
       composer?.abandonCapture();
-      void renderForScrub(undefined, true);
+      downloadRequested = false;
+      stopExportProgressTimer();
+      void runMp4Fallback();
     },
-    onCancel: () => {
-      downloadRequested = true;
-      exportStatus.hidden = false;
-      if (!composer?.isCapturing) startFinalPlayback();
-      startExportProgressTimer();
-    },
+    onCancel: () => {},
   });
 }
 
-finalSlot.addEventListener("click", openScrubConfirm);
+/**
+ * Клик «Скачать» после того, как игроку уже отдавали файл на этой
+ * премьере: похоже, с прошлым файлом что-то не так. Предлагаем либо
+ * ускоренный офлайн-рендер, либо честный повторный просмотр — `composer`
+ * запишет новый файл живым захватом по ходу.
+ */
+function openDownloadBrokenConfirm(): void {
+  openBuildNowConfirm({
+    titleKey: "downloadBrokenTitle",
+    body: rushBody("downloadBrokenBody"),
+    okKey: "downloadRushOk",
+    cancelKey: "downloadBrokenCancel",
+    onOk: () => void runMp4Fallback(),
+    onCancel: () => {
+      downloadedOnce = false;
+      earlyDownloadNoticeShown = false;
+      startFinalPlayback();
+    },
+  });
+}
 
 function startExportProgressTimer(): void {
   stopExportProgressTimer();
@@ -2604,43 +2516,53 @@ function stopExportProgressTimer(): void {
 function stopExportUi(): void {
   stopExportProgressTimer();
   downloadRequested = false;
-  downloadAttempts = 0;
+  earlyDownloadNoticeShown = false;
+  downloadedOnce = false;
   exportStatus.hidden = true;
 }
 
 $("btn-final-play").addEventListener("click", () => {
-  // Отрендеренный для перемотки файл — свой отдельный плеер: обычный
-  // "Играть" должен перезапустить его же, а не разбудить composer,
-  // который сейчас невидим (его видео уехало из слота).
-  if (scrubPlayer) {
-    scrubPlayer.currentTime = 0;
-    void scrubPlayer.play().catch(() => {});
-    return;
-  }
   startFinalPlayback();
 });
 
+/**
+ * Логика трёх сценариев (см. правки владельца: живая эвристика на битый
+ * файл снята — не работала — а перемотка/нативный плеер поверх заранее
+ * отрендеренного файла убраны целиком как лишняя сложность):
+ * 1. Файл ещё не готов, первый клик — просто подписываемся на
+ *    автоскачивание по готовности; прогресс и так виден игроку — та же
+ *    надпись «Ролик допишется к концу просмотра… N%», что и раньше, теперь
+ *    только поднята над превью видео, отдельный попап ей не нужен.
+ * 2. Файл ещё не готов, повторный клик — настоящий выбор
+ *    (`openDownloadRushConfirm`): ускоренный рендер или ждать дальше.
+ * 3. Файл уже когда-то отдавали (живым захватом или рендером) — новый клик
+ *    значит «что-то не так» (`openDownloadBrokenConfirm`): ускоренный
+ *    рендер или пересмотреть заново.
+ */
 btnExport.addEventListener("click", () => {
   if (!composer) return;
-  if (scrubRenderedBlob) {
-    downloadBlob(scrubRenderedBlob, "mp4");
+
+  if (downloadedOnce) {
+    openDownloadBrokenConfirm();
     return;
   }
-  downloadAttempts++;
-  if (downloadAttempts >= 2 || composer.captureWasSuspicious) {
-    // Живой захват мог всё ещё лететь в фоне (первый клик его ждал) — его
-    // завершение не должно ещё раз скачать файл поверх фолбэка.
-    downloadRequested = false;
-    stopExportProgressTimer();
-    void runMp4Fallback();
-    return;
-  }
+
   const ready = composer.captured;
   if (ready) {
+    downloadedOnce = true;
     downloadBlob(ready);
     return;
   }
-  openDownloadWaitConfirm();
+
+  if (!earlyDownloadNoticeShown) {
+    earlyDownloadNoticeShown = true;
+    downloadRequested = true;
+    exportStatus.hidden = false;
+    startExportProgressTimer();
+    return;
+  }
+
+  openDownloadRushConfirm();
 });
 
 // Аудиодорожка рендерится офлайн — мгновенно, без просмотра. Кнопка

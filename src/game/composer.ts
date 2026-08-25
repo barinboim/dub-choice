@@ -79,9 +79,6 @@ export class Composer {
   private capturing = false;
   private recorder: MediaRecorder | null = null;
   private recorderParts: Blob[] = [];
-  private captureStartedAt = 0;
-  /** Живой захват прошёл, но результат явно битый (см. `finishCaptureBlob`). */
-  private suspicious = false;
   /** Формат записи: MP4 (H.264+AAC, Chrome/Safari) или WebM (фолбэк для Firefox). */
   readonly recorderMime =
     [
@@ -115,7 +112,6 @@ export class Composer {
   ): Promise<void> {
     this.backing = await session.backingBuffer();
     this.capturedBlob = null; // записи могли измениться — старый файл невалиден
-    this.suspicious = false;
     this.cues = [];
     for (let i = 0; i < session.pack.clips.length; i++) {
       const clip = session.pack.clips[i];
@@ -183,15 +179,6 @@ export class Composer {
 
   get isCapturing(): boolean {
     return this.capturing;
-  }
-
-  /**
-   * Живой захват завершился, но результат явно битый (эвристика по объёму
-   * в `checkCaptureHealth`) — эту запись отдавать нельзя, нужен резервный
-   * путь (`renderVideoMp4Fallback`).
-   */
-  get captureWasSuspicious(): boolean {
-    return this.suspicious;
   }
 
   /** Расширение файла для текущего формата записи. */
@@ -290,14 +277,11 @@ export class Composer {
       videoBitsPerSecond: 5_000_000,
     });
     this.recorderParts = [];
-    this.captureStartedAt = performance.now();
-    this.suspicious = false;
     this.recorder.ondataavailable = (e) => e.data.size && this.recorderParts.push(e.data);
     this.recorder.onstop = () => {
       const discard = this.discardCurrentCapture;
-      let blob = discard ? null : new Blob(this.recorderParts, { type: this.recorderMime || "video/webm" });
+      const blob = discard ? null : new Blob(this.recorderParts, { type: this.recorderMime || "video/webm" });
       this.recorderParts = [];
-      if (blob) blob = this.checkCaptureHealth(blob);
       if (blob) this.capturedBlob = blob;
       this.onCaptureFinished?.(blob);
     };
@@ -310,27 +294,6 @@ export class Composer {
       this.drawRaf = requestAnimationFrame(draw);
     };
     draw();
-  }
-
-  /**
-   * Эвристика на явно сорвавшийся живой захват: на части устройств скрытый
-   * export-canvas (`display:none`) не отдаёт кадры `captureStream()`, а
-   * throttling rAF/энкодера в фоне на мобильных душит запись и подавно —
-   * итог: файл на порядки легче любой вменяемой записи видео+звука за
-   * столько же времени (баг с прода — 152 КБ на трёхминутный ролик).
-   * Порог занижен нарочно, чтобы не поймать честную
-   * короткую сцену на низком битрейте — ложный отрицательный тут безопаснее
-   * ложного положительного: первый просто не подхватит резервный путь,
-   * второй заставит игрока ждать перекодирование без повода.
-   */
-  private checkCaptureHealth(blob: Blob): Blob | null {
-    const elapsedSec = (performance.now() - this.captureStartedAt) / 1000;
-    const MIN_BYTES_PER_SEC = 20_000; // ~160 кбит/с — заведомо ниже любой честной записи
-    if (elapsedSec > 1 && blob.size < elapsedSec * MIN_BYTES_PER_SEC) {
-      this.suspicious = true;
-      return null;
-    }
-    return blob;
   }
 
   /**

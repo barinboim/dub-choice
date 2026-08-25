@@ -226,24 +226,23 @@ const dict = {
   },
   audioDone: { ru: "Аудиодорожка скачана. 🎧", en: "Audio track downloaded. 🎧" },
   audioError: { ru: "Не удалось отрендерить аудио.", en: "Couldn't render the audio." },
-  scrubModalTitle: { ru: "Перемотка видео", en: "Video scrubbing" },
-  scrubModalBody: {
-    ru: "Перемотка сейчас недоступна — ролик записывается по ходу просмотра. Собрать файл целиком заранее? Это займёт до минуты, зато сможешь свободно листать видео вперёд-назад. На слабых устройствах сборка может надолго загрузить процессор или зависнуть — тяжелее обычной фоновой записи.",
-    en: "Scrubbing isn't available right now — the video is being recorded as it plays. Build the final file ahead of time instead? It takes up to a minute, but then you can freely scrub back and forth. On weak devices this can peg the CPU for a while or even hang — it's heavier than the usual background recording.",
+  downloadRushTitle: { ru: "Скачать прямо сейчас?", en: "Download right now?" },
+  downloadRushBody: {
+    ru: "Хотите скачать видео прямо сейчас? Запустите ускоренный рендер (экспериментально, может не сработать) или дождитесь окончания видео.",
+    en: "Want to download the video right now? Run a quick render (experimental, may not work) or wait for playback to finish.",
   },
-  scrubModalOk: { ru: "Собрать и включить перемотку", en: "Build and enable scrubbing" },
-  scrubModalCancel: { ru: "Смотреть без перемотки", en: "Watch without scrubbing" },
-  scrubRenderFailed: {
-    ru: "Не удалось собрать файл для перемотки — смотрим как обычно.",
-    en: "Couldn't build the file for scrubbing — watching normally instead.",
+  downloadRushOk: { ru: "Ускоренный рендер", en: "Quick render" },
+  downloadRushCancel: { ru: "Дождаться", en: "Wait" },
+  downloadBrokenTitle: { ru: "Файл не скачался?", en: "File didn't come through?" },
+  downloadBrokenBody: {
+    ru: "Что-то не так со скачанным файлом? Запустите ускоренный рендер (экспериментально, может не сработать) или запустите просмотр видео заново — к его концу будет новый файл.",
+    en: "Something wrong with the downloaded file? Run a quick render (experimental, may not work) or replay the video — a fresh file will be ready by the end.",
   },
-  downloadWaitTitle: { ru: "Скачать сейчас?", en: "Download now?" },
-  downloadWaitBody: {
-    ru: "Ваш ролик записывается по ходу просмотра. Собрать файл целиком заранее? На слабых устройствах это не рекомендуется — сборка может надолго загрузить процессор или зависнуть, тяжелее обычной фоновой записи.",
-    en: "Your clip is being recorded as it plays. Build the file ahead of time instead? Not recommended on weak devices — building can peg the CPU for a while or even hang, it's heavier than the usual background recording.",
+  downloadBrokenCancel: { ru: "Смотреть заново", en: "Watch again" },
+  downloadRushIphoneCaveat: {
+    ru: "На iPhone эта сборка иногда падает совсем — тогда поможет только «Смотреть заново».",
+    en: "On iPhone this build sometimes crashes outright — if that happens, only “Watch again” will help.",
   },
-  downloadWaitOk: { ru: "Собрать и скачать", en: "Build and download" },
-  downloadWaitCancel: { ru: "Ждать окончания просмотра", en: "Wait for playback to finish" },
   dubFileSuffix: { ru: "мой дубляж", en: "my dub" },
   audioFileSuffix: { ru: "дубляж (аудио)", en: "dub (audio)" },
   audioFileSuffixVoice: { ru: "мой голос", en: "my voice" },
