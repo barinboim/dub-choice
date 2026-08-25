@@ -909,7 +909,7 @@ select.lang-select {
   font-weight: 600;
   cursor: pointer;
 }
-/* Выбор системного микрофона — только на localhost, дев-хелпер */
+/* Выбор системного микрофона — только на десктопе (см. isMobile() в main.ts) */
 .mic-device-row {
   display: flex;
   align-items: center;
