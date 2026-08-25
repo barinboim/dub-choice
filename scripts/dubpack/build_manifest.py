@@ -24,7 +24,7 @@ import sys
 import tempfile
 import urllib.request
 import zipfile
-from datetime import date as _date
+from datetime import datetime as _datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CREDS = os.path.expanduser("~/.config/dub-choice-r2/credentials.env")
@@ -36,38 +36,64 @@ PUBLIC_BASE = "https://pub-6cdcaa2a325441e59991d44af1e68177.r2.dev/"
 # или несёт дорожку _voices_ru. У старых фанатских паков (hpowl, slonik)
 # поля lang в _pack_info.ini нет вовсе, поэтому им тег проставлен руками.
 # icon — имя файла в public/pack-icons, если оно не совпадает с id пака.
+#
+# Даты в конфиге больше нет: addedAt проставляется временем запуска этого
+# скрипта в момент, когда пак впервые попадает в манифест (см. main()) —
+# порядок публикации в этом списке и есть порядок «новизны». Для уже
+# опубликованных паков дата не трогается повторной заливкой (правка тегов,
+# пересборка), даже если их zip по какой-то причине опять лежит локально.
 PACKS = [
-    # id, заголовок, путь к zip (glob для склеек), ручные теги, дата, иконка
-    ("dayalyublyutebya", "Да я люблю тебя!", "public/packs/da_ya_lyublyu_tebya.zip*", ["мем"], "2026-08-15", "da_ya_lyublyu_tebya"),
-    ("hpowl", "Гарри Поттер — Я вам не сова!", "public/packs/hpowl.zip*", ["фильм", "гарри поттер", "мем", "русская озвучка"], "2026-08-12", None),
-    ("shrekride", "Шрек — Мы уже приехали?", "public/packs/shrekride.zip*", ["мультфильм", "шрек"], "2026-08-14", None),
-    ("dontlookup", "Don't Look Up — The President is Lying", "public/packs/dontlookup.zip*", ["фильм"], "2026-08-14", None),
-    ("landa", "Inglorious Basterds — Hans Landa", "public/packs/landa.zip*", ["фильм"], "2026-08-14", None),
-    ("gofman", "Игорь Гофман — Репортаж из квартиры на Пейсах", "public/packs/gofman.zip*", ["мем", "18+"], "2026-08-14", None),
-    ("slonik", "Зелёный слоник — Сколько истребителей?", "public/packs/slonik.zip*", ["мем", "18+", "русская озвучка"], "2026-08-12", None),
-    ("theroom", "The Room — Oh Hi Mark", "public/packs/theroom.zip*", ["фильм", "мем"], "2026-08-12", None),
-    ("forrestgump", "Forrest Gump — Run Forrest Run", "public/packs/forrestgump.zip*", ["фильм"], "2026-08-14", None),
-    ("starwars", "Star Wars — You Turned Her Against Me", "public/packs/starwars.zip*", ["фильм"], "2026-08-11", None),
-    ("chosenone", "Star Wars — You Were the Chosen One", "public/packs/chosenone.zip*", ["фильм"], "2026-08-13", None),
-    ("lotr", "LOTR — Bridge of Khazad-dûm", "public/packs/lotr.zip*", ["фильм"], "2026-08-11", None),
-    ("breakingbad", "Breaking Bad — I Am the Danger", "public/packs/breakingbad.zip*", ["фильм"], "2026-08-11", None),
-    ("shrek", "Shrek the Third — Pinocchio Tries to Lie", "public/packs/shrek.zip*", ["мультфильм", "шрек"], "2026-08-11", None),
-    ("harrypotter", "Harry Potter — The Duel", "public/packs/harrypotter.zip*", ["фильм", "гарри поттер"], "2026-08-11", None),
-    ("reklamaskaipa", "Реклама Скайпа", "studio/projects/reklama_skai_pa/reklama_skai_pa.zip", ["мем"], "2026-08-17", None),
-    ("shkyadozhdik", "ШКЯ — Дождик", "studio/projects/shkya_dozhdik/shkya_dozhdik.zip", ["мем"], "2026-08-17", None),
-    ("shrekfiona", "Shrek — Fiona and Bird", "studio/projects/shrek_fiona_and_bird/shrek_fiona_and_bird.zip", ["мультфильм", "шрек"], "2026-08-17", None),
-    ("krovibeton", "Кровь и бетон — Ублюдок, мать твою", "studio/projects/krov_i_beton_ublyudok_mat_tvoyu/krov_i_beton_ublyudok_mat_tvoyu.zip", ["фильм", "мем", "18+"], "2026-08-17", None),
-    ("rytphp2", "RYTP — Гарри Повар и Тайная Комната, часть 1", "public/packs/rytphp2.zip", ["мем", "18+", "гарри поттер"], "2026-08-22T18:33", None),
-    ("jjjameson", "Джей Джона Джеймсон на русском + оригинальный смех XD", "public/packs/jjjameson.zip", ["фильм", "русская озвучка"], "2026-08-22", None),
-    ("krastykrabpatrick", "Это красти краб Нет это патрик!", "public/packs/krastykrabpatrick.zip", ["мультфильм", "русская озвучка"], "2026-08-22", None),
-    ("itprikol", "Оно. Прикол", "public/packs/itprikol.zip", ["фильм", "мем", "18+"], "2026-08-22", None),
-    ("zolotayachasha", "Золотая Чаша", "public/packs/zolotayachasha.zip", ["мем", "реклама"], "2026-08-22", None),
-    ("bluelock", "Blue Lock (rus sub)", "public/packs/bluelock.zip", ["аниме"], "2026-08-22", None),
-    ("klinokgyutaro", "Клинок Гютаро", "public/packs/klinokgyutaro.zip", ["аниме", "русская озвучка"], "2026-08-22", None),
-    ("prideprejudice", "Pride & Prejudice (beginning)", "public/packs/prideprejudice.zip", ["фильм", "русская озвучка"], "2026-08-22", None),
-    ("minutpyatogo", "Минут 5-10 пятого в 4ре утра!!!", "public/packs/minut5.zip", ["мем"], "2026-08-22T19:31", None),
-    ("fightclub", "Fight Club", "public/packs/fightclub.zip", ["фильм", "русская озвучка"], "2026-08-23", None),
-    ("nachtonose", "Подождите а что у вас на носу", "public/packs/nachtonose.zip", ["мем", "русская озвучка"], "2026-08-23", None),
+    # id, заголовок, путь к zip (glob для склеек), ручные теги, иконка
+    ("dayalyublyutebya", "Да я люблю тебя!", "public/packs/da_ya_lyublyu_tebya.zip*", ["мем"], "da_ya_lyublyu_tebya"),
+    ("hpowl", "Гарри Поттер — Я вам не сова!", "public/packs/hpowl.zip*", ["фильм", "гарри поттер", "мем", "русская озвучка"], None),
+    ("shrekride", "Шрек — Мы уже приехали?", "public/packs/shrekride.zip*", ["мультфильм", "шрек"], None),
+    ("dontlookup", "Don't Look Up — The President is Lying", "public/packs/dontlookup.zip*", ["фильм"], None),
+    ("landa", "Inglorious Basterds — Hans Landa", "public/packs/landa.zip*", ["фильм"], None),
+    ("gofman", "Игорь Гофман — Репортаж из квартиры на Пейсах", "public/packs/gofman.zip*", ["мем", "18+"], None),
+    ("slonik", "Зелёный слоник — Сколько истребителей?", "public/packs/slonik.zip*", ["мем", "18+", "русская озвучка"], None),
+    ("theroom", "The Room — Oh Hi Mark", "public/packs/theroom.zip*", ["фильм", "мем"], None),
+    ("forrestgump", "Forrest Gump — Run Forrest Run", "public/packs/forrestgump.zip*", ["фильм"], None),
+    ("starwars", "Star Wars — You Turned Her Against Me", "public/packs/starwars.zip*", ["фильм"], None),
+    ("chosenone", "Star Wars — You Were the Chosen One", "public/packs/chosenone.zip*", ["фильм"], None),
+    ("lotr", "LOTR — Bridge of Khazad-dûm", "public/packs/lotr.zip*", ["фильм"], None),
+    ("breakingbad", "Breaking Bad — I Am the Danger", "public/packs/breakingbad.zip*", ["фильм"], None),
+    ("shrek", "Shrek the Third — Pinocchio Tries to Lie", "public/packs/shrek.zip*", ["мультфильм", "шрек"], None),
+    ("harrypotter", "Harry Potter — The Duel", "public/packs/harrypotter.zip*", ["фильм", "гарри поттер"], None),
+    ("reklamaskaipa", "Реклама Скайпа", "studio/projects/reklama_skai_pa/reklama_skai_pa.zip", ["мем"], None),
+    ("shkyadozhdik", "ШКЯ — Дождик", "studio/projects/shkya_dozhdik/shkya_dozhdik.zip", ["мем"], None),
+    ("shrekfiona", "Shrek — Fiona and Bird", "studio/projects/shrek_fiona_and_bird/shrek_fiona_and_bird.zip", ["мультфильм", "шрек"], None),
+    ("krovibeton", "Кровь и бетон — Ублюдок, мать твою", "studio/projects/krov_i_beton_ublyudok_mat_tvoyu/krov_i_beton_ublyudok_mat_tvoyu.zip", ["фильм", "мем", "18+"], None),
+    ("rytphp2", "RYTP — Гарри Повар и Тайная Комната, часть 1", "public/packs/rytphp2.zip", ["мем", "18+", "гарри поттер"], None),
+    ("jjjameson", "Джей Джона Джеймсон на русском + оригинальный смех XD", "public/packs/jjjameson.zip", ["фильм", "русская озвучка"], None),
+    ("krastykrabpatrick", "Это красти краб Нет это патрик!", "public/packs/krastykrabpatrick.zip", ["мультфильм", "русская озвучка"], None),
+    ("itprikol", "Оно. Прикол", "public/packs/itprikol.zip", ["фильм", "мем", "18+"], None),
+    ("zolotayachasha", "Золотая Чаша", "public/packs/zolotayachasha.zip", ["мем", "реклама"], None),
+    ("bluelock", "Blue Lock (rus sub)", "public/packs/bluelock.zip", ["аниме"], None),
+    ("klinokgyutaro", "Клинок Гютаро", "public/packs/klinokgyutaro.zip", ["аниме", "русская озвучка"], None),
+    ("prideprejudice", "Pride & Prejudice (beginning)", "public/packs/prideprejudice.zip", ["фильм", "русская озвучка"], None),
+    ("minutpyatogo", "Минут 5-10 пятого в 4ре утра!!!", "public/packs/minut5.zip", ["мем"], None),
+    ("fightclub", "Fight Club", "public/packs/fightclub.zip", ["фильм", "русская озвучка"], None),
+    ("nachtonose", "Подождите а что у вас на носу", "public/packs/nachtonose.zip", ["мем", "русская озвучка"], None),
+    ("devyatyardov2", "Девять ярдов 2", "public/packs/devyatyardov2.zip", ["фильм", "русская озвучка"], None),
+    ("chernopobelomu", "ЗДЕСЬ ЖЕ ЧЕРНО ПО БЕЛОМУ НАПИСАНО", "public/packs/chernopobelomu.zip", ["фильм", "русская озвучка"], None),
+    ("prideprejudicekollinz", "Pride & Prejudice — Мистер Коллинз", "public/packs/prideprejudicekollinz.zip", ["фильм", "русская озвучка"], None),
+    ("ochenplohayamuzyka", "Очень плохая музыка", "public/packs/ochenplohayamuzyka.zip", ["мем", "русская озвучка"], None),
+    ("skandalvkazino", "Случай в казино", "public/packs/skandalvkazino.zip", ["мем", "18+"], None),
+    ("detroitdopros", "Detroit Become Human — Допрос", "public/packs/detroitdopros.zip", ["русская озвучка", "игра"], None),
+    ("tachkimolniya", "Тачки — Вступительная сцена (Молния Маккуин)", "public/packs/tachkimolniya.zip", ["мультфильм", "русская озвучка"], None),
+    ("achtotypesh", "The Boys — А что ты пьёшь?", "public/packs/achtotypesh.zip", ["фильм", "русская озвучка", "18+"], None),
+    ("buzzwoodyargument", "Toy Story 1 — Woody vs Buzz", "public/packs/buzzwoodyargument.zip", ["мультфильм", "русская озвучка"], None),
+    ("simpsonsbatmarge", "The Simpsons — Give Me the Bat, Marge", "public/packs/simpsonsbatmarge.zip", ["мультфильм"], None),
+    ("dvorovyfutbol", "Вот так прилетело (Дворовый футбол)", "public/packs/dvorovyfutbol.zip", ["мем"], None),
+    ("mellstroy", "Все футажи с Меллстроем", "public/packs/mellstroy.zip", ["мем", "18+"], None),
+    ("pulemetchik", "Знакомьтесь, Пулемётчик", "public/packs/pulemetchik.zip", ["игра", "русская озвучка"], None),
+    ("vihorkov", "Игорь Вихорьков — Ты шл*ха не моя", "public/packs/vihorkov.zip", ["мем", "18+"], None),
+    ("internyobyavlenie", "Интерны — Объявление по всему отделению", "public/packs/internyobyavlenie.zip", ["фильм", "русская озвучка"], None),
+    ("kungfupandashifu", "Кунг-фу Панда — Тайлунг vs Шифу", "public/packs/kungfupandashifu.zip", ["мультфильм", "русская озвучка"], None),
+    ("homlenderrech", "Речь Хомлендера", "public/packs/homlenderrech.zip", ["фильм", "русская озвучка", "18+"], None),
+    ("rastishkareklama", "Смешная реклама Растишки", "public/packs/rastishkareklama.zip", ["реклама", "мем"], None),
+    ("moygrib", "Я не понял, вы че мой гриб снимаете? Это же мой гриб!", "public/packs/moygrib.zip", ["мем", "18+"], None),
+    ("yarobot", "Я, робот", "public/packs/yarobot.zip", ["фильм", "русская озвучка"], None),
 ]
 
 SHORT_MAX_SEC = 60  # граница тега «короткий ролик»
@@ -97,8 +123,12 @@ def published_manifest():
         with urllib.request.urlopen(req, timeout=60) as r:
             return {e["id"]: e for e in json.load(r)}
     except Exception as e:
-        print(f"манифест из R2 недоступен ({e}) — пересчитываю только локальные паки")
-        return {}
+        # Раньше при сбое сети скрипт тихо продолжал с пустым published{} —
+        # для паков без локального zip это всё равно падало чуть ниже
+        # (SystemExit "нет ни локального zip, ни записи в манифесте R2"), а
+        # для паков с локальным zip незаметно подменяло бы addedAt на "сейчас"
+        # (см. main()), считая уже опубликованный пак новым. Падаем сразу.
+        raise SystemExit(f"манифест из R2 недоступен ({e}) — повторите запуск")
 
 
 def parse_ini(text):
@@ -145,7 +175,6 @@ def probe(z):
     duration = 0.0
     pack_lang = ""
     icon_name = ""
-    built = ""
 
     for n in names:
         base = os.path.basename(n)
@@ -153,7 +182,6 @@ def probe(z):
             d = parse_ini(z.read(n).decode("utf-8", "ignore"))
             pack_lang = unquote(d.get("lang", ""))
             icon_name = unquote(d.get("icon", ""))
-            built = unquote(d.get("built", ""))
             continue
         if base.startswith("_") or not (n.lower().endswith(".ini") or n.lower().endswith(".txt")):
             continue
@@ -182,7 +210,6 @@ def probe(z):
         "translations": sorted(langs),
         "lang": pack_lang,
         "iconName": icon_name,
-        "built": built,
         # Русский голос: пак либо изначально русский, либо несёт дорожку дубляжа
         "hasRuVoice": pack_lang == "ru" or any("_voices_ru" in n for n in names),
     }
@@ -256,7 +283,7 @@ def main():
     manifest = []
     uploads = []  # (локальный путь, ключ в бакете, content-type)
 
-    for pack_id, title, pattern, manual_tags, added, icon_stem in PACKS:
+    for pack_id, title, pattern, manual_tags, icon_stem in PACKS:
         data = local_zip(pattern)
 
         if data is None:
@@ -280,6 +307,7 @@ def main():
             z = zipfile.ZipFile(io.BytesIO(data))
             info = probe(z)
             icon_file, curated = extract_icon(z, info, pack_id, icons_dir, icon_stem)
+            prev = published.get(pack_id)
             entry = {
                 "id": pack_id,
                 "title": title,
@@ -291,10 +319,14 @@ def main():
                 "durationSec": info["durationSec"],
                 "translations": info["translations"],
                 "tags": derive_tags(manual_tags, info),
-                # Дату пак несёт сам (built= в _pack_info.ini, пишет
-                # build_pack.py). В конфиге она указана только у паков,
-                # собранных до появления поля: их даты — из git-истории.
-                "addedAt": added or info["built"] or _date.today().isoformat(),
+                # Пак уже был в манифесте R2 — дата публикации не трогается
+                # повторной заливкой (правка тегов, пересборка), даже если
+                # его zip опять лежит локально. Иначе первая публикация —
+                # время запуска скрипта, взятое заново для каждого пака в
+                # цикле: паки идут по списку в порядке публикации, поэтому
+                # последний обработанный в этом запуске получает и самую
+                # позднюю метку — ровно то, что нужно сортировке «Новые».
+                "addedAt": prev["addedAt"] if prev else _datetime.now().isoformat(timespec="seconds"),
             }
             zip_path = os.path.join(out_dir, f"{pack_id}.zip")
             open(zip_path, "wb").write(data)

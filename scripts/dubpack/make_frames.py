@@ -23,6 +23,7 @@ import json
 import re
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 FRAME_HEIGHT = 480
@@ -35,18 +36,30 @@ def ffmpeg(*args: str) -> None:
     subprocess.run(["ffmpeg", "-y", "-v", "error", *args], check=True)
 
 
-def audio_duration(path: Path) -> float:
+@lru_cache(maxsize=None)
+def _probe_duration(path: str) -> float:
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=nw=1:nk=1", str(path)],
+         "-of", "default=nw=1:nk=1", path],
         check=True, capture_output=True, text=True,
     )
     return float(out.stdout.strip())
 
 
+def audio_duration(path: Path) -> float:
+    return _probe_duration(str(path))
+
+
 def grab(video: Path, at: float, dest: Path, height: int, quality: int) -> None:
-    """Кадр на секунде `at`; -ss до -i — быстрый seek по ключевым кадрам."""
-    ffmpeg("-ss", f"{max(at, 0):.3f}", "-i", str(video), "-frames:v", "1",
+    """Кадр на секунде `at`; -ss до -i — быстрый seek по ключевым кадрам.
+
+    VAD/выравнивание иногда оценивают конец последней реплики сцены чуть
+    позже, чем на самом деле кончается видео (наступали на «Случае в
+    казино») — без зажима `-ss` уезжал за EOF, и ffmpeg падал, не найдя
+    кадра вовсе.
+    """
+    at = min(max(at, 0.0), max(_probe_duration(str(video)) - 0.05, 0.0))
+    ffmpeg("-ss", f"{at:.3f}", "-i", str(video), "-frames:v", "1",
            "-vf", f"scale=-2:{height}", "-q:v", str(quality), str(dest))
 
 
