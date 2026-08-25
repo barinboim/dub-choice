@@ -239,9 +239,9 @@ const dict = {
     en: "Something wrong with the downloaded file? Run a quick render (experimental, may not work) or replay the video — a fresh file will be ready by the end.",
   },
   downloadBrokenCancel: { ru: "Смотреть заново", en: "Watch again" },
-  downloadRushIphoneCaveat: {
-    ru: "На iPhone эта сборка иногда падает совсем — тогда поможет только «Смотреть заново».",
-    en: "On iPhone this build sometimes crashes outright — if that happens, only “Watch again” will help.",
+  downloadBrokenMobileBody: {
+    ru: "Что-то не так с файлом? К сожалению, на телефоне сборка готового дубляжа идёт во время просмотра видео. Чтобы пересобрать файл, просмотрите свой дубляж заново.",
+    en: "Something wrong with the file? On phones, the dub is built while you watch — to rebuild it, replay your dub from the start.",
   },
   dubFileSuffix: { ru: "мой дубляж", en: "my dub" },
   audioFileSuffix: { ru: "дубляж (аудио)", en: "dub (audio)" },

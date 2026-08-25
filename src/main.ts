@@ -2341,11 +2341,29 @@ function safeFileName(): string {
   return (session?.pack.title ?? "dub").replace(/[^\p{L}\p{N} _-]/gu, "");
 }
 
+/**
+ * Ниже этого размера готовый ролик почти наверняка — брак живого захвата
+ * (пустой видеотрек при честном аудио, см. `docs/`, «Скрытый export-canvas…»)
+ * — при трёхминутной сцене честный файл всегда тяжелее на порядки. Точный
+ * футаж тут не важен: ложноположительный просто лишний раз спросит, а
+ * ложноотрицательный оставит игрока с окончательно битым файлом на руках.
+ */
+const SUSPICIOUSLY_SMALL_BYTES = 1_000_000;
+
 function downloadBlob(blob: Blob, ext = composer?.videoExt ?? "webm"): void {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${safeFileName()} — ${t("dubFileSuffix")}.${ext}`;
   a.click();
+  if (blob.size < SUSPICIOUSLY_SMALL_BYTES) {
+    // Файл уже уехал игроку — молчать об очевидном браке нечестно, поэтому
+    // сразу же, без ожидания повторного клика, предлагаем тот же выбор,
+    // что и на ручной повторный клик «Скачать» (см. `btnExport`).
+    exportStatus.hidden = true;
+    if (isMobile()) openDownloadBrokenConfirmMobile();
+    else openDownloadBrokenConfirm();
+    return;
+  }
   exportStatus.hidden = false;
   exportStatus.textContent = t("exportDone");
 }
@@ -2362,8 +2380,9 @@ function downloadBlob(blob: Blob, ext = composer?.videoExt ?? "webm"): void {
  * просмотра) — поэтому его предлагают попапы «Скачать» (см. ниже), а не
  * он идёт по умолчанию. На iPhone ffmpeg.wasm иногда падает по памяти
  * (`RuntimeError: Out of bounds memory access`) — это WASM-крэш, его
- * нельзя поймать `catch`, поэтому попапы честно предупреждают заранее
- * (`downloadRushIphoneCaveat`), а не пытаются его отловить здесь.
+ * нельзя поймать `catch`, поэтому на мобильных эту функцию вообще не
+ * предлагают (см. `isMobile` и попапы «Скачать» ниже), а не пытаются
+ * отловить сбой здесь.
  */
 async function runMp4Fallback(): Promise<void> {
   if (!composer || !session) return;
@@ -2386,13 +2405,18 @@ async function runMp4Fallback(): Promise<void> {
 }
 
 /**
- * Apple обязывает все браузеры на iOS работать на движке WebKit, поэтому
- * даже Chrome/Firefox на iPhone (UA несёт CriOS/FxiOS) всё равно содержат
- * "iPhone" — сниффинг ловит устройство независимо от того, какой браузер
- * сверху (тот же приём, что и в `studio/main.ts` перед «Дубляжом»).
+ * iPhone и Android: `renderVideoMp4Fallback` там не «ускоренный» ни в каком
+ * смысле — на iPhone ffmpeg.wasm нередко падает по памяти (WASM OOM, не
+ * ловится `catch`), на Android перекодирование обычно не быстрее живого
+ * захвата, который и так уже пишется по ходу просмотра. Предлагать эту
+ * кнопку там значило бы вводить в заблуждение, поэтому мобильные попапы
+ * вовсе не показывают её — тот же сниффинг, что и `isIPhone` в
+ * `studio/main.ts` перед «Дубляжом» (UA на iOS несёт "iPhone" независимо от
+ * браузера сверху — так требует Apple; iPad сюда не попадает, у него
+ * памяти на вкладку больше).
  */
-function isIPhone(): boolean {
-  return /iPhone/.test(navigator.userAgent);
+function isMobile(): boolean {
+  return /iPhone|Android/.test(navigator.userAgent);
 }
 
 /**
@@ -2451,23 +2475,18 @@ function openBuildNowConfirm(opts: {
   return true;
 }
 
-/** Текст попапов ускоренного рендера: на iPhone — с оговоркой про возможный крэш. */
-function rushBody(baseKey: "downloadRushBody" | "downloadBrokenBody"): string {
-  const base = t(baseKey);
-  return isIPhone() ? `${base} ${t("downloadRushIphoneCaveat")}` : base;
-}
-
 /**
- * Повторный клик «Скачать» до того, как живой захват дописался: первый
- * клик просто просит подождать (`downloadWaitNotice`) и подписывается на
- * автоскачивание по готовности; этот, второй, предлагает настоящий выбор —
- * ускоренный офлайн-рендер (`runMp4Fallback`) прямо сейчас или подождать
- * дальше.
+ * Повторный клик «Скачать» до того, как живой захват дописался (только на
+ * десктопе — на мобильных `isMobile()` эту функцию вообще не вызывает,
+ * прогресс уже виден над видео, дублировать его попапом незачем). Первый
+ * клик просто подождал и подписался на автоскачивание; этот, второй,
+ * предлагает настоящий выбор — ускоренный офлайн-рендер (`runMp4Fallback`)
+ * прямо сейчас или подождать дальше.
  */
 function openDownloadRushConfirm(): void {
   openBuildNowConfirm({
     titleKey: "downloadRushTitle",
-    body: rushBody("downloadRushBody"),
+    body: t("downloadRushBody"),
     okKey: "downloadRushOk",
     cancelKey: "downloadRushCancel",
     onOk: () => {
@@ -2482,14 +2501,14 @@ function openDownloadRushConfirm(): void {
 
 /**
  * Клик «Скачать» после того, как игроку уже отдавали файл на этой
- * премьере: похоже, с прошлым файлом что-то не так. Предлагаем либо
- * ускоренный офлайн-рендер, либо честный повторный просмотр — `composer`
- * запишет новый файл живым захватом по ходу.
+ * премьере (десктоп): похоже, с прошлым файлом что-то не так. Предлагаем
+ * либо ускоренный офлайн-рендер, либо честный повторный просмотр —
+ * `composer` запишет новый файл живым захватом по ходу.
  */
 function openDownloadBrokenConfirm(): void {
   openBuildNowConfirm({
     titleKey: "downloadBrokenTitle",
-    body: rushBody("downloadBrokenBody"),
+    body: t("downloadBrokenBody"),
     okKey: "downloadRushOk",
     cancelKey: "downloadBrokenCancel",
     onOk: () => void runMp4Fallback(),
@@ -2498,6 +2517,26 @@ function openDownloadBrokenConfirm(): void {
       earlyDownloadNoticeShown = false;
       startFinalPlayback();
     },
+  });
+}
+
+/**
+ * Тот же повторный клик после уже выданного файла, но на мобильных: там
+ * нет ускоренного рендера как варианта (см. `isMobile`) — единственный
+ * честный путь пересобрать файл это пересмотреть ролик заново.
+ */
+function openDownloadBrokenConfirmMobile(): void {
+  openBuildNowConfirm({
+    titleKey: "downloadBrokenTitle",
+    body: t("downloadBrokenMobileBody"),
+    okKey: "downloadBrokenCancel",
+    cancelKey: "modalCancel",
+    onOk: () => {
+      downloadedOnce = false;
+      earlyDownloadNoticeShown = false;
+      startFinalPlayback();
+    },
+    onCancel: () => {},
   });
 }
 
@@ -2526,24 +2565,30 @@ $("btn-final-play").addEventListener("click", () => {
 });
 
 /**
- * Логика трёх сценариев (см. правки владельца: живая эвристика на битый
- * файл снята — не работала — а перемотка/нативный плеер поверх заранее
- * отрендеренного файла убраны целиком как лишняя сложность):
+ * Логика трёх сценариев (живая эвристика на битый файл снята — не
+ * работала; перемотка и нативный плеер поверх заранее отрендеренного
+ * файла убраны как лишняя сложность). На мобильных (`isMobile()`)
+ * «ускоренный рендер» нигде не предлагается — на iPhone он часто падает по
+ * памяти, на Android не быстрее того, что и так пишется по ходу просмотра,
+ * предлагать его там значило бы вводить в заблуждение:
  * 1. Файл ещё не готов, первый клик — просто подписываемся на
  *    автоскачивание по готовности; прогресс и так виден игроку — та же
  *    надпись «Ролик допишется к концу просмотра… N%», что и раньше, теперь
  *    только поднята над превью видео, отдельный попап ей не нужен.
- * 2. Файл ещё не готов, повторный клик — настоящий выбор
- *    (`openDownloadRushConfirm`): ускоренный рендер или ждать дальше.
+ * 2. Файл ещё не готов, повторный клик — на десктопе настоящий выбор
+ *    (`openDownloadRushConfirm`): ускоренный рендер или ждать дальше; на
+ *    мобильных — ничего, надпись с прогрессом и так уже на экране.
  * 3. Файл уже когда-то отдавали (живым захватом или рендером) — новый клик
- *    значит «что-то не так» (`openDownloadBrokenConfirm`): ускоренный
- *    рендер или пересмотреть заново.
+ *    значит «что-то не так»: на десктопе `openDownloadBrokenConfirm`
+ *    (ускоренный рендер или пересмотреть заново), на мобильных —
+ *    `openDownloadBrokenConfirmMobile` (только пересмотреть заново).
  */
 btnExport.addEventListener("click", () => {
   if (!composer) return;
 
   if (downloadedOnce) {
-    openDownloadBrokenConfirm();
+    if (isMobile()) openDownloadBrokenConfirmMobile();
+    else openDownloadBrokenConfirm();
     return;
   }
 
@@ -2562,7 +2607,7 @@ btnExport.addEventListener("click", () => {
     return;
   }
 
-  openDownloadRushConfirm();
+  if (!isMobile()) openDownloadRushConfirm();
 });
 
 // Аудиодорожка рендерится офлайн — мгновенно, без просмотра. Кнопка
