@@ -44,6 +44,18 @@ export function initFeedback(): void {
   for (const el of document.querySelectorAll("[data-feedback]")) {
     el.addEventListener("click", openFeedbackForm);
   }
+
+  // Кнопки в подвале нет на карточке пака, на экране дубляжа и на премьере
+  // (подвал живёт только на home) — а поймать баг человек может именно там.
+  // Ctrl/Cmd+Shift+F открывает форму с любого экрана обоих документов.
+  window.addEventListener("keydown", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      openFeedbackForm();
+    }
+  });
 }
 
 function describeReason(reason: unknown): string {
