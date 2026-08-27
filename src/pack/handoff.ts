@@ -28,19 +28,52 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function put(value: unknown, key: string): Promise<void> {
-  const db = await openDb();
+function deleteDb(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(DB_NAME);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+    // Другая вкладка держит соединение — не виснем вечно, просто не чиним.
+    req.onblocked = () => resolve();
+  });
+}
+
+/**
+ * iOS Safari иногда возвращает "старую" базу без реально созданных
+ * object store (эвикция базы под нехватку места/ITP) — любая транзакция
+ * валится с NotFoundError "The object can not be found here.", и то же
+ * соединение это не лечит: повторный put/take падает идентично сколько ни
+ * пробуй (наступали на проде 2026-08-27). Один раз пересоздаём базу целиком
+ * и повторяем операцию — это чинит канал, а не конкретный объект. Другие
+ * ошибки (например DataCloneError у Blob-тяжёлого пака) не трогаем: для них
+ * уже есть отдельный fallback на ZIP в stashPackForGame/stashPackForStudio.
+ */
+async function withRecovery<T>(attempt: () => Promise<T>): Promise<T> {
   try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    });
-  } finally {
-    db.close();
+    return await attempt();
+  } catch (err) {
+    if (!(err instanceof DOMException) || err.name !== "NotFoundError") throw err;
+    console.warn("IndexedDB-канал сломан (NotFoundError), пересоздаю базу", err);
+    await deleteDb();
+    return await attempt();
   }
+}
+
+async function put(value: unknown, key: string): Promise<void> {
+  await withRecovery(async () => {
+    const db = await openDb();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    } finally {
+      db.close();
+    }
+  });
 }
 
 /**
@@ -63,22 +96,24 @@ export async function stashPackForGame(pack: DubPack): Promise<void> {
 }
 
 async function take<T>(key: string): Promise<T | null> {
-  const db = await openDb();
-  try {
-    return await new Promise<T | null>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      const store = tx.objectStore(STORE);
-      const getReq = store.get(key);
-      getReq.onsuccess = () => {
-        const value = (getReq.result as T | undefined) ?? null;
-        if (value) store.delete(key);
-        resolve(value);
-      };
-      getReq.onerror = () => reject(getReq.error);
-    });
-  } finally {
-    db.close();
-  }
+  return withRecovery(async () => {
+    const db = await openDb();
+    try {
+      return await new Promise<T | null>((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        const store = tx.objectStore(STORE);
+        const getReq = store.get(key);
+        getReq.onsuccess = () => {
+          const value = (getReq.result as T | undefined) ?? null;
+          if (value) store.delete(key);
+          resolve(value);
+        };
+        getReq.onerror = () => reject(getReq.error);
+      });
+    } finally {
+      db.close();
+    }
+  });
 }
 
 /** Забирает отложенный пак и сразу удаляет его — одноразовый ключ. */
