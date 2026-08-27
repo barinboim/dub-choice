@@ -10,10 +10,15 @@ import { Recording } from "./recorder";
 const MAX_GAIN = 6;
 /** Пик после усиления не должен доходить до 0 dBFS (запас от клиппинга). */
 const HEADROOM = 0.98;
-/** Ниже этого RMS считаем сигнал тишиной/шумом — усиливать нечего и не с чем сравнивать. */
-const SILENCE_RMS = 0.0005;
+/**
+ * Ниже этого RMS считаем сигнал тишиной/шумом — усиливать нечего и не с чем
+ * сравнивать. Экспортируем: тот же порог использует баг-репорт (main.ts),
+ * чтобы пометить дубль подозрительно тихим — тем же критерием, что уже
+ * проверен здесь на практике.
+ */
+export const SILENCE_RMS = 0.0005;
 
-function samplesRms(samples: Float32Array): number {
+export function samplesRms(samples: Float32Array): number {
   if (samples.length === 0) return 0;
   let sumSq = 0;
   for (let i = 0; i < samples.length; i++) sumSq += samples[i] * samples[i];

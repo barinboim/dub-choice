@@ -23,7 +23,7 @@ import {
   formatSize,
   type PreloadedPack,
 } from "./pack/preloaded";
-import { audioContext, blobDuration } from "./audio/context";
+import { audioContext, audioContextStatus, blobDuration } from "./audio/context";
 import {
   MicRecorder,
   recordingToBuffer,
@@ -32,7 +32,7 @@ import {
   windowedRecording,
   type Recording,
 } from "./audio/recorder";
-import { matchLoudness } from "./audio/normalize";
+import { matchLoudness, samplesRms, SILENCE_RMS } from "./audio/normalize";
 import { WaveformView, type WaveformColors } from "./audio/waveform";
 import { DubSession, ORIGINAL_LANG } from "./game/session";
 import {
@@ -1105,6 +1105,32 @@ for (const id of ["btn-pack-edit", "btn-final-edit-pack"]) {
 
 $("btn-pack-back").addEventListener("click", () => showScreen("home"));
 
+/**
+ * Контекст баг-репорта на самой записи: раньше `setFeedbackContext`
+ * вызывался только при выборе пака и дальше не обновлялся — к моменту
+ * жалобы «записал, а звука нет» отчёт уже не знал ни микрофон, ни режим
+ * микса, ни состояние AudioContext. Дёргаем перед попыткой записи (тогда
+ * это попадает в отчёт и при отказе микрофона) и после каждого дубля.
+ */
+function updateDubFeedbackContext(): void {
+  if (!selectedPack) return;
+  const micLabel = micDeviceSelect.options[micDeviceSelect.selectedIndex]?.textContent;
+  const ac = audioContextStatus();
+  setFeedbackContext({
+    extra: {
+      "пак": currentPackSlug,
+      "реплик в паке": selectedPack.clips.length,
+      "видео пака": selectedPack.video?.type || "?",
+      "режим микса": mixMode,
+      "персонажей выключено": disabledCharacters.size,
+      "устройство ввода": isMobile() ? "моб. по умолчанию" : micLabel || "по умолчанию",
+      "устройств ввода найдено": isMobile() ? undefined : micDeviceSelect.options.length,
+      "AudioContext": ac ? `${ac.state}, ${ac.sampleRate} Гц` : "не создан",
+      "дублей записано": session?.recordings.size ?? 0,
+    },
+  });
+}
+
 $("btn-start").addEventListener("click", async () => {
   if (!selectedPack) return;
   // По HTTP браузеры вообще не показывают промпт микрофона — объясняем сразу
@@ -1114,6 +1140,7 @@ $("btn-start").addEventListener("click", async () => {
     return;
   }
   audioContext(); // создаём по жесту пользователя
+  updateDubFeedbackContext();
   micStatus.textContent = t("micRequest");
   micStatus.classList.remove("error");
   try {
@@ -1948,10 +1975,18 @@ async function finishRecording(auto = false): Promise<void> {
     // но в монтаж уходит запись целиком
     const window = takeWindow(rec, original.duration);
     matchLoudness(rec, original, window);
-    note("записал дубль");
+    // Тот же порог, которым matchLoudness сама решает «усиливать нечего» —
+    // если запись реально тихая, это стоит увидеть в отчёте до вопроса игроку
+    const rms = samplesRms(window);
+    note(rms < SILENCE_RMS ? `записал дубль — подозрительно тихо (RMS ${rms.toFixed(5)})` : "записал дубль");
     session.recordings.set(session.clipIndex, rec);
     waveform?.setUserRecording(window, takeTimelineSamples(original, window.length));
+  } else {
+    // Кнопку нажали, а от микрофона не пришло ни одного сэмпла — раньше это
+    // проходило совсем без следа, дубль просто не сохранялся молча
+    note("запись пустая — микрофон не отдал ни одного сэмпла");
   }
+  updateDubFeedbackContext();
   waveform?.setPlayhead(null);
   updateDubButtons();
 }

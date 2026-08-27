@@ -8,6 +8,15 @@ export function audioContext(): AudioContext {
 }
 
 /**
+ * Для баг-репортов: «suspended» контекст (например, если resume() из
+ * audioContext() ещё не долетел к моменту жалобы) — частая причина тишины
+ * без единой ошибки в консоли.
+ */
+export function audioContextStatus(): { state: AudioContextState; sampleRate: number } | null {
+  return ctx ? { state: ctx.state, sampleRate: ctx.sampleRate } : null;
+}
+
+/**
  * Декодирует аудио-Blob в AudioBuffer.
  * Основной путь — decodeAudioData (Chrome/Firefox понимают wav/mp3/ogg).
  * Если браузер не осилил (например, ogg-vorbis в Safari) — wasm-фолбэк.
