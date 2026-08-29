@@ -625,6 +625,14 @@ a:hover { color: #fff; }
 }
 .credits p { margin: 0; }
 .credits a { color: var(--ink-soft); }
+
+.final-support {
+  margin: 14px 0 0;
+  text-align: center;
+  color: var(--ink-dim);
+  font-size: 0.82rem;
+}
+.final-support a { color: var(--ink-soft); }
 /* Кнопка в подвале живёт среди ссылок — и выглядеть должна ссылкой:
    у .btn свои поля, из-за них строка уезжала вправо. */
 .credits .btn {
