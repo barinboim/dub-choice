@@ -376,18 +376,40 @@ export function channelsToBuffer(channels: Float32Array[], rate: number): AudioB
  * а не в timeline.ts, потому что нужен обоим — и панели справа, и кнопке на
  * самой пилюле (импорт из timeline.ts в lanes.ts дал бы цикл).
  */
-let stopAtSec = 0;
+let playClipToken = 0;
 export async function playClipRange(video: HTMLVideoElement, startSec: number, endSec: number): Promise<void> {
-  stopAtSec = endSec;
-  video.currentTime = startSec;
-  const onTime = (): void => {
-    if (video.currentTime >= stopAtSec) {
-      video.pause();
-      video.removeEventListener("timeupdate", onTime);
+  // Каждый вызов отменяет предыдущий: игрок может ткнуть другую реплику, не
+  // дослушав эту.
+  const token = ++playClipToken;
+
+  // `currentTime =` асинхронный — без ожидания `seeked` плеер успевал начать
+  // играть со старого места, и в начало реплики влезал чужой звук.
+  if (Math.abs(video.currentTime - startSec) > 0.02) {
+    video.currentTime = startSec;
+    await new Promise<void>((resolve) => {
+      const done = (): void => {
+        video.removeEventListener("seeked", done);
+        resolve();
+      };
+      video.addEventListener("seeked", done);
+      setTimeout(done, 400); // страховка, если seeked не придёт
+    });
+  }
+  if (token !== playClipToken) return;
+
+  // Останавливаемся по rAF, а не по `timeupdate`: событие приходит раз в
+  // ~200 мс, и запись переигрывала конец реплики на четверть секунды.
+  const tick = (): void => {
+    if (token !== playClipToken) return;
+    if (video.currentTime >= endSec || video.paused || video.ended) {
+      if (!video.paused) video.pause();
+      return;
     }
+    requestAnimationFrame(tick);
   };
-  video.addEventListener("timeupdate", onTime);
   await video.play().catch(() => undefined);
+  if (token !== playClipToken) return;
+  requestAnimationFrame(tick);
 }
 
 /**
