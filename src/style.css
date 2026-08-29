@@ -388,6 +388,8 @@ a:hover { color: #fff; }
 
 /* ---------- Полки: «Новинки» и «Популярные озвучки» ---------- */
 .shelf { margin-top: 26px; }
+
+.ad-slot { margin-top: 26px; display: flex; justify-content: center; overflow: hidden; }
 /* Первая полка идёт сразу под заголовком — свой отступ у него уже есть */
 .shelf-first { margin-top: 0; }
 .shelf-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 10px; }

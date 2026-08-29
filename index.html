@@ -23,6 +23,16 @@
         document.head.appendChild(gc);
       }
     </script>
+    <!-- Yandex.RTB: тоже только на проде, площадка верифицирована на этот домен -->
+    <script>
+      if (location.hostname === "dubchoice.barinbo.im") {
+        window.yaContextCb = window.yaContextCb || [];
+        var yaLoader = document.createElement("script");
+        yaLoader.src = "https://yandex.ru/ads/system/context.js";
+        yaLoader.async = true;
+        document.head.appendChild(yaLoader);
+      }
+    </script>
   </head>
   <body>
     <div id="app">
@@ -36,28 +46,28 @@
 
       <!-- ЭКРАН 1: выбор пака -->
       <section id="screen-home" class="screen">
-        <p class="tagline" data-i18n="tagline"></p>
+        <p class="tagline" data-i18n="tagline">🎙️ Твоя студия дубляжа</p>
 
         <!-- Полка «Новинки»: SHELF_NEW_SIZE паков по addedAt (byNew), см. renderShelves. -->
         <section id="shelf-new" class="shelf shelf-first" hidden>
           <div class="shelf-head">
-            <h2 class="shelf-title" data-i18n="shelfNew"></h2>
-            <span class="shelf-sub" data-i18n="shelfNewSub"></span>
+            <h2 class="shelf-title" data-i18n="shelfNew">Новинки</h2>
+            <span class="shelf-sub" data-i18n="shelfNewSub">добавлены недавно</span>
           </div>
           <div id="shelf-new-track" class="shelf-track"></div>
         </section>
 
         <div id="drop-zone" class="drop-zone" tabindex="0">
-          <p class="drop-title" data-i18n="dropTitle"></p>
+          <p class="drop-title" data-i18n="dropTitle">Загрузи свой dub-пак</p>
           <p class="drop-hint">
-            <span data-i18n="dropHintZip"></span>
+            <span data-i18n="dropHintZip">ZIP-архив с</span>
             <a href="https://gamebanana.com/mods/cats/44064" target="_blank" rel="noopener">GameBanana</a>
-            <span data-i18n="dropHintOrVideo"></span>
+            <span data-i18n="dropHintOrVideo">или своё видео.</span>
           </p>
           <div class="drop-buttons">
-            <button id="btn-pick-zip" class="btn btn-pill" data-i18n="pickZip"></button>
+            <button id="btn-pick-zip" class="btn btn-pill" data-i18n="pickZip">Выбрать ZIP</button>
             <span class="btn-studio-wrap">
-              <a id="btn-studio" class="btn btn-pill btn-studio" href="studio.html" data-i18n="ownVideo"></a>
+              <a id="btn-studio" class="btn btn-pill btn-studio" href="studio.html" data-i18n="ownVideo">Своё видео</a>
               <sup class="beta-badge">BETA</sup>
             </span>
           </div>
@@ -66,19 +76,34 @@
 
         <p id="home-error" class="home-error" hidden></p>
 
-        <div id="history-label" class="section-label" data-i18n="historyTitle" hidden></div>
+        <div id="history-label" class="section-label" data-i18n="historyTitle" hidden>Прошлые игры</div>
         <div id="history-list" class="pack-list"></div>
 
         <!-- Полка: что чаще всего озвучивают на этой неделе -->
         <section id="shelf-popular" class="shelf" hidden>
           <div class="shelf-head">
-            <h2 class="shelf-title" data-i18n="shelfPopular"></h2>
-            <span class="shelf-sub" data-i18n="shelfPopularSub"></span>
+            <h2 class="shelf-title" data-i18n="shelfPopular">Популярные озвучки</h2>
+            <span class="shelf-sub" data-i18n="shelfPopularSub">на этой неделе</span>
           </div>
           <div id="shelf-track" class="shelf-track"></div>
         </section>
 
-        <div class="section-label" data-i18n="galleryTitle"></div>
+        <!-- Yandex.RTB: рекламный блок под полкой «Популярные озвучки» -->
+        <div class="ad-slot">
+          <div id="yandex_rtb_R-A-19834940-1"></div>
+          <script>
+            if (location.hostname === "dubchoice.barinbo.im") {
+              window.yaContextCb.push(() => {
+                Ya.Context.AdvManager.render({
+                  blockId: "R-A-19834940-1",
+                  renderTo: "yandex_rtb_R-A-19834940-1",
+                });
+              });
+            }
+          </script>
+        </div>
+
+        <div class="section-label" data-i18n="galleryTitle">Встроенные паки</div>
 
         <div class="search-box">
           <span class="search-icon" aria-hidden="true">
@@ -92,11 +117,11 @@
 
         <div class="gallery-controls">
           <div class="ctl-row">
-            <span class="ctl-label" data-i18n="sortLabel"></span>
+            <span class="ctl-label" data-i18n="sortLabel">Сортировка</span>
             <div id="sort-bar" class="seg"></div>
           </div>
           <div class="ctl-row">
-            <span class="ctl-label" data-i18n="tagsLabel"></span>
+            <span class="ctl-label" data-i18n="tagsLabel">Теги</span>
             <div id="tag-bar" class="tagbar"></div>
           </div>
         </div>
@@ -107,26 +132,26 @@
 
         <footer class="credits">
           <p>
-            <span data-i18n="creditsCreated"></span>
+            <span data-i18n="creditsCreated">Создал</span>
             <a href="https://t.me/barinboimgpt" target="_blank" rel="noopener">@barinboim</a>
           </p>
           <p>
-            <span data-i18n="creditsInspired"></span>
+            <span data-i18n="creditsInspired">Вдохновлено игрой The Choicer Voicer от YeahMaybe</span>
             · <a href="https://yeahmaybe.itch.io/the-choicer-voicer" target="_blank" rel="noopener">itch.io</a>
           </p>
           <p>
-            <span data-i18n="creditsSupport"></span>
+            <span data-i18n="creditsSupport">Поддержать проект:</span>
             <a href="https://www.donationalerts.com/r/barinboim" target="_blank" rel="noopener">DonationAlerts</a>
           </p>
           <p>
-            <button id="feedback-open" class="btn btn-text btn-sm" type="button" data-feedback data-i18n="feedbackOpen"></button>
+            <button id="feedback-open" class="btn btn-text btn-sm" type="button" data-feedback data-i18n="feedbackOpen">Сообщить о проблеме</button>
           </p>
         </footer>
       </section>
 
       <!-- ЭКРАН 2: карточка пака -->
       <section id="screen-pack" class="screen" hidden>
-        <button id="btn-pack-back" class="btn btn-text" data-i18n="back"></button>
+        <button id="btn-pack-back" class="btn btn-text" data-i18n="back">← Назад</button>
         <div class="pack-top-row">
           <div class="pack-card">
             <img id="pack-icon" class="pack-icon" alt="" />
@@ -139,38 +164,38 @@
             </div>
           </div>
           <div id="char-filter" class="char-filter" hidden>
-            <div class="section-label" data-i18n="filterCharacters"></div>
+            <div class="section-label" data-i18n="filterCharacters">Фильтр персонажей:</div>
             <div id="char-filter-list" class="char-filter-list"></div>
-            <p id="char-filter-empty" class="mic-status error char-filter-empty" data-i18n="filterEmpty" hidden></p>
+            <p id="char-filter-empty" class="mic-status error char-filter-empty" data-i18n="filterEmpty" hidden>Выбери хотя бы одного персонажа</p>
           </div>
         </div>
         <div id="pack-warnings" class="pack-warnings" hidden></div>
         <div id="mic-device-row" class="mic-device-row" hidden>
-          <label for="mic-device-select" data-i18n="micDeviceLabel"></label>
+          <label for="mic-device-select" data-i18n="micDeviceLabel">🎙️ Микрофон</label>
           <select id="mic-device-select" class="lang-select"></select>
         </div>
         <div class="mix-modes" id="pack-mix-modes">
           <label class="mix-mode">
             <input type="radio" name="mix-mode-pack" value="dub" checked />
             <span class="mix-mode-text">
-              <span class="mix-mode-title" data-i18n="mixDub"></span>
-              <small data-i18n="mixDubHint"></small>
+              <span class="mix-mode-title" data-i18n="mixDub">Дубляж</span>
+              <small data-i18n="mixDubHint">твоя озвучка полностью заменит голоса персонажей</small>
             </span>
           </label>
           <label class="mix-mode">
             <input type="radio" name="mix-mode-pack" value="voiceover" />
             <span class="mix-mode-text">
-              <span class="mix-mode-title" data-i18n="mixVoiceover"></span>
-              <small data-i18n="mixVoiceoverHint"></small>
+              <span class="mix-mode-title" data-i18n="mixVoiceover">Закадр</span>
+              <small data-i18n="mixVoiceoverHint">твоя озвучка ляжет поверх приглушённых оригинальных голосов</small>
             </span>
           </label>
         </div>
-        <p class="mix-modes-note" data-i18n="mixChangeLater"></p>
+        <p class="mix-modes-note" data-i18n="mixChangeLater">Выбор можно будет поменять перед сохранением ролика</p>
         <div class="pack-start-row">
-          <button id="btn-start" class="btn btn-primary btn-big" data-i18n="start"></button>
+          <button id="btn-start" class="btn btn-primary btn-big" data-i18n="start">Озвучить!</button>
           <!-- Только для пака из редактора: встроенные скачивать неоткуда -->
-          <button id="btn-pack-download" class="btn btn-pill" data-i18n="downloadShort" hidden></button>
-          <button id="btn-pack-edit" class="btn btn-pill btn-studio" data-i18n="editShort" hidden></button>
+          <button id="btn-pack-download" class="btn btn-pill" data-i18n="downloadShort" hidden>Скачать</button>
+          <button id="btn-pack-edit" class="btn btn-pill btn-studio" data-i18n="editShort" hidden>Редактировать</button>
           <p id="mic-status" class="mic-status"></p>
         </div>
       </section>
@@ -178,7 +203,7 @@
       <!-- ЭКРАН 3: дубляж -->
       <section id="screen-dub" class="screen screen-dub" hidden>
         <div class="dub-top">
-          <button id="btn-dub-back" class="btn btn-pill dub-back" data-i18n="back"></button>
+          <button id="btn-dub-back" class="btn btn-pill dub-back" data-i18n="back">← Назад</button>
           <div class="dub-progress">
             <span id="dub-counter" class="dub-counter"></span>
             <div class="dub-progress-bar"><div id="dub-progress-fill"></div></div>
@@ -196,20 +221,20 @@
           <div class="dub-side">
             <div id="dub-character" class="dub-character"></div>
             <div class="dub-controls">
-              <button id="btn-orig" class="btn btn-pill" data-i18n="original"></button>
-              <button id="btn-record" class="btn btn-record" data-i18n="record"></button>
-              <button id="btn-next" class="btn btn-primary" data-i18n="next" disabled></button>
-              <button id="btn-play-take" class="btn btn-pill" data-i18n="myTake" hidden></button>
-              <button id="btn-to-final" class="btn btn-pill" data-i18n="toPremiere" hidden></button>
+              <button id="btn-orig" class="btn btn-pill" data-i18n="original">▶ Оригинал</button>
+              <button id="btn-record" class="btn btn-record" data-i18n="record">● Записать</button>
+              <button id="btn-next" class="btn btn-primary" data-i18n="next" disabled>Готово →</button>
+              <button id="btn-play-take" class="btn btn-pill" data-i18n="myTake" hidden>▶ Мой дубль</button>
+              <button id="btn-to-final" class="btn btn-pill" data-i18n="toPremiere" hidden>🎬 К премьере</button>
             </div>
             <div class="monitor-block">
               <label class="monitor-toggle">
                 <input id="toggle-countdown" type="checkbox" />
-                <span>⏰ <span data-i18n="countdownLabel"></span></span>
+                <span>⏰ <span data-i18n="countdownLabel">Отсчёт 3–2–1 перед записью</span></span>
               </label>
               <label class="monitor-toggle">
                 <input id="toggle-monitor" type="checkbox" />
-                <span>🎧 <span data-i18n="monitorLabel"></span></span>
+                <span>🎧 <span data-i18n="monitorLabel">Слышать дорожку</span></span>
               </label>
               <div class="monitor-volume">
                 <input id="monitor-volume" type="range" min="0" max="100" value="50" />
@@ -221,45 +246,45 @@
 
         <div id="dub-lang-rows" class="lang-rows">
           <div id="dub-audio-langs" class="lang-row" hidden>
-            <span class="lang-row-label" data-i18n="audioTrackLabel"></span>
+            <span class="lang-row-label" data-i18n="audioTrackLabel">Звук</span>
             <span id="dub-audio-pills" class="lang-pills"></span>
           </div>
           <div id="dub-caption-langs" class="lang-row" hidden>
-            <span class="lang-row-label" data-i18n="captionsLabel"></span>
+            <span class="lang-row-label" data-i18n="captionsLabel">Субтитры</span>
             <span id="dub-caption-pills" class="lang-pills"></span>
           </div>
         </div>
-        <p class="caption-edit-hint" data-i18n="captionEditHint"></p>
+        <p class="caption-edit-hint" data-i18n="captionEditHint">нажми на текст, если хочешь отредактировать</p>
         <p id="dub-caption" class="dub-caption"></p>
         <div id="dub-caption-edit" class="caption-edit" hidden>
           <textarea id="dub-caption-input" class="caption-input" rows="2"></textarea>
-          <button id="btn-caption-done" class="btn btn-pill" data-i18n="captionDone"></button>
+          <button id="btn-caption-done" class="btn btn-pill" data-i18n="captionDone">Готово</button>
         </div>
 
         <div class="waveform-wrap">
           <canvas id="dub-waveform" class="waveform"></canvas>
-          <div id="record-badge" class="record-badge" data-i18n="recBadge" hidden></div>
+          <div id="record-badge" class="record-badge" data-i18n="recBadge" hidden>● ЗАПИСЬ</div>
         </div>
         <p class="waveform-hint" id="waveform-hint"></p>
       </section>
 
       <!-- ЭКРАН 4: финальный ролик -->
       <section id="screen-final" class="screen screen-final" hidden>
-        <button id="btn-final-back" class="btn btn-text" data-i18n="backToClips"></button>
-        <h2 class="final-title" data-i18n="premiere"></h2>
+        <button id="btn-final-back" class="btn btn-text" data-i18n="backToClips">← К репликам</button>
+        <h2 class="final-title" data-i18n="premiere">🍿 Премьера твоего дубляжа!</h2>
         <!-- Свой пак из студии: правка, публикация, скачивание. Сразу под
              заголовком, а не в ряду с «Скачать видео»: это действия с самим
              паком, а не с роликом, и внизу они читались как соседи экспорта.
              Подписи здесь длинные («…пак») — рядом стоят кнопки про ролик,
              и одно «Скачать» на всю премьеру было бы двусмысленным -->
         <div id="final-own-pack" class="final-own-pack" hidden>
-          <button id="btn-final-edit-pack" class="btn btn-pill btn-studio" data-i18n="editPack"></button>
-          <button id="btn-final-publish-pack" class="btn btn-pill" data-i18n="publishPack"></button>
-          <button id="btn-final-download-pack" class="btn btn-pill" data-i18n="downloadPack"></button>
+          <button id="btn-final-edit-pack" class="btn btn-pill btn-studio" data-i18n="editPack">Редактировать пак</button>
+          <button id="btn-final-publish-pack" class="btn btn-pill" data-i18n="publishPack">Опубликовать пак</button>
+          <button id="btn-final-download-pack" class="btn btn-pill" data-i18n="downloadPack">Скачать пак</button>
         </div>
         <div class="lang-rows">
           <div id="final-audio-langs" class="lang-row" hidden>
-            <span class="lang-row-label" data-i18n="audioTrackLabel"></span>
+            <span class="lang-row-label" data-i18n="audioTrackLabel">Звук</span>
             <span id="final-audio-pills" class="lang-pills"></span>
           </div>
         </div>
@@ -272,48 +297,48 @@
           <label class="mix-mode">
             <input type="radio" name="mix-mode" value="dub" checked />
             <span class="mix-mode-text">
-              <span class="mix-mode-title" data-i18n="mixDub"></span>
-              <small data-i18n="mixDubHint"></small>
+              <span class="mix-mode-title" data-i18n="mixDub">Дубляж</span>
+              <small data-i18n="mixDubHint">твоя озвучка полностью заменит голоса персонажей</small>
             </span>
           </label>
           <label class="mix-mode">
             <input type="radio" name="mix-mode" value="voiceover" />
             <span class="mix-mode-text">
-              <span class="mix-mode-title" data-i18n="mixVoiceover"></span>
-              <small data-i18n="mixVoiceoverHint"></small>
+              <span class="mix-mode-title" data-i18n="mixVoiceover">Закадр</span>
+              <small data-i18n="mixVoiceoverHint">твоя озвучка ляжет поверх приглушённых оригинальных голосов</small>
             </span>
           </label>
         </div>
         <div class="voiceover-volume">
-          <span data-i18n="takeVolume"></span>
+          <span data-i18n="takeVolume">Громкость озвучки</span>
           <input id="take-volume" type="range" min="0" max="100" value="75" />
           <span id="take-volume-value" class="monitor-volume-value">75%</span>
         </div>
         <div id="voiceover-volume-row" class="voiceover-volume" hidden>
-          <span data-i18n="voiceoverVolume"></span>
+          <span data-i18n="voiceoverVolume">Громкость оригинала</span>
           <input id="voiceover-volume" type="range" min="0" max="100" value="30" />
           <span id="voiceover-volume-value" class="monitor-volume-value">30%</span>
         </div>
         <div class="final-controls">
-          <button id="btn-final-play" class="btn btn-primary btn-big" data-i18n="watch"></button>
+          <button id="btn-final-play" class="btn btn-primary btn-big" data-i18n="watch">▶ Смотреть</button>
           <button id="btn-export" class="btn btn-pill"></button>
-          <button id="btn-export-audio" class="btn btn-pill" data-i18n="downloadAudio"></button>
-          <button id="btn-retry" class="btn btn-pill" data-i18n="redub"></button>
-          <button id="btn-home" class="btn btn-pill" data-i18n="otherPack"></button>
+          <button id="btn-export-audio" class="btn btn-pill" data-i18n="downloadAudio">🎧 Скачать аудио (WAV)</button>
+          <button id="btn-retry" class="btn btn-pill" data-i18n="redub">↩ Переозвучить заново</button>
+          <button id="btn-home" class="btn btn-pill" data-i18n="otherPack">🏠 Другой пак</button>
         </div>
 
         <!-- Результаты: попадание дубля в оригинальные реплики -->
         <section id="results" class="results" hidden>
-          <h3 class="results-title" data-i18n="resultsTitle"></h3>
+          <h3 class="results-title" data-i18n="resultsTitle">Результаты</h3>
           <div id="results-track" class="results-track" hidden>
-            <p class="results-track-q" data-i18n="scoreTrackQuestion"></p>
+            <p class="results-track-q" data-i18n="scoreTrackQuestion">По какой дорожке считаем ваши баллы?</p>
             <div id="results-track-pills" class="lang-pills"></div>
           </div>
           <div id="results-total" class="results-total">
             <span id="results-percent" class="results-percent"></span>
             <span id="results-verdict" class="results-verdict"></span>
           </div>
-          <p class="results-hint" data-i18n="resultsHint"></p>
+          <p class="results-hint" data-i18n="resultsHint">Балл — насколько твой дубль попал в ритм оригинала: вовремя начал, вовремя замолчал, там же сделал акценты. Нажми на реплику, чтобы переписать её.</p>
           <div id="results-list" class="results-list"></div>
         </section>
       </section>
@@ -321,26 +346,26 @@
       <!-- Попап выбора состава WAV-экспорта -->
       <div id="wav-export-modal" class="modal-backdrop" hidden>
         <div class="modal-card">
-          <h3 class="modal-title" data-i18n="wavModalTitle"></h3>
+          <h3 class="modal-title" data-i18n="wavModalTitle">Что скачать?</h3>
           <div class="modal-options">
             <button id="wav-opt-voice" class="modal-option">
-              <span class="modal-option-title" data-i18n="wavOptVoice"></span>
-              <small data-i18n="wavOptVoiceHint"></small>
+              <span class="modal-option-title" data-i18n="wavOptVoice">Только мой голос</span>
+              <small data-i18n="wavOptVoiceHint">реплики, которые ты озвучил — без фона</small>
             </button>
             <button id="wav-opt-voice-chars" class="modal-option" hidden>
-              <span class="modal-option-title" data-i18n="wavOptVoiceChars"></span>
-              <small data-i18n="wavOptVoiceCharsHint"></small>
+              <span class="modal-option-title" data-i18n="wavOptVoiceChars">Мой голос и голоса персонажей</span>
+              <small data-i18n="wavOptVoiceCharsHint">плюс оригинальные реплики персонажей, которых ты не озвучивал — без фона</small>
             </button>
             <button id="wav-opt-full" class="modal-option">
-              <span class="modal-option-title" data-i18n="wavOptFull"></span>
-              <small data-i18n="wavOptFullHint"></small>
+              <span class="modal-option-title" data-i18n="wavOptFull">Вся дорожка с фоном</span>
+              <small data-i18n="wavOptFullHint">тот же микс, что и в экспортируемом видео</small>
             </button>
           </div>
-          <button id="wav-modal-cancel" class="btn btn-text" data-i18n="modalCancel"></button>
+          <button id="wav-modal-cancel" class="btn btn-text" data-i18n="modalCancel">Отмена</button>
         </div>
       </div>
       <button id="results-jump" class="results-jump" hidden>
-        <span data-i18n="resultsJump"></span>
+        <span data-i18n="resultsJump">Результаты и баллы</span>
         <span class="results-jump-arrow" aria-hidden="true">↓</span>
       </button>
     </div>
