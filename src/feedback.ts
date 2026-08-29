@@ -45,9 +45,10 @@ export function initFeedback(): void {
     el.addEventListener("click", openFeedbackForm);
   }
 
-  // Кнопки в подвале нет на карточке пака, на экране дубляжа и на премьере
-  // (подвал живёт только на home) — а поймать баг человек может именно там.
-  // Ctrl/Cmd+Shift+F открывает форму с любого экрана обоих документов.
+  // Кнопки нет только на карточке пака (подвал живёт исключительно на home,
+  // но на экране записи и премьере своя кнопка внизу самого экрана) —
+  // Ctrl/Cmd+Shift+F закрывает и этот пробел, открывая форму с любого
+  // экрана обоих документов.
   window.addEventListener("keydown", (e) => {
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
