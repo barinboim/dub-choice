@@ -24,7 +24,7 @@ const DB_NAME = "dubchoice-history";
 const META_STORE = "meta";
 const PAYLOAD_STORE = "payload";
 /** Сколько последних прохождений хранить — старые вытесняются автоматически. */
-const HISTORY_LIMIT = 10;
+const HISTORY_LIMIT = 5;
 
 export interface HistoryMeta {
   id: string;
