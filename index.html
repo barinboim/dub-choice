@@ -23,28 +23,6 @@
         document.head.appendChild(gc);
       }
     </script>
-    <!--
-      Яндекс.РСЯ отклонил площадку модерацией (2026-08-29, «иным причинам»),
-      повторная подача возможна не раньше чем через 30 дней. Реклама — VK.
-      <script>
-        if (location.hostname === "dubchoice.barinbo.im") {
-          window.yaContextCb = window.yaContextCb || [];
-          var yaLoader = document.createElement("script");
-          yaLoader.src = "https://yandex.ru/ads/system/context.js";
-          yaLoader.async = true;
-          document.head.appendChild(yaLoader);
-        }
-      </script>
-    -->
-    <!-- VK Ads: тоже только на проде, площадка верифицирована на этот домен -->
-    <script>
-      if (location.hostname === "dubchoice.barinbo.im") {
-        var vkLoader = document.createElement("script");
-        vkLoader.src = "https://ad.mail.ru/static/ads-async.js";
-        vkLoader.async = true;
-        document.head.appendChild(vkLoader);
-      }
-    </script>
   </head>
   <body>
     <div id="app">
@@ -126,16 +104,6 @@
         <p id="gallery-count" class="result-line"></p>
         <div id="preloaded-list" class="preloaded-list"></div>
         <nav id="gallery-pager" class="gallery-pager" hidden></nav>
-
-        <!-- VK Ads: рекламный блок под галереей встроенных паков -->
-        <div class="ad-slot">
-          <ins class="mrg-tag" style="display:inline-block;width:auto;height:250px" data-ad-client="ad-2058738" data-ad-slot="2058738"></ins>
-          <script>
-            if (location.hostname === "dubchoice.barinbo.im") {
-              (window.MRGtag = window.MRGtag || []).push({});
-            }
-          </script>
-        </div>
 
         <footer class="credits">
           <p>
