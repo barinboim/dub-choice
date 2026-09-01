@@ -13,6 +13,10 @@ const dict = {
     ru: "🎙️ Твоя студия дубляжа",
     en: "🎙️ Your dubbing studio",
   },
+  vpnHint: {
+    ru: "Как и всё хорошее в этой жизни, контент этого сайта работает лучше со включённым VPN",
+    en: "Like everything good in life, this site's content works better with a VPN on",
+  },
   dropTitle: { ru: "Загрузи свой dub-пак", en: "Load your own dub pack" },
   dropHintZip: { ru: "ZIP-архив с", en: "A ZIP archive from" },
   dropHintOrVideo: { ru: "или своё видео.", en: "or your own video." },

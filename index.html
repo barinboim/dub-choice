@@ -38,6 +38,10 @@
       <section id="screen-home" class="screen">
         <p class="tagline" data-i18n="tagline">🎙️ Твоя студия дубляжа</p>
 
+        <!-- Подсказка про VPN — показывается только для заходов из РФ (см. src/geo.ts):
+             паки, иконки и веса студии лежат в Cloudflare R2, из России он капризничает. -->
+        <p id="vpn-hint" class="vpn-hint" data-i18n="vpnHint" hidden>Как и всё хорошее в этой жизни, контент этого сайта работает лучше со включённым VPN</p>
+
         <!-- Полка «Новинки»: SHELF_NEW_SIZE паков по addedAt (byNew), см. renderShelves. -->
         <section id="shelf-new" class="shelf shelf-first" hidden>
           <div class="shelf-head">

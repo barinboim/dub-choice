@@ -14,6 +14,7 @@ import { openDownloadModal, openPublishModal } from "./pack/own-pack";
 import { looksLikeVideo } from "./studio/source";
 import { initFeedback, setFeedbackContext } from "./feedback";
 import { note } from "./journey";
+import { initVpnHint, showVpnHint } from "./geo";
 import { DubPack, PackError, packCharacters, clipIsActive } from "./pack/types";
 import {
   loadPreloadedManifest,
@@ -2773,9 +2774,11 @@ async function initPreloadedPacks(): Promise<void> {
   } catch (err) {
     console.error(err);
     showHomeError(t("manifestLoadError"));
+    showVpnHint(); // R2 не ответил — возможно, Cloudflare заблокирован целиком
   }
   renderPreloadedList();
 }
+void initVpnHint($("vpn-hint")); // до initPreloadedPacks: фолбэк загрузки паков дёргает showVpnHint()
 void initPreloadedPacks();
 initFeedback();
 

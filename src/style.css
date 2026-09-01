@@ -195,6 +195,18 @@ a:hover { color: #fff; }
   text-wrap: balance;
 }
 
+.vpn-hint {
+  margin: -22px 0 32px;
+  padding: 10px 14px;
+  max-width: 44ch;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
 .section-label {
   font-size: 0.72rem;
   font-weight: 600;
