@@ -22,7 +22,7 @@ import { buildPack, downloadZip, playInGame } from "./build";
 import { openDownloadModal, openPublishModal } from "../pack/own-pack";
 import { takePackForStudio, takePendingVideo } from "../pack/handoff";
 import { deleteDraft, listDrafts, loadDraftPack, saveDraft, type DraftMeta } from "../pack/drafts";
-import { loadPackFromZip } from "../pack/loader";
+import { loadPackFromZip, loadPackFromUrl } from "../pack/loader";
 import { decodePackAudio, packToState } from "./reopen";
 import { audioBufferToWav } from "../audio/wav";
 import { buildReport } from "../diagnostics";
@@ -717,3 +717,12 @@ void takePackForStudio().then((pack) => {
     void openExistingPack(Promise.resolve(pack));
   }
 });
+
+// Ссылка на пак прямо в URL — так открывается кнопка «В редактор» из
+// письма модерации в Telegram: пак ещё не в галерее, доступен только по
+// прямому адресу в R2 (submissions/...), передавать его иначе некуда.
+const moderationUrl = new URLSearchParams(location.search).get("load");
+if (moderationUrl) {
+  trackSource("moderation");
+  void openExistingPack(loadPackFromUrl(moderationUrl));
+}

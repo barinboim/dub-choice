@@ -110,6 +110,12 @@ export async function publishPack(
   const characters = new Set<string>();
   for (const clip of pack.clips) for (const name of clip.characters) characters.add(name);
 
+  // Модератору важно увидеть заранее, что автор не заполнил текст реплик —
+  // такой пак не пройдёт озвучку без правок, но об этом не узнать по одной
+  // иконке и названию. Пусто — буквально пустая строка, без догадок про
+  // «одну букву» и т.п.
+  const emptyCaptions = pack.clips.filter((clip) => clip.caption.trim() === "").length;
+
   const signed = await post("/publish/sign", {
     title: pack.title,
     author: meta.author,
@@ -120,6 +126,7 @@ export async function publishPack(
     fileName: `${packFolderName(pack)}.zip`,
     size: zipBlob.size,
     clips: pack.clips.length,
+    emptyCaptions,
     characters: [...characters],
     lang: pack.lang,
     mix: pack.forcedMix ?? "dub",

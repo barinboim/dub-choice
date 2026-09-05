@@ -18,7 +18,7 @@ import sys
 from datetime import date as _date
 from pathlib import Path
 
-from make_frames import FRAME_AT, FRAME_HEIGHT, FRAME_QUALITY, grab
+from make_frames import FRAME_AT, FRAME_HEIGHT, FRAME_QUALITY, audio_duration, grab
 
 CLIP_BITRATE = "128k"
 BACKING_BITRATE = "192k"
@@ -52,9 +52,14 @@ def main() -> int:
 
     spec = json.load(open(aligned_path, encoding="utf-8"))
 
-    # Иконка: квадратный кроп по центру кадра
-    ffmpeg("-ss", str(icon_at), "-i", video, "-frames:v", "1",
-           "-vf", f"crop=ih:ih,scale={ICON_SIZE}:{ICON_SIZE}", str(outdir / "icon.png"))
+    # Иконка: квадратный кроп по центру кадра. min(iw,ih), а не жёстко ih —
+    # иначе на портретном видео (iw < ih) crop просит ширину больше кадра
+    # и падает. Таймкод зажимается по длительности видео: у короткого
+    # ролика фиксированные --icon-at по умолчанию (45 с) могут уехать за EOF
+    icon_at = min(icon_at, max(audio_duration(Path(video)) - 0.05, 0.0))
+    ffmpeg("-ss", f"{icon_at:.3f}", "-i", video, "-frames:v", "1",
+           "-vf", f"crop='min(iw,ih)':'min(iw,ih)',scale={ICON_SIZE}:{ICON_SIZE}",
+           str(outdir / "icon.png"))
 
     # "-" — собрать пак без фоновой дорожки (промежуточная проверка формата:
     # движок такие паки грузит, просто в финале будет тишина между репликами)

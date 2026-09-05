@@ -12,7 +12,7 @@
  */
 import { trackEvent } from "../analytics";
 
-export type StudioSource = "file" | "link" | "zip" | "handoff";
+export type StudioSource = "file" | "link" | "zip" | "handoff" | "moderation";
 export type StudioMode = "voiceover" | "dub";
 
 /** Слаги ошибок: набор закрытый, свободного текста здесь быть не должно. */

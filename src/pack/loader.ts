@@ -26,6 +26,17 @@ export async function loadPackFromZip(file: File): Promise<DubPack> {
   return parsePack(files);
 }
 
+/**
+ * Загружает пак по прямой ссылке на ZIP (например, presubmission-архив
+ * из письма модерации в Telegram, `?load=` в studio.html).
+ */
+export async function loadPackFromUrl(url: string): Promise<DubPack> {
+  const res = await fetch(url);
+  if (!res.ok) throw new PackError(`Не удалось скачать пак (${res.status}).`);
+  const blob = await res.blob();
+  return loadPackFromZip(new File([blob], "pack.zip", { type: "application/zip" }));
+}
+
 /** Загружает пак из списка файлов (input webkitdirectory или drag-and-drop папки). */
 export async function loadPackFromFiles(fileList: Iterable<File>): Promise<DubPack> {
   const files: PackFileMap = new Map();
