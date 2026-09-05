@@ -1271,15 +1271,13 @@ const micTroubleText = $("mic-trouble-text");
 const btnMicReconnect = $<HTMLButtonElement>("btn-mic-reconnect");
 
 /** Какая беда показана сейчас — чтобы не перерисовывать баннер на каждый кадр. */
-let micTroubleKind: "ended" | "muted" | "silentTake" | null = null;
+let micTroubleKind: "ended" | "muted" | null = null;
 
-function showMicTrouble(kind: "ended" | "muted" | "silentTake" | null): void {
+function showMicTrouble(kind: "ended" | "muted" | null): void {
   micTroubleKind = kind;
   micTrouble.hidden = kind === null;
   if (kind === null) return;
-  micTroubleText.textContent = t(
-    kind === "ended" ? "micLost" : kind === "muted" ? "micMuted" : "micSilentTake"
-  );
+  micTroubleText.textContent = t(kind === "ended" ? "micLost" : "micMuted");
 }
 
 recorder.onTrouble((what) => {
@@ -2144,17 +2142,19 @@ async function finishRecording(auto = false): Promise<void> {
     // Ровную тишину отделяем от тихого голоса: это разные диагнозы (молчащий
     // микрофон против далёкого от рта), а `toFixed(5)` их обоих печатал
     // как «0.00000» и вёл разбор отчёта по ложному следу
+    // Беззвучный дубль — законный ход: реплику можно намеренно пропустить,
+    // промолчав в неё. Поэтому тишина уходит только в дневник и отчёт, а
+    // игроку про неё не говорится ни слова: о живости микрофона отвечает
+    // индикатор уровня, и обвинять человека в поломке за его же решение
+    // нельзя (решение владельца 2026-09-05, баннер тут был и убран)
     const rms = samplesRms(window);
     lastTakeRms = rms;
     if (rms === 0) {
       note("записал дубль — ровная тишина, микрофон не дал сигнала");
-      showMicTrouble("silentTake");
     } else if (rms < SILENCE_RMS) {
       note(`записал дубль — подозрительно тихо (RMS ${rms.toExponential(1)})`);
-      showMicTrouble("silentTake");
     } else {
       note("записал дубль");
-      if (micTroubleKind === "silentTake") showMicTrouble(null);
     }
     session.recordings.set(session.clipIndex, rec);
     waveform?.setUserRecording(window, takeTimelineSamples(original, window.length));
@@ -2163,7 +2163,6 @@ async function finishRecording(auto = false): Promise<void> {
     // проходило совсем без следа, дубль просто не сохранялся молча
     note("запись пустая — микрофон не отдал ни одного сэмпла");
     lastTakeRms = 0;
-    showMicTrouble("silentTake");
   }
   updateDubFeedbackContext();
   waveform?.setPlayhead(null);

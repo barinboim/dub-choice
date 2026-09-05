@@ -169,8 +169,9 @@ const dict = {
   monitorLabel: { ru: "Слышать дорожку", en: "Hear the track" },
   micLevelLabel: { ru: "🎙️ Микрофон слышит", en: "🎙️ Mic input" },
   micReconnect: { ru: "Переподключить микрофон", en: "Reconnect microphone" },
-  // Три беды с микрофоном, о которых игроку нужно сказать прямо: устройство
-  // пропало, браузер отдаёт тишину, дубль записался беззвучным
+  // Две беды, о которых браузер сообщает сам и в которых нет сомнений:
+  // устройство пропало или отдаёт тишину. Беззвучный дубль сюда не входит —
+  // промолчать в реплику можно намеренно, чтобы её пропустить
   micLost: {
     ru: "Микрофон отключился. Проверь, что он на месте, и нажми «Переподключить микрофон».",
     en: "The microphone went away. Check it's plugged in and hit “Reconnect microphone”.",
@@ -178,10 +179,6 @@ const dict = {
   micMuted: {
     ru: "Микрофон молчит — возможно, он выключен кнопкой или приглушён в системе. Проверь его или выбери другой на карточке пака.",
     en: "The mic is silent — it may be muted by a hardware switch or in your system settings. Check it or pick another one on the pack card.",
-  },
-  micSilentTake: {
-    ru: "В дубле нет звука: микрофон ничего не записал. Проверь, тот ли микрофон выбран, и попробуй ещё раз.",
-    en: "That take has no sound: the mic recorded nothing. Check the selected microphone and try again.",
   },
   countdownLabel: { ru: "Отсчёт 3–2–1 перед записью", en: "3–2–1 countdown" },
   cancelCountdown: { ru: "✕ Отмена", en: "✕ Cancel" },
