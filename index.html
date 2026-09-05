@@ -37,6 +37,10 @@
       <!-- ЭКРАН 1: выбор пака -->
       <section id="screen-home" class="screen">
         <p class="tagline" data-i18n="tagline">🎙️ Твоя студия дубляжа</p>
+        <p class="tagline-school">
+          <span data-i18n="taglineSchool">Проект</span>
+          <a href="https://school.barinbo.im" target="_blank" rel="noopener" data-i18n="taglineSchoolLink">Школы Баринбойма</a>
+        </p>
 
         <!-- Подсказка про VPN — показывается только для заходов из РФ (см. src/geo.ts):
              паки, иконки и веса студии лежат в Cloudflare R2, из России он капризничает. -->
@@ -219,8 +223,27 @@
                 <input id="monitor-volume" type="range" min="0" max="100" value="50" />
                 <span id="monitor-volume-value" class="monitor-volume-value">50%</span>
               </div>
+              <!-- Живой уровень входа: молчащий микрофон должно быть видно
+                   до записи, а не после десятка пустых дублей -->
+              <div id="mic-level" class="mic-level" hidden>
+                <span class="mic-level-label" data-i18n="micLevelLabel">🎙️ Микрофон слышит</span>
+                <span class="mic-level-bar"><span id="mic-level-fill" class="mic-level-fill"></span></span>
+              </div>
             </div>
           </div>
+        </div>
+
+        <!-- Микрофон замолчал: браузер сказал об этом сам, или дубль вышел
+             беззвучным. Без этого человек писал дубль за дублем в тишину -->
+        <div id="mic-trouble" class="mic-trouble" hidden>
+          <p id="mic-trouble-text" class="mic-trouble-text"></p>
+          <!-- Выбор устройства нужен здесь же: на карточке пака он остался
+               за спиной, а «← Назад» ведёт к предыдущей реплике, не к нему -->
+          <div id="mic-trouble-row" class="mic-device-row" hidden>
+            <label for="mic-trouble-device" data-i18n="micDeviceLabel">🎙️ Микрофон</label>
+            <select id="mic-trouble-device" class="lang-select"></select>
+          </div>
+          <button id="btn-mic-reconnect" class="btn btn-pill" type="button" data-i18n="micReconnect">Переподключить микрофон</button>
         </div>
 
         <div id="dub-lang-rows" class="lang-rows">
@@ -245,6 +268,7 @@
           <div id="record-badge" class="record-badge" data-i18n="recBadge" hidden>● ЗАПИСЬ</div>
         </div>
         <p class="waveform-hint" id="waveform-hint"></p>
+
 
         <p class="screen-feedback">
           <button id="feedback-open-dub" class="btn btn-text btn-sm" type="button" data-feedback data-i18n="feedbackOpen">Сообщить о проблеме</button>

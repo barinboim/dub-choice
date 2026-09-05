@@ -60,6 +60,9 @@ function showScreen(name: keyof typeof screens): void {
   // Дневник сеанса (journey.ts): по нему в отчёте о проблеме видно, каким
   // путём человек дошёл до поломки.
   note(`экран: ${name}`);
+  // Уходим с записи — отпускаем микрофонный граф: на экране дубляжа он держится
+  // всё время ради индикатора уровня, но на премьере и главной он ни к чему
+  if (document.body.dataset.screen === "dub" && name !== "dub") recorder.disarm();
   for (const [key, el] of Object.entries(screens)) el.hidden = key !== name;
   // Мобильная версия: по имени активного экрана в CSS решаем, показывать ли
   // логотип и переключатель языка в шапке (см. style.css)
@@ -756,7 +759,7 @@ async function openHistoryEntry(meta: HistoryMeta): Promise<void> {
       extra: {
         "пак": currentPackSlug,
         "реплик в паке": pack.clips.length,
-        "видео пака": pack.video?.type || "?",
+        "видео пака": pack.video?.type || `${pack.videoKind} (без mime)`,
       },
     });
     videoPlayer = await createVideoPlayer(pack.video, pack.videoKind);
@@ -899,14 +902,60 @@ const micStatus = $("mic-status");
  */
 const micDeviceRow = $("mic-device-row");
 const micDeviceSelect = $<HTMLSelectElement>("mic-device-select");
+/**
+ * Тот же список — в баннере беды на экране записи. Второй копией, а не
+ * переездом: выбор нужен и до записи (карточка пака), и в момент, когда
+ * микрофон умер посреди сессии, а до карточки уже не дойти — «← Назад»
+ * ведёт к предыдущей реплике.
+ */
+const micTroubleRow = $("mic-trouble-row");
+const micTroubleDevice = $<HTMLSelectElement>("mic-trouble-device");
+const micSelects = [micDeviceSelect, micTroubleDevice];
 let micDeviceId: string | undefined;
 let micProbed = false;
 
 if (!isMobile()) {
-  micDeviceSelect.addEventListener("change", () => {
-    micDeviceId = micDeviceSelect.value || undefined;
-  });
+  for (const sel of micSelects) {
+    sel.addEventListener("change", () => {
+      micDeviceId = sel.value || undefined;
+      for (const other of micSelects) if (other !== sel) other.value = sel.value;
+      note("сменил микрофон в списке");
+      // Поток мог быть уже открыт (игрок пришёл на карточку с экрана записи) —
+      // тогда выбор нужно применить сразу, иначе он останется декорацией
+      if (recorder.ready) void applyMicDevice();
+    });
+  }
   navigator.mediaDevices?.addEventListener?.("devicechange", () => void refreshMicDevices());
+}
+
+/**
+ * Переоткрывает микрофон на выбранном устройстве и обновляет экран записи.
+ * Один путь на все случаи: смена в списке, кнопка «Переподключить», молчащий
+ * трек перед записью.
+ */
+async function applyMicDevice(): Promise<void> {
+  try {
+    try {
+      await recorder.init(micDeviceId);
+    } catch (err) {
+      // Устройства с таким id больше нет (выдернули USB, отключили гарнитуру):
+      // `deviceId: { exact }` в этом случае падает всегда, и упереться в
+      // мёртвый выбор — худшее, что можно сделать с человеком, у которого и
+      // так пропал звук. Берём системный по умолчанию и говорим об этом списком
+      if (micDeviceId === undefined) throw err;
+      note("выбранного микрофона больше нет — беру системный по умолчанию");
+      micDeviceId = undefined;
+      await recorder.init(undefined);
+    }
+    if (document.body.dataset.screen === "dub") await recorder.arm();
+    showMicTrouble(recorder.healthy ? null : "muted");
+  } catch {
+    note("микрофон не дался при переподключении");
+    showMicTrouble("ended");
+  }
+  // Список мог измениться ровно из-за той беды, с которой мы разбираемся
+  await refreshMicDevices();
+  updateDubFeedbackContext();
 }
 
 /** Запрашивает список микрофонов на карточке пака, один раз за сессию. */
@@ -927,20 +976,28 @@ async function refreshMicDevices(): Promise<void> {
       devices = await navigator.mediaDevices.enumerateDevices();
       inputs = devices.filter((d) => d.kind === "audioinput");
     }
-    const prev = micDeviceSelect.value;
-    micDeviceSelect.replaceChildren(
-      ...inputs.map((d, i) => {
-        const opt = document.createElement("option");
-        opt.value = d.deviceId;
-        opt.textContent = d.label || `Microphone ${i + 1}`;
-        return opt;
-      })
-    );
-    if (inputs.some((d) => d.deviceId === prev)) micDeviceSelect.value = prev;
+    // Прежний выбор держим по deviceId игрока, а не по значению в поле:
+    // список перерисовывается и на devicechange, когда одно из устройств
+    // как раз исчезло — и поле уже пустое
+    const prev = micDeviceId ?? micDeviceSelect.value;
+    for (const sel of micSelects) {
+      sel.replaceChildren(
+        ...inputs.map((d, i) => {
+          const opt = document.createElement("option");
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Microphone ${i + 1}`;
+          return opt;
+        })
+      );
+      if (inputs.some((d) => d.deviceId === prev)) sel.value = prev;
+    }
     micDeviceId = micDeviceSelect.value || undefined;
     micDeviceRow.hidden = inputs.length === 0;
+    // В баннере выбор имеет смысл только когда есть из чего выбирать
+    micTroubleRow.hidden = inputs.length < 2;
   } catch {
     micDeviceRow.hidden = true;
+    micTroubleRow.hidden = true;
   }
 }
 
@@ -1067,7 +1124,7 @@ function selectPack(pack: DubPack, sourceId = "custom"): void {
     extra: {
       "пак": currentPackSlug,
       "реплик в паке": pack.clips.length,
-      "видео пака": pack.video?.type || "?",
+      "видео пака": pack.video?.type || `${pack.videoKind} (без mime)`,
     },
   });
   trackEvent(`pack-select/${currentPackSlug}`);
@@ -1113,19 +1170,34 @@ $("btn-pack-back").addEventListener("click", () => showScreen("home"));
  * микса, ни состояние AudioContext. Дёргаем перед попыткой записи (тогда
  * это попадает в отчёт и при отказе микрофона) и после каждого дубля.
  */
+/** RMS последнего дубля — в отчёт числом, а не только пометкой в дневнике. */
+let lastTakeRms: number | null = null;
+
 function updateDubFeedbackContext(): void {
   if (!selectedPack) return;
   const micLabel = micDeviceSelect.options[micDeviceSelect.selectedIndex]?.textContent;
   const ac = audioContextStatus();
+  // Что игрок выбрал в списке и что браузер реально открыл — разные вещи, и
+  // именно их расхождение объясняло бы «выбрал правильный микрофон, а звука
+  // нет». Раньше в отчёт шёл только выбор, и разбирать приходилось гадая
+  const health = recorder.health;
   setFeedbackContext({
     extra: {
       "пак": currentPackSlug,
       "реплик в паке": selectedPack.clips.length,
-      "видео пака": selectedPack.video?.type || "?",
+      // Blob'ы из ZIP собираются без MIME (pack/loader.ts), поэтому type тут
+      // пуст всегда — формат видно по videoKind, а не по нему
+      "видео пака": selectedPack.video?.type || `${selectedPack.videoKind} (без mime)`,
       "режим микса": mixMode,
       "персонажей выключено": disabledCharacters.size,
       "устройство ввода": isMobile() ? "моб. по умолчанию" : micLabel || "по умолчанию",
       "устройств ввода найдено": isMobile() ? undefined : micDeviceSelect.options.length,
+      "микрофон открыт": health
+        ? `${health.label || "без имени"} — ${health.readyState}${health.muted ? ", ПРИГЛУШЁН" : ""}`
+        : "не открыт",
+      "микрофон подключён к графу": recorder.armed,
+      "беда с микрофоном на экране": micTroubleKind ?? "нет",
+      "RMS последнего дубля": lastTakeRms === null ? undefined : lastTakeRms.toExponential(2),
       "AudioContext": ac ? `${ac.state}, ${ac.sampleRate} Гц` : "не создан",
       "дублей записано": session?.recordings.size ?? 0,
     },
@@ -1184,6 +1256,77 @@ const btnBack = $<HTMLButtonElement>("btn-dub-back");
 const btnOrig = $<HTMLButtonElement>("btn-orig");
 const btnPlayTake = $<HTMLButtonElement>("btn-play-take");
 const btnToFinal = $<HTMLButtonElement>("btn-to-final");
+
+/**
+ * Состояние микрофона на глазах у игрока: живой уровень входа и баннер, если
+ * микрофон замолчал. До этого о молчащем микрофоне не сообщалось вообще
+ * ничего — беззвучный дубль уходил лишь строкой в баг-репорт, а человек по
+ * ту сторону экрана писал в тишину десяток дублей подряд, пока не сдавался
+ * (два таких отчёта с прода, 2026-09-04).
+ */
+const micLevel = $("mic-level");
+const micLevelFill = $("mic-level-fill");
+const micTrouble = $("mic-trouble");
+const micTroubleText = $("mic-trouble-text");
+const btnMicReconnect = $<HTMLButtonElement>("btn-mic-reconnect");
+
+/** Какая беда показана сейчас — чтобы не перерисовывать баннер на каждый кадр. */
+let micTroubleKind: "ended" | "muted" | "silentTake" | null = null;
+
+function showMicTrouble(kind: "ended" | "muted" | "silentTake" | null): void {
+  micTroubleKind = kind;
+  micTrouble.hidden = kind === null;
+  if (kind === null) return;
+  micTroubleText.textContent = t(
+    kind === "ended" ? "micLost" : kind === "muted" ? "micMuted" : "micSilentTake"
+  );
+}
+
+recorder.onTrouble((what) => {
+  note(`микрофон замолчал: ${what}`);
+  showMicTrouble(what);
+  updateDubFeedbackContext();
+});
+
+btnMicReconnect.addEventListener("click", () => {
+  note("нажал «Переподключить микрофон»");
+  showMicTrouble(null);
+  // Поток отпускаем явно: устройство могло смениться под нами, а дальше
+  // applyMicDevice откроет выбранное (или системное, если выбранного не стало)
+  recorder.dispose();
+  void applyMicDevice();
+});
+
+/**
+ * Индикатор уровня живёт, пока открыт экран записи: пик читается по кадру
+ * отрисовки (recorder копит его сам — колбэк на каждый чанк дёргал бы DOM
+ * сотни раз в секунду). Спад плавный, иначе полоска дёргается на паузах речи.
+ */
+let micLevelShown = 0;
+let micLevelRunning = false;
+
+/** Заводит цикл индикатора; сам гаснет, когда экран записи закрыт. */
+function startMicLevelLoop(): void {
+  if (micLevelRunning) return;
+  micLevelRunning = true;
+  const pump = (): void => {
+    if (document.body.dataset.screen !== "dub") {
+      micLevel.hidden = true;
+      micLevelRunning = false;
+      return;
+    }
+    micLevel.hidden = !recorder.armed;
+    if (recorder.armed) {
+      micLevelShown = Math.max(recorder.readPeak(), micLevelShown * 0.82);
+      // Корень — чтобы тихая, но живая речь была видна: на линейной шкале она
+      // прижимается к нулю, и работающий микрофон выглядел бы мёртвым
+      micLevelFill.style.width = `${Math.min(100, Math.sqrt(micLevelShown) * 100)}%`;
+      micLevelFill.classList.toggle("silent", micLevelShown < 0.002);
+    }
+    requestAnimationFrame(pump);
+  };
+  requestAnimationFrame(pump);
+}
 
 /**
  * Узкий экран: длинная подпись на кнопке не влезает, а настройки записи
@@ -1300,6 +1443,15 @@ async function enterClip(index: number): Promise<void> {
   }
   waveform.clearUserRecording();
   waveform.setPlayhead(null);
+
+  // Микрофон подключаем к графу заранее, не дожидаясь записи: индикатор
+  // уровня оживает сразу, и молчащий вход виден до первого дубля, а не после
+  // десятого. Заодно поток успевает раскачаться (раньше это делал отсчёт).
+  startMicLevelLoop();
+  void recorder.arm().then(
+    () => showMicTrouble(recorder.healthy ? null : "muted"),
+    () => showMicTrouble("ended")
+  );
 
   await refreshOriginalWave();
   updateDubButtons();
@@ -1835,7 +1987,8 @@ function cancelCountdown(): void {
   countdownToken++;
   countdownActive = false;
   dubCountdown.hidden = true;
-  recorder.disarm(); // микрофон подключали под запись, которой не будет
+  // Микрофон не разоружаем: на экране записи он держится всё время ради
+  // индикатора уровня, а отпускается при уходе с экрана (showScreen)
   updateDubButtons();
 }
 
@@ -1850,13 +2003,9 @@ async function runCountdown(): Promise<boolean> {
   countdownActive = true;
   updateDubButtons();
 
-  // Отсчёт могли отменить, пока микрофон подключался, — тогда сразу отпускаем
-  void recorder
-    .arm()
-    .then(() => {
-      if (token !== countdownToken) recorder.disarm();
-    })
-    .catch(() => {}); // ошибку доступа поймает start() после отсчёта
+  // Микрофон обычно уже подключён (arm на входе в реплику), но если игрок
+  // успел нажать раньше — подключится здесь; ошибку доступа поймает start()
+  void recorder.arm().catch(() => {});
   if (videoPlayer && session) {
     videoPlayer.pause(); // предпросмотр мог ещё идти
     videoPlayer.currentTime = session.clip.timestamps[0];
@@ -1900,6 +2049,9 @@ btnRecord.addEventListener("click", async () => {
   }
   cancelWatch();
   closeCaptionEditor(); // правку не бросаем открытой поверх записи
+  // Трек мог умереть, пока игрок слушал оригинал: пробуем оживить молча —
+  // писать в заведомо мёртвый микрофон бессмысленно
+  if (recorder.ready && !recorder.healthy) await applyMicDevice();
   const buf = await session.originalBuffer();
   const totalSamples = Math.floor(buf.duration * audioContext().sampleRate);
   const clipIndex = session.clipIndex;
@@ -1914,11 +2066,18 @@ btnRecord.addEventListener("click", async () => {
   waveform.beginUserRecording(totalSamples);
 
   // Пишем шире реплики (запас с обоих концов), а рисуем ровно её окно:
-  // хвост за пределами хронометража в волну не лезет, но в записи остаётся
+  // хвост за пределами хронометража в волну не лезет, но в записи остаётся.
+  // До markStart() волну не показываем вовсе: recorder.start() уже пишет
+  // (на случай, если видео начнётся не сразу), но до реального первого кадра
+  // это чужой, ещё не привязанный к времени кусок — если рисовать его сразу,
+  // волна на глазах убегает вперёд и потом рывком прыгает обратно к нулю,
+  // когда markStart() обрежет всё лишнее (баг-репорт 2026-09-05).
   let drawn = 0;
+  let waveVisible = false;
   await recorder.start(
     buf.duration,
     (chunk) => {
+      if (!waveVisible) return;
       const room = totalSamples - drawn;
       if (room <= 0) return;
       const part = chunk.length <= room ? chunk : chunk.subarray(0, room);
@@ -1949,6 +2108,10 @@ btnRecord.addEventListener("click", async () => {
     drawn = 0;
     waveform.beginUserRecording(totalSamples); // волну рисуем от того же нуля
   }
+  // Либо от чистого нуля (started), либо — если видео так и не отдало
+  // событие "playing" за отведённый таймаут — от того, что уже накопилось:
+  // ждать дальше нечем, но обгонять видео волна больше не будет
+  waveVisible = true;
   // Оригинал в ухо — вместе с видео, иначе подсказка сама себя рассинхронит
   if (toggleMonitor.checked) {
     const ctx = audioContext();
@@ -1977,15 +2140,30 @@ async function finishRecording(auto = false): Promise<void> {
     const window = takeWindow(rec, original.duration);
     matchLoudness(rec, original, window);
     // Тот же порог, которым matchLoudness сама решает «усиливать нечего» —
-    // если запись реально тихая, это стоит увидеть в отчёте до вопроса игроку
+    // если запись реально тихая, это стоит увидеть в отчёте до вопроса игроку.
+    // Ровную тишину отделяем от тихого голоса: это разные диагнозы (молчащий
+    // микрофон против далёкого от рта), а `toFixed(5)` их обоих печатал
+    // как «0.00000» и вёл разбор отчёта по ложному следу
     const rms = samplesRms(window);
-    note(rms < SILENCE_RMS ? `записал дубль — подозрительно тихо (RMS ${rms.toFixed(5)})` : "записал дубль");
+    lastTakeRms = rms;
+    if (rms === 0) {
+      note("записал дубль — ровная тишина, микрофон не дал сигнала");
+      showMicTrouble("silentTake");
+    } else if (rms < SILENCE_RMS) {
+      note(`записал дубль — подозрительно тихо (RMS ${rms.toExponential(1)})`);
+      showMicTrouble("silentTake");
+    } else {
+      note("записал дубль");
+      if (micTroubleKind === "silentTake") showMicTrouble(null);
+    }
     session.recordings.set(session.clipIndex, rec);
     waveform?.setUserRecording(window, takeTimelineSamples(original, window.length));
   } else {
     // Кнопку нажали, а от микрофона не пришло ни одного сэмпла — раньше это
     // проходило совсем без следа, дубль просто не сохранялся молча
     note("запись пустая — микрофон не отдал ни одного сэмпла");
+    lastTakeRms = 0;
+    showMicTrouble("silentTake");
   }
   updateDubFeedbackContext();
   waveform?.setPlayhead(null);

@@ -190,9 +190,27 @@ a:hover { color: #fff; }
   font-weight: 700;
   letter-spacing: -0.035em;
   line-height: 1.04;
-  margin: 34px 0 38px;
+  margin: 34px 0 10px;
   max-width: 17ch;
   text-wrap: balance;
+}
+
+.tagline-school {
+  color: var(--ink-dim);
+  font-size: 0.95rem;
+  margin: 0 0 38px;
+}
+
+.tagline-school a {
+  color: var(--wave-user);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(127, 224, 210, 0.4);
+  transition: border-color 0.15s ease;
+}
+
+.tagline-school a:hover {
+  border-color: var(--wave-user);
 }
 
 .vpn-hint {
@@ -1494,3 +1512,39 @@ select.lang-select {
   justify-content: center;
   margin: -6px 0 18px;
 }
+
+/* ---------- Микрофон на экране записи ---------- */
+/* Живой уровень входа: единственный способ увидеть молчащий микрофон
+   до записи, а не после десятка беззвучных дублей */
+.mic-level { display: flex; align-items: center; gap: 10px; }
+.mic-level-label { color: var(--ink-dim); font-size: 0.8rem; white-space: nowrap; }
+.mic-level-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+.mic-level-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #25b3a3, #b6ffee);
+  transition: width 60ms linear;
+}
+/* Тишина на входе — не повод для бирюзы: полоска гаснет в тревожный цвет */
+.mic-level-fill.silent { background: #ff9c8f; }
+
+/* Баннер беды: устройство пропало, приглушено или дубль вышел беззвучным */
+.mic-trouble {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 156, 143, 0.5);
+  border-radius: 14px;
+  background: rgba(255, 156, 143, 0.08);
+}
+.mic-trouble-text { margin: 0; color: #ff9c8f; font-size: 0.9rem; }

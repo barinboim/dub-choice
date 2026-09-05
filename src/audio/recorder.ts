@@ -63,8 +63,27 @@ function tailOf(chunks: Float32Array[], n: number): Float32Array {
   return need > 0 ? out.subarray(need) : out;
 }
 
+/** Что случилось с уже открытым микрофоном: трек умер или его приглушили. */
+export type MicTrouble = "ended" | "muted";
+
+/** Состояние реально открытого устройства — для баг-репортов и проверок. */
+export interface MicHealth {
+  /** Имя устройства, которое отдал браузер (может не совпадать с выбранным в списке). */
+  label: string;
+  deviceId: string;
+  /** "live" — трек жив; "ended" — устройство пропало. */
+  readyState: MediaStreamTrackState;
+  /** Трек жив, но браузер отдаёт тишину: mute в микшере, кнопка на гарнитуре. */
+  muted: boolean;
+}
+
 export class MicRecorder {
   private stream: MediaStream | null = null;
+  /** С каким устройством открыт текущий поток — чтобы заметить смену выбора. */
+  private openedDeviceId: string | undefined;
+  private onTroubleCb: ((what: MicTrouble) => void) | null = null;
+  /** Пик входа с прошлого чтения — питает индикатор уровня (см. readPeak). */
+  private peakSinceRead = 0;
   private source: MediaStreamAudioSourceNode | null = null;
   private worklet: AudioWorkletNode | null = null;
   private chunks: Float32Array[] = [];
@@ -86,11 +105,24 @@ export class MicRecorder {
 
   /**
    * Запрашивает доступ к микрофону (можно вызвать заранее, на экране пака).
-   * deviceId — выбор конкретного устройства (дев-хелпер для localhost,
-   * см. mic-device-select в main.ts); в проде не передаётся.
+   * deviceId — выбор конкретного устройства (`mic-device-select` в main.ts).
+   *
+   * Поток кэшируется, но НЕ навсегда. Раньше здесь стояло `if (this.stream)
+   * return`, а `dispose()` не вызывался ниоткуда — то есть однажды открытый
+   * поток жил до перезагрузки страницы. Последствий было два, и оба пришли
+   * баг-репортами с прода (2026-09-04): выбор другого микрофона в списке
+   * молча игнорировался («выбрал правильный микрофон, а звука нет»), а
+   * микрофон, умерший посреди сессии (устройство выдернули, Windows
+   * приглушил его, другое приложение забрало эксклюзивно), не оживал уже
+   * ничем — ни сменой пака, ни возвратом на главную; человек писал десять
+   * дублей в тишину и уходил. Поэтому переоткрываем поток, если сменилось
+   * устройство или трек больше не отдаёт звук.
    */
   async init(deviceId?: string): Promise<void> {
-    if (this.stream) return;
+    if (this.stream && this.openedDeviceId === deviceId && this.healthy) return;
+    // Пересобрать граф на живой записи нельзя — дубль оборвётся на полуслове
+    if (this.active) return;
+    this.release();
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
@@ -99,10 +131,55 @@ export class MicRecorder {
         ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
       },
     });
+    this.openedDeviceId = deviceId;
+    const track = this.stream.getAudioTracks()[0];
+    // Браузер сам сообщает и о смерти устройства, и о его приглушении —
+    // это единственный способ узнать о беде, не дожидаясь пустого дубля
+    track?.addEventListener("ended", () => this.onTroubleCb?.("ended"));
+    track?.addEventListener("mute", () => this.onTroubleCb?.("muted"));
+  }
+
+  /** Кому сообщать, что открытый микрофон замолчал. */
+  onTrouble(cb: (what: MicTrouble) => void): void {
+    this.onTroubleCb = cb;
   }
 
   get ready(): boolean {
     return this.stream !== null;
+  }
+
+  /** Трек открыт, жив и не приглушён — то есть от него можно ждать звука. */
+  get healthy(): boolean {
+    const h = this.health;
+    return h !== null && h.readyState === "live" && !h.muted;
+  }
+
+  /** Состояние реально открытого устройства (в отчёт и для проверок перед записью). */
+  get health(): MicHealth | null {
+    const track = this.stream?.getAudioTracks()[0];
+    if (!track) return null;
+    return {
+      label: track.label,
+      deviceId: track.getSettings().deviceId ?? "",
+      readyState: track.readyState,
+      muted: track.muted,
+    };
+  }
+
+  /**
+   * Пик входа с прошлого вызова, 0…1 — питает индикатор уровня. Читается
+   * по кадру отрисовки, а не колбэком на каждый чанк: worklet присылает их
+   * ~375 раз в секунду, и дёргать DOM с такой частотой незачем.
+   */
+  readPeak(): number {
+    const peak = this.peakSinceRead;
+    this.peakSinceRead = 0;
+    return peak;
+  }
+
+  /** Микрофон подключён к графу и питает индикатор уровня. */
+  get armed(): boolean {
+    return this.worklet !== null;
   }
 
   /**
@@ -112,7 +189,9 @@ export class MicRecorder {
    * заговорил раньше персонажа. Вызывается на отсчёте перед записью.
    */
   async arm(): Promise<void> {
-    await this.init();
+    // Именно с тем устройством, что уже открыто: init() без аргумента взял бы
+    // системный микрофон по умолчанию и молча отменил выбор игрока
+    await this.init(this.openedDeviceId);
     const ctx = audioContext();
     await ensureWorklet(ctx);
     if (this.worklet) return;
@@ -132,6 +211,12 @@ export class MicRecorder {
   }
 
   private receive(data: Float32Array): void {
+    // Уровень копим всегда — и до записи тоже: индикатор на экране должен
+    // показать молчащий микрофон раньше, чем игрок запишет в тишину дубль
+    for (let i = 0; i < data.length; i++) {
+      const a = Math.abs(data[i]);
+      if (a > this.peakSinceRead) this.peakSinceRead = a;
+    }
     if (!this.active) {
       // Прогрев до start(): держим короткое кольцо на случай раннего вступления
       this.preRoll.push(data);
@@ -249,9 +334,16 @@ export class MicRecorder {
 
   /** Полностью освобождает микрофон (например, при выходе из игры). */
   dispose(): void {
+    this.release();
+  }
+
+  /** Отпускает поток и граф: следующий init() откроет устройство заново. */
+  private release(): void {
     this.teardown();
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
+    this.openedDeviceId = undefined;
+    this.peakSinceRead = 0;
   }
 }
 
