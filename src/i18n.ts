@@ -13,9 +13,11 @@ const dict = {
     ru: "🎙️ Твоя студия дубляжа",
     en: "🎙️ Your dubbing studio",
   },
+  taglineSchool: { ru: "проект", en: "a project by" },
+  taglineSchoolLink: { ru: "школы баринбойма", en: "barinboim's school" },
   vpnHint: {
-    ru: "Как и всё хорошее в этой жизни, контент этого сайта работает лучше со включённым VPN",
-    en: "Like everything good in life, this site's content works better with a VPN on",
+    ru: "как и всё хорошее в этой жизни, контент сайта работает намного лучше со включённым VPN",
+    en: "like everything good in life, this site's content works a lot better with a VPN on",
   },
   dropTitle: { ru: "Загрузи свой dub-пак", en: "Load your own dub pack" },
   dropHintZip: { ru: "ZIP-архив с", en: "A ZIP archive from" },
@@ -165,6 +167,22 @@ const dict = {
   nextFinal: { ru: "Готово — смотреть! 🎬", en: "Done — watch! 🎬" },
   nextFinalShort: { ru: "Готово 🎬", en: "Done 🎬" },
   monitorLabel: { ru: "Слышать дорожку", en: "Hear the track" },
+  micLevelLabel: { ru: "🎙️ Микрофон слышит", en: "🎙️ Mic input" },
+  micReconnect: { ru: "Переподключить микрофон", en: "Reconnect microphone" },
+  // Три беды с микрофоном, о которых игроку нужно сказать прямо: устройство
+  // пропало, браузер отдаёт тишину, дубль записался беззвучным
+  micLost: {
+    ru: "Микрофон отключился. Проверь, что он на месте, и нажми «Переподключить микрофон».",
+    en: "The microphone went away. Check it's plugged in and hit “Reconnect microphone”.",
+  },
+  micMuted: {
+    ru: "Микрофон молчит — возможно, он выключен кнопкой или приглушён в системе. Проверь его или выбери другой на карточке пака.",
+    en: "The mic is silent — it may be muted by a hardware switch or in your system settings. Check it or pick another one on the pack card.",
+  },
+  micSilentTake: {
+    ru: "В дубле нет звука: микрофон ничего не записал. Проверь, тот ли микрофон выбран, и попробуй ещё раз.",
+    en: "That take has no sound: the mic recorded nothing. Check the selected microphone and try again.",
+  },
   countdownLabel: { ru: "Отсчёт 3–2–1 перед записью", en: "3–2–1 countdown" },
   cancelCountdown: { ru: "✕ Отмена", en: "✕ Cancel" },
   savingTake: { ru: "Сохраняю…", en: "Saving…" },
@@ -573,6 +591,7 @@ const TAG_EN: Record<string, string> = {
   "короткий ролик": "short",
   "аниме": "anime",
   "реклама": "ad",
+  "музыка": "music",
 };
 
 export function tagLabel(tag: string): string {

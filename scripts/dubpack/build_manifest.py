@@ -8,6 +8,13 @@
     python3 scripts/dubpack/build_manifest.py                 # только манифест
     python3 scripts/dubpack/build_manifest.py --upload        # + заливка в R2
     python3 scripts/dubpack/build_manifest.py --plays out.json  # подмешать статистику
+    python3 scripts/dubpack/build_manifest.py --upload --reupload  # + перезалить и неизменённые
+
+С --upload в R2 едут только новые и пересобранные паки: если размер
+локального zip совпал с тем, что уже в манифесте R2, пак считается тем же
+самым (просто забыт в public/packs после прошлой публикации) и не трогается.
+--reupload заставляет залить всё равно — сменилась иконка, пересборка без
+изменения размера файла.
 
 Ключи R2 берутся из ~/.config/dub-choice-r2/credentials.env.
 """
@@ -81,7 +88,7 @@ PACKS = [
     ("skandalvkazino", "Случай в казино", "public/packs/skandalvkazino.zip", ["мем", "18+"], None),
     ("detroitdopros", "Detroit Become Human — Допрос", "public/packs/detroitdopros.zip", ["русская озвучка", "игра"], None),
     ("tachkimolniya", "Тачки — Вступительная сцена (Молния Маккуин)", "public/packs/tachkimolniya.zip", ["мультфильм", "русская озвучка"], None),
-    ("achtotypesh", "The Boys — А что ты пьёшь?", "public/packs/achtotypesh.zip", ["фильм", "русская озвучка", "18+"], None),
+    ("achtotypesh", "The Boys — А что ты пьёшь?", "public/packs/achtotypesh.zip", ["фильм", "русская озвучка", "18+", "the boys"], None),
     ("buzzwoodyargument", "Toy Story 1 — Woody vs Buzz", "public/packs/buzzwoodyargument.zip", ["мультфильм", "русская озвучка"], None),
     ("simpsonsbatmarge", "The Simpsons — Give Me the Bat, Marge", "public/packs/simpsonsbatmarge.zip", ["мультфильм"], None),
     ("dvorovyfutbol", "Вот так прилетело (Дворовый футбол)", "public/packs/dvorovyfutbol.zip", ["мем"], None),
@@ -90,10 +97,32 @@ PACKS = [
     ("vihorkov", "Игорь Вихорьков — Ты шл*ха не моя", "public/packs/vihorkov.zip", ["мем", "18+"], None),
     ("internyobyavlenie", "Интерны — Объявление по всему отделению", "public/packs/internyobyavlenie.zip", ["фильм", "русская озвучка"], None),
     ("kungfupandashifu", "Кунг-фу Панда — Тайлунг vs Шифу", "public/packs/kungfupandashifu.zip", ["мультфильм", "русская озвучка"], None),
-    ("homlenderrech", "Речь Хомлендера", "public/packs/homlenderrech.zip", ["фильм", "русская озвучка", "18+"], None),
+    ("homlenderrech", "Речь Хомлендера", "public/packs/homlenderrech.zip", ["фильм", "русская озвучка", "18+", "the boys"], None),
     ("rastishkareklama", "Смешная реклама Растишки", "public/packs/rastishkareklama.zip", ["реклама", "мем"], None),
     ("moygrib", "Я не понял, вы че мой гриб снимаете? Это же мой гриб!", "public/packs/moygrib.zip", ["мем", "18+"], None),
     ("yarobot", "Я, робот", "public/packs/yarobot.zip", ["фильм", "русская озвучка"], None),
+    # --- партия 2026-08-28: студийные паки, порядок = порядок публикации ---
+    ("boyklubbar", "Бойцовский клуб — Сцена из бара", "public/packs/boyklubbar.zip", ["фильм", "русская озвучка"], None),
+    ("fruktovyysad", "Фруктовый сад — А я томат!", "public/packs/fruktovyysad.zip", ["реклама", "русская озвучка"], None),
+    ("steverobin", "Stranger Things — Steve & Dustin", "public/packs/steverobin.zip", ["фильм", "русская озвучка"], None),
+    ("superpezdyuk", "The Boys — Супер п#@дюк", "public/packs/superpezdyuk.zip", ["фильм", "18+", "the boys", "русская озвучка"], None),
+    ("kurokonepogreshim", "Баскетбол Куроко — Я непогрешим", "public/packs/kurokonepogreshim.zip", ["аниме", "русская озвучка"], None),
+    ("klassnymuzikl", "Классный Мюзикл — Трой и Габриелла", "public/packs/klassnymuzikl.zip", ["фильм", "русская озвучка"], None),
+    ("pacanygolod", "Пацаны — Голод, а телефоны есть (The Boys)", "public/packs/pacanygolod.zip", ["фильм", "18+", "русская озвучка", "the boys"], None),
+    ("sopranoskris", "The Sopranos — Крис не любит тех, кто без очереди", "public/packs/sopranoskris.zip", ["фильм", "русская озвучка", "18+"], None),
+    ("hpalastor", "Гарри Поттер — Впервые встречает Аластора Грюма", "public/packs/hpalastor.zip", ["фильм", "гарри поттер", "русская озвучка"], None),
+    # --- партия 2026-08-29 ---
+    ("umineko", "Umineko — Беатриче троллит Баттлера", "public/packs/umineko.zip", ["аниме", "игра"], None),
+    ("sanychdeti", "«5 бутылок водки», Саныч — дети, подонки!", "public/packs/sanychdeti.zip", ["фильм", "русская озвучка", "мем", "18+"], None),
+    ("dota2", "Dota 2 — Первый скилл и третий", "public/packs/dota2.zip", ["игра", "мем", "18+"], None),
+    ("gambol", "Гамбол — Проект по истории", "public/packs/gambol.zip", ["мультфильм", "русская озвучка"], None),
+    ("spongebob", "Губка Боб — Патрик и кошелёк", "public/packs/spongebob.zip", ["мультфильм", "русская озвучка"], None),
+    ("karatel", "Каратель в суде", "public/packs/karatel.zip", ["фильм", "18+"], None),
+    ("etottort", "Angry Birds — «Этот торт теперь ваш!»", "public/packs/etottort.zip", ["мультфильм", "русская озвучка"], None),
+    ("spongebobnarezka", "Губка Боб — нарезка", "public/packs/spongebobnarezka.zip", ["мультфильм", "русская озвучка"], None),
+    ("zhivoyogurec", "Живой огурец", "public/packs/zhivoyogurec.zip", ["мем"], None),
+    ("vanpiszombi", "One Piece — Зомби", "public/packs/vanpiszombi.zip", ["аниме", "русская озвучка"], None),
+    ("rockyhorror", "Rocky Horror Picture Show — Rose Tint My World", "studio/projects/rockyhorrorps_rose_tint_my_world/rockyhorrorps_rose_tint_my_world.zip", ["фильм", "музыка", "18+"], None),
 ]
 
 SHORT_MAX_SEC = 60  # граница тега «короткий ролик»
@@ -269,6 +298,8 @@ def load_env(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--upload", action="store_true", help="залить паки, иконки и манифест в R2")
+    ap.add_argument("--reupload", action="store_true",
+                    help="перезалить и те паки, что не изменились (сменилась иконка / пересборка без смены размера)")
     ap.add_argument("--plays", help="json {pack_id: число} со статистикой GoatCounter")
     ap.add_argument("--out", default="build/manifest", help="куда сложить манифест и иконки")
     args = ap.parse_args()
@@ -285,11 +316,21 @@ def main():
 
     for pack_id, title, pattern, manual_tags, icon_stem in PACKS:
         data = local_zip(pattern)
+        prev = published.get(pack_id)
+
+        # Локальный zip есть, но по размеру он тот же, что уже лежит в R2 —
+        # это не новый и не пересобранный пак, а архив, забытый в public/packs
+        # после прошлой публикации. Читать его заново и гнать в бакет десятки
+        # мегабайт незачем: галерея всё нужное уже посчитала. Дальше идём тем
+        # же путём, что и для пака без локального zip — освежаем title и теги.
+        # --reupload заставляет залить всё равно.
+        if (data is not None and prev is not None and not args.reupload
+                and prev.get("sizeBytes") == len(data)):
+            data = None
 
         if data is None:
-            # Пак уже опубликован, архива под рукой нет — берём посчитанное
+            # Пак уже опубликован, свежего архива нет — берём посчитанное
             # раньше. Заливать тоже нечего: в бакете лежит ровно этот файл.
-            prev = published.get(pack_id)
             if prev is None:
                 raise SystemExit(
                     f"{pack_id}: нет ни локального zip ({pattern}), ни записи в манифесте R2")
@@ -307,7 +348,6 @@ def main():
             z = zipfile.ZipFile(io.BytesIO(data))
             info = probe(z)
             icon_file, curated = extract_icon(z, info, pack_id, icons_dir, icon_stem)
-            prev = published.get(pack_id)
             entry = {
                 "id": pack_id,
                 "title": title,
