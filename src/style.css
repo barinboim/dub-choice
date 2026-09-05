@@ -568,6 +568,11 @@ a:hover { color: #fff; }
 }
 .pi-adult-inline { color: var(--record); font-weight: 600; }
 
+/* Полка «Популярные»: строку «реплики · просмотры» целиком прижимаем к
+   нижнему краю карточки — ровной линией у всех карточек ряда, как бы ни
+   лёг заголовок */
+.shelf-card .pi-meta-bottom { margin-top: auto; padding-top: 4px; }
+
 /* Прогресс закачки — тонкая полоска по низу карточки */
 .pi-progress {
   position: absolute;

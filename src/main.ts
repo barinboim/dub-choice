@@ -288,6 +288,9 @@ function buildMeta(pp: PreloadedPack, kind: "shelf" | "grid" | "new"): HTMLEleme
   const wide = kind !== "grid";
   const meta = document.createElement("div");
   meta.className = "pi-meta";
+  // На «Популярных» строку метаданных целиком (реплики · просмотры) прижимаем
+  // к нижнему краю карточки — ровно у всех карточек ряда.
+  if (kind === "shelf") meta.classList.add("pi-meta-bottom");
   const parts: { text: string; cls?: string }[] = wide
     ? [{ text: `${pp.clips ?? 0} ${t("clipsCount")}` }]
     : [{ text: fmtDuration(pp.durationSec ?? 0) }, { text: formatSize(pp.sizeBytes) }];
@@ -308,7 +311,9 @@ function buildMeta(pp: PreloadedPack, kind: "shelf" | "grid" | "new"): HTMLEleme
 }
 
 /**
- * Теги под названием — только на полке «Популярные». «Короткий ролик»
+ * Теги под названием — только на полке «Новинки» (тест на деве: у свежего
+ * пака ещё нет цифр просмотров, зато теги сразу говорят, про что он).
+ * «Короткий ролик»
  * пропускаем (о длине говорит бейдж на обложке), «18+» — тоже, он уже
  * стоит бейджем в углу.
  */
@@ -382,7 +387,7 @@ function buildPackCard(pp: PreloadedPack, kind: "shelf" | "grid" | "new"): HTMLE
   title.className = "pi-title";
   title.textContent = pp.title;
   body.append(title, buildMeta(pp, kind));
-  if (kind === "shelf") {
+  if (kind === "new") {
     const tags = buildCardTags(pp);
     if (tags) body.append(tags);
   }
